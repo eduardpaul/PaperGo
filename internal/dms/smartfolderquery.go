@@ -471,7 +471,7 @@ func (s *Service) querySmartFolder(ctx context.Context, subject string, f *views
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
-	out, err := s.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Envelope: in.Envelope}, q, nil)
+	out, err := s.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, compact: in.compact}, q, nil)
 	if err != nil {
 		return SmartFolderResult{}, err
 	}
@@ -479,12 +479,19 @@ func (s *Service) querySmartFolder(ctx context.Context, subject string, f *views
 	for _, c := range candidates {
 		byID[c.collection.ID] = c.collection
 	}
-	result := SmartFolderResult{Compact: out.Compact, Data: []SmartFolderEntry{}, NextCursor: out.NextCursor, Total: out.Total, TotalCapped: out.TotalCapped}
+	result := SmartFolderResult{Data: []SmartFolderEntry{}, NextCursor: out.NextCursor, Total: out.Total, TotalCapped: out.TotalCapped}
 	for _, item := range out.Data {
 		c := byID[*item.ContainerID]
 		result.Data = append(result.Data, SmartFolderEntry{string(c.Kind), item.WorkspaceID, c.ID, c.Name, item})
 	}
 	return result, nil
+}
+
+// QuerySmartFolderCompact is QuerySmartFolder returning compact items.
+func (s *Service) QuerySmartFolderCompact(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (CompactSmartFolderResult, error) {
+	in.compact = true
+	out, err := s.QuerySmartFolder(ctx, subject, id, in)
+	return compactSmartFolderResult(out), err
 }
 
 type SmartFolderPreview struct {
@@ -509,9 +516,6 @@ func (s *Service) PreviewSmartFolder(ctx context.Context, subject string, in Sma
 }
 
 func (s *Service) SmartFolderGroups(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (SmartFolderGroupsResult, error) {
-	if in.Envelope != "" {
-		return SmartFolderGroupsResult{}, invalid("envelope belongs to item queries")
-	}
 	return read(ctx, s, func(t *Service) (SmartFolderGroupsResult, error) {
 		f, err := t.smartFolder(ctx, subject, id, false)
 		if err != nil {

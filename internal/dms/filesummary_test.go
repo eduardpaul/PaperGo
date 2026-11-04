@@ -107,21 +107,25 @@ func TestCompactQueryReadsFilesWhenSelected(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		envelope QueryEnvelope
+		compact  bool
 		selected []string
 		file     bool
 	}{
-		{EnvelopeFull, nil, true},
-		{EnvelopeCompact, nil, false},
-		{EnvelopeCompact, []string{}, false},
-		{EnvelopeCompact, []string{"$file_type"}, true},
+		{false, nil, true},
+		{true, nil, false},
+		{true, []string{}, false},
+		{true, []string{"$file_type"}, true},
 	} {
-		out, err := s.Query(testContext, "alice", lib.ID, QueryRequest{Envelope: tc.envelope, Select: tc.selected})
+		out, err := s.Query(testContext, "alice", lib.ID, QueryRequest{compact: tc.compact, Select: tc.selected})
 		if err != nil || len(out.Data) != 1 {
 			t.Fatal(out, err)
 		}
 		if (out.Data[0].File != nil) != tc.file {
-			t.Errorf("%s selecting %v: file %+v", tc.envelope, tc.selected, out.Data[0].File)
+			t.Errorf("compact %v selecting %v: file %+v", tc.compact, tc.selected, out.Data[0].File)
 		}
+	}
+	compact, err := s.QueryCompact(testContext, "alice", lib.ID, QueryRequest{Select: []string{"$file_type"}})
+	if err != nil || len(compact.Data) != 1 || compact.Data[0].File == nil {
+		t.Fatal("a compact item's selected file", compact, err)
 	}
 }

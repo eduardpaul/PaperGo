@@ -3404,6 +3404,153 @@
         "description": " Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both."
       }
     },
+    "/v1/resources/{id}/query/compact": {
+      "post": {
+        "summary": "Query Compact",
+        "operationId": "queryCompact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          }
+        },
+        "description": "The items a collection query matches as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both."
+      }
+    },
     "/v1/resources/{id}/query/groups": {
       "post": {
         "summary": "Query Groups",
@@ -4715,6 +4862,156 @@
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
+    "/v1/views/{id}/query/compact": {
+      "post": {
+        "summary": "Query View Compact",
+        "operationId": "queryViewCompact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewQueryRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "The items a saved view lists as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
     "/v1/views/{id}/query/groups": {
       "post": {
         "summary": "Query View Groups",
@@ -5859,6 +6156,72 @@
           "item.read"
         ],
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/query/compact": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "operationId": "querySmartFolderCompact",
+        "summary": "Query Smart Folder Compact",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactSmartFolderResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "The items of a smart folder as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "in": "query",
@@ -24541,6 +24904,208 @@
           "version"
         ]
       },
+      "CompactResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "folder",
+              "item"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optimistic resource lock version, independent of content revision_number and blob version."
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
+          },
+          "archived": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "Present and true when the item is archived, with archived_at and archived_by."
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "archived_by": {
+            "type": "string",
+            "readOnly": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present when select names $created_at."
+          },
+          "created_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present when select names $created_by."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present when select names $modified_at."
+          },
+          "updated_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present when select names $modified_by."
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "Present when select names $file_type."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "kind",
+          "name",
+          "version",
+          "values"
+        ],
+        "additionalProperties": false,
+        "description": "An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields."
+      },
+      "CompactQueryResult": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompactResource"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "More entries match than total_limit; total is the limit."
+          },
+          "search_capped": {
+            "type": "boolean",
+            "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ],
+        "additionalProperties": false
+      },
+      "CompactSmartFolderEntry": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/CompactResource"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "collection_id",
+          "collection_name",
+          "item",
+          "collection_kind"
+        ]
+      },
+      "CompactSmartFolderResult": {
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompactSmartFolderEntry"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "Preview counts stop at 10,000. True means total is a lower bound."
+          }
+        },
+        "description": "Authorized items sorted by name, created or modified time, with ID ties in the same direction. Default is modified descending. Cursors bind folder version, caller, surface, path, ordering, schemas and resolved references.",
+        "type": "object",
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ]
+      },
       "CreateResource": {
         "type": "object",
         "properties": {
@@ -25773,15 +26338,6 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
-          },
-          "envelope": {
-            "type": "string",
-            "enum": [
-              "full",
-              "compact"
-            ],
-            "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           }
         },
         "required": [],
@@ -25819,15 +26375,6 @@
               "type": "string"
             },
             "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
-          },
-          "envelope": {
-            "type": "string",
-            "enum": [
-              "full",
-              "compact"
-            ],
-            "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           },
           "selected": {
             "type": "array",
@@ -27249,15 +27796,6 @@
               }
             },
             "description": "Results default to modified descending. ID ties follow the chosen direction. Group queries use grouping order."
-          },
-          "envelope": {
-            "type": "string",
-            "enum": [
-              "full",
-              "compact"
-            ],
-            "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           }
         },
         "additionalProperties": false,

@@ -45,17 +45,17 @@ type SmartFolderInput struct {
 }
 
 type SmartFolderQueryRequest struct {
-	// Envelope compact returns each entry's item as a CompactItem.
-	Envelope     QueryEnvelope `json:"envelope,omitempty"`
-	Sort         *SortSpec     `json:"sort,omitempty"`
-	TotalLimit   int           `json:"-"`
-	Path         []*string     `json:"path,omitempty"`
-	Surface      string        `json:"surface,omitempty"`
-	After        string        `json:"-"`
-	Limit        int           `json:"-"`
-	IncludeTotal bool          `json:"include_total,omitempty"`
+	Sort         *SortSpec `json:"sort,omitempty"`
+	TotalLimit   int       `json:"-"`
+	Path         []*string `json:"path,omitempty"`
+	Surface      string    `json:"surface,omitempty"`
+	After        string    `json:"-"`
+	Limit        int       `json:"-"`
+	IncludeTotal bool      `json:"include_total,omitempty"`
 	// aggregation makes the query's rows those of these aggregates.
 	aggregation *aggregationSpec
+	// compact reads what compact items hold (QuerySmartFolderCompact).
+	compact bool
 }
 
 func smartDefinition(f *viewstore.SmartFolder) (SmartFolderDefinition, error) {

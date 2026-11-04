@@ -86,11 +86,8 @@ func TestQueryAggregatesRoute(t *testing.T) {
 	if want := `{"@odata.nextLink":null,"total":1,"value":[{"keys":[],"count":3,"values":{"max_outdoor":"6.0"}}]}`; w.Code != 200 || strings.TrimSpace(w.Body.String()) != want {
 		t.Fatalf("a smart folder's figures: %d %s", w.Code, w.Body)
 	}
-	w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query", `{"envelope":"compact"}`, testToken, "", "application/json")
+	w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query/compact", `{}`, testToken, "", "application/json")
 	if w.Code != 200 || strings.Contains(w.Body.String(), "head_revision_id") || !strings.Contains(w.Body.String(), `"collection_name":"Temperatures"`) {
 		t.Fatalf("a smart folder's compact items: %d %s", w.Code, w.Body)
-	}
-	if w = request(h, "POST", "/v1/smart-folders/"+folder.ID+"/query/groups", `{"envelope":"compact"}`, testToken, "", "application/json"); w.Code != 422 {
-		t.Fatalf("an envelope on smart folder groups: %d %s", w.Code, w.Body)
 	}
 }

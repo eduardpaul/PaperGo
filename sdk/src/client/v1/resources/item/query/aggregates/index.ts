@@ -11,8 +11,15 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface AggregatesRequestBuilder extends BaseRequestBuilder<AggregatesRequestBuilder> {
     /**
-     * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.
-     * @param body The request body
+     * Reads every page of the POST request, following @odata.nextLink, and returns their values in order. Each page is one request.
+     * @param body The request body, sent again for every page
+     * @param requestConfiguration Configuration for the request; later pages take their query from @odata.nextLink.
+     * @returns {Promise<NonNullable<AggregateResult["value"]>>}
+     */
+     all(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<AggregateResult["value"]>>;
+    /**
+     * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+     * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<AggregateResult>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -25,19 +32,36 @@ export interface AggregatesRequestBuilder extends BaseRequestBuilder<AggregatesR
      * @throws {Problem} error when the service returns a 422 status code
      * @throws {Problem} error when the service returns a 500 status code
      */
-     post(body: AggregateRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<AggregateResult | undefined>;
+     post(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined) : Promise<AggregateResult | undefined>;
     /**
-     * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.
-     * @param body The request body
+     * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+     * @param body Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
-     toPostRequestInformation(body: AggregateRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
+     toPostRequestInformation(body: AggregateRequest, requestConfiguration?: RequestConfiguration<AggregatesRequestBuilderPostQueryParameters> | undefined) : RequestInformation;
+}
+/**
+ * Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, so a cursor keeps its place in the order, not the values seen. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.
+ */
+export interface AggregatesRequestBuilderPostQueryParameters {
+    /**
+     * Continuation from @odata.nextLink; resend the same query body.
+     */
+    skiptoken?: string;
+    top?: number;
 }
 /**
  * Uri template for the request builder.
  */
-export const AggregatesRequestBuilderUriTemplate = "{+baseurl}/v1/resources/{id}/query/aggregates";
+export const AggregatesRequestBuilderUriTemplate = "{+baseurl}/v1/resources/{id}/query/aggregates{?%24skiptoken*,%24top*}";
+/**
+ * Mapper for query parameters from symbol name to serialization name represented as a constant.
+ */
+const AggregatesRequestBuilderPostQueryParametersMapper: Record<string, string> = {
+    "skiptoken": "%24skiptoken",
+    "top": "%24top",
+};
 /**
  * Metadata for all the requests in the request builder.
  */
@@ -61,6 +85,7 @@ export const AggregatesRequestBuilderRequestsMetadata: RequestsMetadata = {
         requestBodyContentType: "application/json",
         requestBodySerializer: serializeAggregateRequest,
         requestInformationContentSetMethod: "setContentFromParsable",
+        queryParametersMapper: AggregatesRequestBuilderPostQueryParametersMapper,
     },
 };
 /* tslint:enable */

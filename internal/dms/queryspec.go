@@ -42,34 +42,12 @@ type QuerySpec struct {
 	Keyword    string `json:"keyword,omitempty"`
 }
 
-// QueryEnvelope is how much of each item a query returns: the full
-// resource, or a CompactItem.
-type QueryEnvelope string
-
-const (
-	EnvelopeFull    QueryEnvelope = "full"
-	EnvelopeCompact QueryEnvelope = "compact"
-)
-
-// compact reports whether e asks for compact items.
-func (e QueryEnvelope) compact() (bool, error) {
-	switch e {
-	case "", EnvelopeFull:
-		return false, nil
-	case EnvelopeCompact:
-		return true, nil
-	}
-	return false, invalid("envelope is full or compact")
-}
-
 type QueryRequest struct {
-	Select []string `json:"select,omitempty"`
-	// Envelope compact returns each item as a CompactItem.
-	Envelope QueryEnvelope `json:"envelope,omitempty"`
-	Query    QuerySpec     `json:"query"`
-	Surface  string        `json:"surface,omitempty"`
-	After    string        `json:"-"`
-	Limit    int           `json:"-"`
+	Select  []string  `json:"select,omitempty"`
+	Query   QuerySpec `json:"query"`
+	Surface string    `json:"surface,omitempty"`
+	After   string    `json:"-"`
+	Limit   int       `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
 	// TotalLimit stops counting there and reports total_capped when more
@@ -82,15 +60,15 @@ type QueryRequest struct {
 	itemsOnly bool
 	// aggregation makes the query's rows those of these aggregates.
 	aggregation *aggregationSpec
+	// compact reads what compact items hold (QueryCompact).
+	compact bool
 }
 type QueryResult struct {
-	Data []*resources.Resource `json:"value"`
-	// Compact writes the items as CompactItem (QueryRequest.Envelope), with
-	// the built-in columns of Selection.
-	Compact    bool     `json:"-"`
-	Selection  []string `json:"-"`
-	NextCursor string   `json:"-"`
-	Total      *int     `json:"total,omitempty"`
+	Data       []*resources.Resource `json:"value"`
+	NextCursor string                `json:"-"`
+	// selection is what the query selected of each item.
+	selection []string
+	Total     *int `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
 	// SearchCapped means the search text matched more entries than a query
@@ -641,15 +619,18 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	})
 }
 
+// QueryCompact is Query returning compact items.
+func (s *Service) QueryCompact(ctx context.Context, subject, containerID string, in QueryRequest) (CompactResult, error) {
+	in.compact = true
+	out, err := s.Query(ctx, subject, containerID, in)
+	return compactResult(out), err
+}
+
 // queryCompiled returns one page of q. A non-nil fields projects item values
 // to those keys (see overlayPage); nil returns complete values.
 func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
 	if in.TotalLimit < 0 || in.TotalLimit > 1_000_000 {
 		return QueryResult{}, invalid("total_limit must be between 1 and 1000000")
-	}
-	compact, e := in.Envelope.compact()
-	if e != nil {
-		return QueryResult{}, e
 	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
@@ -666,7 +647,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 		for i, r := range page {
 			ids[i], ranks[i] = r.ID, r.Rank
 		}
-		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, Compact: compact, Selection: in.Select}
+		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, selection: in.Select}
 		if len(ids) > limit {
 			out.NextCursor = cursorEncode(q, ids[limit-1], ranks[limit-1])
 			ids = ids[:limit]
@@ -689,7 +670,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 			// A compact item holds no file unless the query selects it, so its
 			// blob is not looked up.
 			hydrate := t.overlayPage
-			if compact && !slices.Contains(in.Select, "$file_type") {
+			if in.compact && !slices.Contains(in.Select, "$file_type") {
 				hydrate = t.overlaySurfaces
 			}
 			if _, e = hydrate(ctx, subject, in.Surface, out.Data, fields); e != nil {
@@ -716,9 +697,6 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
-	if in.Envelope != "" {
-		return Page[QueryGroup]{}, invalid("envelope belongs to item queries")
-	}
 	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return Page[QueryGroup]{}, err

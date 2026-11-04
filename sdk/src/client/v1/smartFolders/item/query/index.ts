@@ -4,6 +4,10 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, createSmartFolderResultFromDiscriminatorValue, serializeSmartFolderQueryRequest, serializeSmartFolderResult, type Problem, type SmartFolderQueryRequest, type SmartFolderResult } from '../../../../models/index.js';
 // @ts-ignore
+import { AggregatesRequestBuilderRequestsMetadata, type AggregatesRequestBuilder } from './aggregates/index.js';
+// @ts-ignore
+import { CompactRequestBuilderRequestsMetadata, type CompactRequestBuilder } from './compact/index.js';
+// @ts-ignore
 import { GroupsRequestBuilderRequestsMetadata, type GroupsRequestBuilder } from './groups/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
@@ -19,6 +23,14 @@ export interface QueryRequestBuilder extends BaseRequestBuilder<QueryRequestBuil
      * @returns {Promise<NonNullable<SmartFolderResult["value"]>>}
      */
      all(body: SmartFolderQueryRequest, requestConfiguration?: RequestConfiguration<QueryRequestBuilderPostQueryParameters> | undefined) : Promise<NonNullable<SmartFolderResult["value"]>>;
+    /**
+     * The aggregates property
+     */
+    get aggregates(): AggregatesRequestBuilder;
+    /**
+     * The compact property
+     */
+    get compact(): CompactRequestBuilder;
     /**
      * The groups property
      */
@@ -57,6 +69,12 @@ export const QueryRequestBuilderUriTemplate = "{+baseurl}/v1/smart-folders/{id}/
  * Metadata for all the navigation properties in the request builder.
  */
 export const QueryRequestBuilderNavigationMetadata: Record<Exclude<keyof QueryRequestBuilder, KeysToExcludeForNavigationMetadata | "all">, NavigationMetadata> = {
+    aggregates: {
+        requestsMetadata: AggregatesRequestBuilderRequestsMetadata,
+    },
+    compact: {
+        requestsMetadata: CompactRequestBuilderRequestsMetadata,
+    },
     groups: {
         requestsMetadata: GroupsRequestBuilderRequestsMetadata,
     },

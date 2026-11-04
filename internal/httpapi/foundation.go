@@ -206,6 +206,9 @@ func (a *API) registerFoundation(m *router) {
 	m.HandleFunc("POST /v1/resources/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
 		return a.dms(r).Query(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
+	m.HandleFunc("POST /v1/resources/{id}/query/compact", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
+		return a.dms(r).QueryCompact(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("POST /v1/resources/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
 		return a.dms(r).QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
@@ -250,6 +253,9 @@ func (a *API) registerFoundation(m *router) {
 	}))
 	m.HandleFunc("POST /v1/views/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
 		return a.dms(r).QueryView(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
+	m.HandleFunc("POST /v1/views/{id}/query/compact", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
+		return a.dms(r).QueryViewCompact(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("POST /v1/views/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
 		return a.dms(r).QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)

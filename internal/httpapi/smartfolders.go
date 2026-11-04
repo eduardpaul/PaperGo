@@ -44,6 +44,9 @@ func (a *API) registerSmartFolders(m *router) {
 	m.HandleFunc("POST /v1/smart-folders/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
 		return a.dms(r).QuerySmartFolder(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
+	m.HandleFunc("POST /v1/smart-folders/{id}/query/compact", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
+		return a.dms(r).QuerySmartFolderCompact(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("POST /v1/smart-folders/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
 		return a.dms(r).SmartFolderGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))

@@ -177,10 +177,8 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Select []string `json:"select,omitempty"`
-	// Envelope compact returns compact items, as QueryRequest.Envelope.
-	Envelope QueryEnvelope `json:"envelope,omitempty"`
-	Surface  string        `json:"surface,omitempty"`
+	Select  []string `json:"select,omitempty"`
+	Surface string   `json:"surface,omitempty"`
 	// Selected lists the items a navigation view shows at the terms opened
 	// in its fields, combined as the view matches them.
 	Selected     []NavigationSelection `json:"selected,omitempty"`
@@ -188,6 +186,8 @@ type ViewQueryRequest struct {
 	Limit        int                   `json:"-"`
 	IncludeTotal bool                  `json:"include_total,omitempty"`
 	TotalLimit   int                   `json:"total_limit,omitempty"`
+	// compact reads what compact items hold (QueryViewCompact).
+	compact bool
 }
 
 // viewQuery is the query a view runs and whether it lists items only: a
@@ -233,7 +233,7 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if selection == nil {
 			selection = v.Columns
 		}
-		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection, Envelope: in.Envelope, itemsOnly: itemsOnly}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection, itemsOnly: itemsOnly, compact: in.compact}
 		if request.Surface == "" {
 			request.Surface = "auto"
 		}
@@ -254,10 +254,15 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		return out, nil
 	})
 }
+
+// QueryViewCompact is QueryView returning compact items.
+func (s *Service) QueryViewCompact(ctx context.Context, subject, id string, in ViewQueryRequest) (CompactResult, error) {
+	in.compact = true
+	out, err := s.QueryView(ctx, subject, id, in)
+	return compactResult(out), err
+}
+
 func (s *Service) QueryViewGroups(ctx context.Context, subject, id string, in ViewQueryRequest) (Page[QueryGroup], error) {
-	if in.Envelope != "" {
-		return Page[QueryGroup]{}, invalid("envelope belongs to item queries")
-	}
 	return read(ctx, s, func(t *Service) (Page[QueryGroup], error) {
 		v, e := t.View(ctx, subject, id)
 		if e != nil {
