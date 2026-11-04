@@ -48,3 +48,34 @@ it('turns search off for a list, keeping the rest of the built-in', async () => 
   expect(writes[0].body).toEqual({ collection_id: 'diesel', automatic_enabled: false, manual_enabled: false, state: 'published', disabled_triggers: ['term.changed'], parameters: {} });
   client.clear();
 });
+
+// A published copy of the built-in can fill the role: the setting shows it,
+// and offers no choice that would turn it off by turning the built-in on.
+it('names a workflow that keeps search in place of the built-in', async () => {
+  const copy: Workflow = { id: 'w2', collection_id: 'diesel', workspace_id: 'ws', key: 'my-index', name: 'My index', description: '', automatic_enabled: true, manual_enabled: false, state: 'published', automatic_provider: true, current_version: 1, source: '', definition: { triggers: [] }, version: 1, parameters: {} };
+  const paused: Workflow = { ...copy, id: 'w1', key: 'search-index-diesel', name: 'Index for search', builtin_key: 'search.index', automatic_enabled: false };
+  const builtin: BuiltInState = { key: 'search.index', name: 'Index for search', description: '', role: 'search.index', default: true, system: true, workflows: [paused] };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL | string) => {
+      const url = new URL(String(input), window.location.origin);
+      let result: unknown = { value: [] };
+      if (url.pathname === '/v1/workflow-catalog') result = { triggers: [], builtins: [], roles: [{ key: 'search.index', name: 'Search index' }] };
+      else if (url.pathname.endsWith('/workflow-builtins')) result = { value: [builtin] };
+      else if (url.pathname.endsWith('/workflow-roles')) result = { value: [{ role: { key: 'search.index' }, scope: 'collection', automatic_enabled: true, workflow: copy }] };
+      return new Response(stringifyJSON(result), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <CollectionSearchSettings workspaceId="ws" collectionId="diesel" canManage />
+    </QueryClientProvider>,
+  );
+  const picker = (await screen.findByLabelText('Search the items')) as HTMLSelectElement;
+  expect(picker.value).toBe('on');
+  expect(picker.disabled).toBe(true);
+  expect(screen.getByText(/"My index" keeps this list's search/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  client.clear();
+});

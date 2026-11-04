@@ -525,6 +525,7 @@
     "off": "Desactivada: solo nombres",
     "onHint": "Cada cambio actualiza el índice de búsqueda.",
     "offHint": "Buscar dentro de la lista solo encuentra nombres y los cambios no pasan por el índice: lo adecuado para listas de lecturas o mediciones.",
+    "customHint": "El flujo de trabajo «{{name}}» mantiene la búsqueda de esta lista. Cámbialo desde los flujos de trabajo del espacio de trabajo.",
     "saved": "Ajuste de búsqueda guardado"
   },
   "sheet": {
