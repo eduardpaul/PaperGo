@@ -113,20 +113,13 @@ type AggregateGroup struct {
 type AggregateResult struct {
 	Data []AggregateGroup `json:"value"`
 	// Total counts the groups of every page.
-	Total int `json:"total"`
-	// SearchCapped means the search text matched more entries than a query
-	// considers; the figures cover only those.
-	SearchCapped bool   `json:"search_capped,omitempty"`
-	NextCursor   string `json:"-"`
+	Total      int    `json:"total"`
+	NextCursor string `json:"-"`
 }
 
 // APIPage exposes the page to the HTTP layer.
 func (p AggregateResult) APIPage() (map[string]any, string) {
-	result := map[string]any{"value": p.Data, "total": p.Total}
-	if p.SearchCapped {
-		result["search_capped"] = true
-	}
-	return result, p.NextCursor
+	return map[string]any{"value": p.Data, "total": p.Total}, p.NextCursor
 }
 
 // Aggregate limits: figures a request asks for, groups it holds to sort and
@@ -814,6 +807,9 @@ func (s *Service) aggregates(ctx context.Context, subject string, q compiledQuer
 	if e != nil {
 		return AggregateResult{}, e
 	}
+	if q.searchCapped {
+		return AggregateResult{}, invalid("the search text matches more entries than a query considers, so figures would cover part of them: narrow it")
+	}
 	groups := map[aggregateKey]*aggregatedGroup{}
 	items := 0
 	gather := func(row content.AggregateRow) error {
@@ -851,7 +847,7 @@ func (s *Service) aggregates(ctx context.Context, subject string, q compiledQuer
 		return AggregateResult{}, e
 	}
 	ordered := slices.SortedFunc(maps.Values(groups), spec.compareGroups)
-	out := AggregateResult{Data: []AggregateGroup{}, Total: len(ordered), SearchCapped: q.searchCapped}
+	out := AggregateResult{Data: []AggregateGroup{}, Total: len(ordered)}
 	page := ordered[min(offset, len(ordered)):]
 	if len(page) > spec.limit {
 		page = page[:spec.limit]
