@@ -18,6 +18,7 @@ func (m module) Routes() []httpapi.Route {
 	return []httpapi.Route{
 		{Method: http.MethodGet, Pattern: "/v1/workspaces/{id}/apps", OperationID: "listApps", Handle: m.list},
 		{Method: http.MethodPost, Pattern: "/v1/workspaces/{id}/apps", OperationID: "createApp", Handle: m.create},
+		{Method: http.MethodGet, Pattern: "/v1/apps", OperationID: "listLauncherApps", Handle: m.launcher},
 		{Method: http.MethodGet, Pattern: "/v1/apps/{id}", OperationID: "getApp", Handle: m.get},
 		{Method: http.MethodPut, Pattern: "/v1/apps/{id}", OperationID: "updateApp", Handle: m.update},
 		{Method: http.MethodDelete, Pattern: "/v1/apps/{id}", OperationID: "deleteApp", Handle: m.delete},
@@ -30,6 +31,16 @@ func service(in httpapi.Request) *Service { return &Service{DMS: in.DMS} }
 
 func (module) list(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
 	out, err := service(in).List(r.Context(), in.Subject, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	httpapi.Respond(w, r, http.StatusOK, map[string]any{"value": out})
+	return nil
+}
+
+// launcher lists the apps the caller may see in every workspace.
+func (module) launcher(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := service(in).Launcher(r.Context(), in.Subject)
 	if err != nil {
 		return err
 	}

@@ -57,7 +57,7 @@ export function AppEditor({ workspaceId, app: initial, onClose }: { workspaceId:
       setApp(next);
       setParameters(next.parameters);
       toast.success(t('editor.saved', { version: next.current_version }));
-      await client.invalidateQueries({ queryKey: appKeys.list(workspaceId) });
+      await client.invalidateQueries({ queryKey: appKeys.lists });
       await client.invalidateQueries({ queryKey: appKeys.one(next.id) });
     },
   });

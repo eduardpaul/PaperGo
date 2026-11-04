@@ -47,13 +47,15 @@ type View struct {
 	Parameters       map[string]any  `json:"parameters"`
 	ParametersSchema json.RawMessage `json:"parameters_schema"`
 	CurrentVersion   int             `json:"current_version"`
-	Source           string          `json:"source,omitempty"`
-	CanWrite         bool            `json:"can_write"`
-	CreatedBy        string          `json:"created_by"`
-	UpdatedBy        string          `json:"updated_by"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	Version          int             `json:"version"`
+	// WorkspaceName is set in lists of every workspace's apps.
+	WorkspaceName string    `json:"workspace_name,omitempty"`
+	Source        string    `json:"source,omitempty"`
+	CanWrite      bool      `json:"can_write"`
+	CreatedBy     string    `json:"created_by"`
+	UpdatedBy     string    `json:"updated_by"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       int       `json:"version"`
 }
 
 // VersionView is one version of an app.
@@ -155,12 +157,75 @@ func (s *Service) List(ctx context.Context, subject, workspaceID string) ([]View
 		}
 		out := make([]View, 0, len(rows))
 		for _, a := range rows {
-			// Only the form: a version's source and bundle are large.
-			schema, err := t.DAL.Apps().Schema(ctx, a.ID, int64(a.CurrentVersion))
+			item, err := summary(ctx, t, a, write)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, view(a, appstore.Version{Content: appstore.Content{ParametersSchema: schema}}, write))
+			out = append(out, item)
+		}
+		return out, nil
+	})
+}
+
+// summary is an app as lists show it, with its parameters form but not
+// its source: only the form is read, since a version's source and bundle
+// are large.
+func summary(ctx context.Context, t *dms.Service, a appstore.App, write bool) (View, error) {
+	schema, err := t.DAL.Apps().Schema(ctx, a.ID, int64(a.CurrentVersion))
+	if err != nil {
+		return View{}, err
+	}
+	return view(a, appstore.Version{Content: appstore.Content{ParametersSchema: schema}}, write), nil
+}
+
+// Launcher returns the apps subject may see in every workspace, by name,
+// each with its workspace's name: published apps of the workspaces subject
+// reads, and drafts too where subject writes apps.
+func (s *Service) Launcher(ctx context.Context, subject string) ([]View, error) {
+	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]View, error) {
+		rows, err := t.DAL.Apps().List(ctx, appstore.Filter{})
+		if err != nil {
+			return nil, err
+		}
+		var ids []string
+		seen := map[string]bool{}
+		for _, a := range rows {
+			if !seen[a.WorkspaceID] {
+				seen[a.WorkspaceID] = true
+				ids = append(ids, a.WorkspaceID)
+			}
+		}
+		reads, err := t.AuthorizeMany(ctx, subject, "read", ids)
+		if err != nil {
+			return nil, err
+		}
+		type workspace struct {
+			name  string
+			write bool
+		}
+		workspaces := map[string]workspace{}
+		for _, id := range ids {
+			if !reads[id] {
+				continue
+			}
+			ws, err := t.DAL.Resources().Resource(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			workspaces[id] = workspace{name: ws.Name, write: writes(ctx, t, subject, id)}
+		}
+		out := []View{}
+		for _, a := range rows {
+			ws, ok := workspaces[a.WorkspaceID]
+			if !ok || a.State != appstore.StatePublished && !ws.write {
+				continue
+			}
+			item, err := summary(ctx, t, a, ws.write)
+			if err != nil {
+				return nil, err
+			}
+			item.WorkspaceName = ws.name
+			out = append(out, item)
 		}
 		return out, nil
 	})

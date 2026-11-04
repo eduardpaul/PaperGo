@@ -60,6 +60,9 @@ export default app({ render: () => "Hello" });`
 	if w = call(h, "GET", "/v1/workspaces/"+ws.ID+"/apps", ""); w.Code != 200 || !strings.Contains(w.Body.String(), created.ID) || strings.Contains(w.Body.String(), `"source"`) {
 		t.Fatalf("list: %d %s", w.Code, w.Body)
 	}
+	if w = call(h, "GET", "/v1/apps", ""); w.Code != 200 || !strings.Contains(w.Body.String(), created.ID) || !strings.Contains(w.Body.String(), `"workspace_name":"Farm"`) || strings.Contains(w.Body.String(), `"source"`) {
+		t.Fatalf("the launcher: %d %s", w.Code, w.Body)
+	}
 	if w = call(h, "GET", "/v1/apps/"+created.ID, ""); w.Code != 200 || w.Header().Get("ETag") != `"1"` || !strings.Contains(w.Body.String(), `"source"`) {
 		t.Fatalf("get: %d %s", w.Code, w.Body)
 	}

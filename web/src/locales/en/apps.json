@@ -36,5 +36,13 @@
   "frame": {
     "notLoaded": "The app could not be loaded.",
     "stopped": "The app tried to leave its page and was stopped. Open it again to restart it."
+  },
+  "launcher": {
+    "title": "Apps",
+    "description": "Every app you can open, in all your workspaces.",
+    "filter": "Find an app",
+    "empty": "No apps yet",
+    "emptyHint": "Workspace managers add apps in Workspace settings → Apps.",
+    "noMatches": "No app matches “{{q}}”."
   }
 }

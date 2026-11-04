@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { AppWindow, Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, Plus, Search } from 'lucide-react';
+import { AppWindow, Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, LayoutGrid, Plus, Search } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
 import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
@@ -24,6 +24,7 @@ const navigation = [
   { to: '/', label: 'nav.home', icon: House, exact: true },
   { to: '/inbox', label: 'nav.inbox', icon: Inbox, exact: false },
   { to: '/tasks', label: 'nav.tasks', icon: ClipboardCheck, exact: false },
+  { to: '/launcher', label: 'nav.apps', icon: LayoutGrid, exact: false },
   { to: '/search', label: 'nav.search', icon: Search, exact: false },
   { to: '/archive', label: 'nav.archive', icon: Archive, exact: false },
 ] as const;

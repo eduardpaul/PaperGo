@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppLauncherRouteImport } from './routes/_app/launcher'
 import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -85,6 +86,11 @@ const AppArchiveRoute = AppArchiveRouteImport.update({
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLauncherRoute = AppLauncherRouteImport.update({
+  id: '/launcher',
+  path: '/launcher',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
@@ -320,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AppAdminRouteWithChildren
   '/archive': typeof AppArchiveRoute
   '/inbox': typeof AppInboxRoute
+  '/launcher': typeof AppLauncherRoute
   '/notifications': typeof AppNotificationsRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
@@ -367,6 +374,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/archive': typeof AppArchiveRoute
   '/inbox': typeof AppInboxRoute
+  '/launcher': typeof AppLauncherRoute
   '/notifications': typeof AppNotificationsRoute
   '/search': typeof AppSearchRoute
   '/tasks': typeof AppTasksRoute
@@ -415,6 +423,7 @@ export interface FileRoutesById {
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/archive': typeof AppArchiveRoute
   '/_app/inbox': typeof AppInboxRoute
+  '/_app/launcher': typeof AppLauncherRoute
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
@@ -467,6 +476,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/archive'
     | '/inbox'
+    | '/launcher'
     | '/notifications'
     | '/search'
     | '/settings'
@@ -514,6 +524,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/archive'
     | '/inbox'
+    | '/launcher'
     | '/notifications'
     | '/search'
     | '/tasks'
@@ -561,6 +572,7 @@ export interface FileRouteTypes {
     | '/_app/admin'
     | '/_app/archive'
     | '/_app/inbox'
+    | '/_app/launcher'
     | '/_app/notifications'
     | '/_app/search'
     | '/_app/settings'
@@ -654,6 +666,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/launcher': {
+      id: '/_app/launcher'
+      path: '/launcher'
+      fullPath: '/launcher'
+      preLoaderRoute: typeof AppLauncherRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/notifications': {
@@ -1062,6 +1081,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppArchiveRoute: typeof AppArchiveRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppLauncherRoute: typeof AppLauncherRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
@@ -1083,6 +1103,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppArchiveRoute: AppArchiveRoute,
   AppInboxRoute: AppInboxRoute,
+  AppLauncherRoute: AppLauncherRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,

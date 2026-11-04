@@ -160,3 +160,73 @@ func TestAppsAreWrittenByAppManagersAndSeenByReaders(t *testing.T) {
 		t.Fatalf("a deleted app: %v", err)
 	}
 }
+
+// The launcher lists the apps of every workspace the caller reads, with
+// the workspace's name: published apps, and drafts where they write apps.
+func TestLauncherListsTheAppsOfEveryWorkspace(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.Database(t)
+	s := dms.NewService(db.SQL)
+	svc := &Service{DMS: s}
+	directory := identity.Directory{DB: db.SQL}
+	role, err := directory.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "App writers", Scopes: []string{Scope}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
+	}
+	farm, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Farm"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", farm.ID, dms.CreateResource{Kind: "list", Name: "Diesel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	office, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Office"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SetWorkspaceMember(ctx, "alice", farm.ID, dms.WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Create(ctx, "alice", farm.ID, Save{Name: "Diesel tracker", Source: listApp, State: appstore.StatePublished, Parameters: map[string]any{"list": list.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Create(ctx, "alice", farm.ID, Save{Name: "Barn draft", Source: listApp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Create(ctx, "alice", office.ID, Save{Name: "Board", Source: `import { app } from "@papergo/app";
+export default app({ render: () => null });`, State: appstore.StatePublished})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(subject string) []string {
+		t.Helper()
+		apps, err := svc.Launcher(ctx, subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, a := range apps {
+			if a.Source != "" || len(a.ParametersSchema) == 0 {
+				t.Fatalf("a launcher entry: %+v", a)
+			}
+			out = append(out, a.Name+" in "+a.WorkspaceName)
+		}
+		return out
+	}
+	if got := strings.Join(names("alice"), ", "); got != "Barn draft in Farm, Board in Office, Diesel tracker in Farm" {
+		t.Fatalf("alice's launcher: %s", got)
+	}
+	if got := strings.Join(names("bob"), ", "); got != "Diesel tracker in Farm" {
+		t.Fatalf("a visitor of the farm sees its published apps only: %s", got)
+	}
+	if got := names("stranger"); len(got) != 0 {
+		t.Fatalf("someone in no workspace: %v", got)
+	}
+}

@@ -36,5 +36,13 @@
   "frame": {
     "notLoaded": "No se pudo cargar la aplicación.",
     "stopped": "La aplicación intentó salir de su página y se detuvo. Ábrela de nuevo para reiniciarla."
+  },
+  "launcher": {
+    "title": "Aplicaciones",
+    "description": "Todas las aplicaciones que puedes abrir, en todos tus espacios de trabajo.",
+    "filter": "Buscar una aplicación",
+    "empty": "Aún no hay aplicaciones",
+    "emptyHint": "Los responsables de cada espacio de trabajo las añaden en Ajustes del espacio de trabajo → Aplicaciones.",
+    "noMatches": "Ninguna aplicación coincide con «{{q}}»."
   }
 }

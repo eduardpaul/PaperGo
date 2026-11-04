@@ -79,7 +79,7 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 
 ## How it runs
 
-People open a workspace's published apps from the sidebar, below its lists, and those who write apps add and change them in **Workspace settings → Apps**. The app page gives the app the whole screen below the top bar, with a one-line header, and the app is its only scroll area; on a phone it runs edge to edge. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
+People open a workspace's published apps from the sidebar, below its lists. **Apps** in the main navigation, at `/launcher`, lists every app they may open in all their workspaces, grouped by workspace: typing narrows them by name, description or workspace and Enter opens the first; the search palette (Ctrl K) lists them too. Those who write apps add and change them in **Workspace settings → Apps**. The app page gives the app the whole screen below the top bar, with a one-line header, and the app is its only scroll area; on a phone it runs edge to edge. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
 
 The app page puts the app in a sandboxed frame:
 
@@ -114,6 +114,7 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 
 | Method | Route | Purpose |
 | --- | --- | --- |
+| GET | `/v1/apps` | The apps the caller may see in every workspace, by name, each with `workspace_name`, for the launcher |
 | GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, by name, without their source; or create one: `{"name", "description", "source", "parameters", "state", "key"}` |
 | GET / PUT / DELETE | `/v1/apps/{id}` | Read; replace name, description, state, parameters and source (`If-Match`); delete with its versions (`If-Match`) |
 | GET | `/v1/apps/{id}/versions` | Versions with their sources and forms, newest first |

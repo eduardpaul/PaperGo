@@ -29,7 +29,7 @@ function AppsPage() {
     mutationFn: (entry: App) => api(`/v1/apps/${entry.id}`, { method: 'DELETE', ifMatch: entry.version }),
     onSuccess: async () => {
       setDeleting(undefined);
-      await client.invalidateQueries({ queryKey: appKeys.list(workspaceId) });
+      await client.invalidateQueries({ queryKey: appKeys.lists });
     },
   });
   return (

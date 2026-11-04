@@ -1,5 +1,6 @@
 {
   "nav": {
+    "apps": "Apps",
     "archive": "Archive",
     "home": "Home",
     "inbox": "Inbox",
@@ -21,7 +22,8 @@
     "noMatchesSearch": "No matches. Press enter on Search to look through items.",
     "openFile": "Open file",
     "placeholder": "Search or jump to…",
-    "title": "Search or jump to"
+    "title": "Search or jump to",
+    "apps": "Apps"
   },
   "account": {
     "administration": "Administration",

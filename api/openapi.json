@@ -23938,6 +23938,31 @@
         ]
       }
     },
+    "/v1/apps": {
+      "get": {
+        "summary": "List Launcher Apps",
+        "operationId": "listLauncherApps",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The apps the caller may see in every workspace, by name, each with workspace_name, for the launcher: published apps of the workspaces the caller reads, and drafts too where the caller may write apps. Lists leave out the source.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/v1/apps/{id}": {
       "get": {
         "summary": "Get App",
@@ -35020,6 +35045,10 @@
           },
           "current_version": {
             "type": "integer"
+          },
+          "workspace_name": {
+            "type": "string",
+            "description": "The app's workspace's name; set in the launcher's list."
           },
           "source": {
             "type": "string",

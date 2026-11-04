@@ -124,7 +124,8 @@ Saving compiles the source with the esbuild the server embeds, as workflows are 
 
 ## Web
 
-- **Sidebar:** the workspace's published apps, under Apps.
+- **Sidebar:** the workspace's published apps, under its lists.
+- **Launcher** (`/launcher`, Apps in the main navigation, and the search palette): every app the viewer may open, in all workspaces, from `GET /v1/apps`.
 - **App page:** the frame, the bridge, and the app's name and description.
 - **Workspace settings → Apps:**
   - the list of apps, with Add, Publish and Delete;

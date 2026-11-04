@@ -16,6 +16,8 @@ export interface App {
   parameters_schema: Record<string, unknown>;
   current_version: number;
   source?: string;
+  /** Set in the launcher's list. */
+  workspace_name?: string;
   can_write: boolean;
   created_by: string;
   updated_by: string;
@@ -32,7 +34,10 @@ export interface AppVersion {
 }
 
 export const appKeys = {
+  /** Every list of apps: a workspace's and the launcher's. */
+  lists: ['apps'] as const,
   list: (workspaceId: string) => ['apps', workspaceId] as const,
+  launcher: ['apps', 'launcher'] as const,
   one: (id: string) => ['app', id] as const,
 };
 
@@ -41,6 +46,12 @@ export const appsQuery = (workspaceId: string) =>
     queryKey: appKeys.list(workspaceId),
     queryFn: async () => (await api<{ value: App[] }>(`/v1/workspaces/${workspaceId}/apps`)).data.value,
   });
+
+/** The apps the viewer may see in every workspace, by name, with their workspace's name. */
+export const launcherQuery = queryOptions({
+  queryKey: appKeys.launcher,
+  queryFn: async () => (await api<{ value: App[] }>('/v1/apps')).data.value,
+});
 
 export const appQuery = (id: string) =>
   queryOptions({
