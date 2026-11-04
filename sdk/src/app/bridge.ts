@@ -11,7 +11,7 @@ export type OpenTarget = { itemId: string } | { taskId: string } | { listId: str
 /** The page's theme. */
 export type Theme = "light" | "dark";
 
-/** A live change of an item the viewer may see, in the app's workspace. */
+/** A live change of an item the viewer may see, in the app's workspace or leaving it. */
 export interface Change {
   id: string;
   /** The item's list or library, when the page knows it. */
@@ -20,6 +20,10 @@ export interface Change {
   contentTypeId?: string;
   /** Whether the item was removed or is no longer visible. */
   removed?: boolean;
+  /** Whether the item was created. */
+  created?: boolean;
+  /** Where the page last saw the item before this change, when it did. */
+  from?: { collectionId?: string; contentTypeId?: string };
   /** The page's live stream reconnected and may have missed changes: read everything again. */
   resync?: boolean;
 }

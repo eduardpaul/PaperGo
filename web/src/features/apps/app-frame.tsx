@@ -9,7 +9,7 @@ import { can } from '@/features/lists/access';
 import { useTranslation } from '@/i18n';
 import { onItemChange } from '@/lib/live';
 import { appBundle, type App } from './api';
-import { appChange, appDocument, send, type BridgeRequest } from './bridge';
+import { appChange, appDocument, rememberRead, send, type BridgeRequest, type Places } from './bridge';
 
 type Target = { itemId: string } | { taskId: string } | { listId: string };
 
@@ -60,6 +60,8 @@ export function AppFrame({ app }: { app: App }) {
     let port: MessagePort | undefined;
     let loads = 0;
     let stopLive: (() => void) | undefined;
+    // Where this run of the app saw its workspace's items.
+    const places: Places = new Map();
     const tellTheme = () => port?.postMessage({ type: 'papergo:theme', theme: currentTheme() });
     const themes = new MutationObserver(tellTheme);
     const open = async (target: Target) => {
@@ -71,6 +73,7 @@ export function AppFrame({ app }: { app: App }) {
     const serve = async (message: FrameMessage) => {
       if (message.type === 'papergo:request') {
         const response = await send(message);
+        rememberRead(message.url, response, app.workspace_id, places);
         port?.postMessage({ type: 'papergo:response', id: message.id, response }, response.bytes ? [response.bytes] : []);
       } else if (message.type === 'papergo:open') {
         void open(message.target).catch(() => undefined);
@@ -83,7 +86,7 @@ export function AppFrame({ app }: { app: App }) {
       port.onmessage = (e: MessageEvent<FrameMessage>) => void serve(e.data);
       element.contentWindow?.postMessage({ type: 'papergo:port' }, '*', [channel.port2]);
       stopLive = onItemChange((item) => {
-        const change = appChange(item, app.workspace_id);
+        const change = appChange(item, app.workspace_id, places);
         if (change) port?.postMessage({ type: 'papergo:change', changes: [change] });
       });
       // The theme may have changed since the document was written.

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { setToken } from '@/api/http';
-import { appChange, appDocument, refusal, send } from './bridge';
+import { appChange, appDocument, refusal, rememberRead, send, type Places } from './bridge';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -91,9 +91,21 @@ it('keeps a <!-- in a script from swallowing the scripts after it', () => {
 });
 
 it('tells an app of the changes of its own workspace only', () => {
+  const places: Places = new Map();
   const change = { id: 'i1', workspaceId: 'w1', collectionId: 'l1', contentTypeId: 't1', removed: false };
-  expect(appChange(change, 'w1')).toEqual({ id: 'i1', collectionId: 'l1', contentTypeId: 't1', removed: false });
-  expect(appChange(change, 'w2')).toBeUndefined();
-  expect(appChange({ id: 'i2', workspaceId: 'w2', removed: true }, 'w1')).toBeUndefined();
-  expect(appChange({ id: '', resync: true }, 'w1')).toEqual({ id: '', resync: true });
+  expect(appChange(change, 'w1', places)).toEqual({ id: 'i1', collectionId: 'l1', contentTypeId: 't1', removed: false });
+  expect(appChange({ id: 'i3', workspaceId: 'w2', collectionId: 'l9' }, 'w1', places)).toBeUndefined();
+  expect(appChange({ id: 'i2', workspaceId: 'w2', removed: true }, 'w1', places)).toBeUndefined();
+  expect(appChange({ id: '', resync: true }, 'w1', places)).toEqual({ id: '', resync: true });
+});
+
+it('tells an app where an item was, and of one that left its workspace', () => {
+  const places: Places = new Map();
+  rememberRead('/v1/resources/l1/query/compact?$top=500', { status: 200, headers: {}, body: JSON.stringify({ value: [{ id: 'i1', workspace_id: 'w1', content_type_id: 't1' }, { id: 'x', workspace_id: 'w2' }] }) }, 'w1', places);
+  expect(places.get('i1')).toEqual({ collectionId: 'l1', contentTypeId: 't1' });
+  expect(places.has('x')).toBe(false);
+  expect(appChange({ id: 'i1', workspaceId: 'w1', collectionId: 'l1', contentTypeId: 't2' }, 'w1', places)).toEqual({ id: 'i1', collectionId: 'l1', contentTypeId: 't2', from: { collectionId: 'l1', contentTypeId: 't1' } });
+  // Moved to another workspace: removed from where the app saw it, without saying where it went.
+  expect(appChange({ id: 'i1', workspaceId: 'w2', collectionId: 'l9', contentTypeId: 't9' }, 'w1', places)).toEqual({ id: 'i1', collectionId: 'l1', contentTypeId: 't2', removed: true });
+  expect(appChange({ id: 'i1', workspaceId: 'w2', collectionId: 'l9' }, 'w1', places)).toBeUndefined();
 });

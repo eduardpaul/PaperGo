@@ -134,7 +134,20 @@ function useConcerns(listId: string | undefined, contentTypeId: string | undefin
       stale = true;
     };
   }, [ctx, listId, contentTypeId, live]);
-  return (change) => change.collectionId === listId && !cannotMatch(types, contentTypeId, change.contentTypeId);
+  return (change) => concerns(listId, contentTypeId, types, change);
+}
+
+/**
+ * Whether a change can concern a query of a list and a type: the item is in
+ * it now or was where the page last saw it. An item of the list the page had
+ * not seen may have changed type in place, so it concerns the query whatever
+ * its type, unless it was just created.
+ */
+export function concerns(listId: string | undefined, contentTypeId: string | undefined, types: ListType[] | undefined, change: Change): boolean {
+  const within = (place: { collectionId?: string; contentTypeId?: string }) => place.collectionId === listId && !cannotMatch(types, contentTypeId, place.contentTypeId);
+  if (within(change)) return true;
+  if (change.from) return within(change.from);
+  return change.collectionId === listId && !change.created && !change.removed;
 }
 
 function toSpec(q: Query): Record<string, unknown> {

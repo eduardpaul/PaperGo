@@ -5,7 +5,7 @@
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
 import { appContext, RequestError, type Init } from "../../src/app/context.js";
 import { formatter, wallClock } from "../../src/app/format.js";
-import { aggregateRequest, cannotMatch, queryRequest, readPages } from "../../src/app/hooks.js";
+import { aggregateRequest, cannotMatch, concerns, queryRequest, readPages } from "../../src/app/hooks.js";
 import { flipSign, ticks } from "../../src/app/kit.js";
 import { json } from "../../src/values.js";
 
@@ -162,6 +162,16 @@ expect("a type the list did not have when read", cannotMatch(types, "invoice", "
 expect("a query of any type", cannotMatch(types, undefined, "reading"), false);
 expect("an item without a type", cannotMatch(types, "invoice", undefined), false);
 expect("before the types are read", cannotMatch(undefined, "invoice", "reading"), false);
+
+// A change concerns a query where the item is now or where the page saw it.
+const of = (change: Parameters<typeof concerns>[3]) => concerns("l1", "invoice", types, change);
+expect("an item of the type in the list", of({ id: "a", collectionId: "l1", contentTypeId: "copy" }), true);
+expect("an item that left the list", of({ id: "a", collectionId: "l2", contentTypeId: "copy", from: { collectionId: "l1", contentTypeId: "copy" } }), true);
+expect("an item that changed to another type", of({ id: "a", collectionId: "l1", contentTypeId: "reading", from: { collectionId: "l1", contentTypeId: "copy" } }), true);
+expect("an item of another type that stays one", of({ id: "a", collectionId: "l1", contentTypeId: "reading", from: { collectionId: "l1", contentTypeId: "reading" } }), false);
+expect("an item of the list the page had not seen", of({ id: "a", collectionId: "l1", contentTypeId: "reading" }), true);
+expect("a new item of another type", of({ id: "a", collectionId: "l1", contentTypeId: "reading", created: true }), false);
+expect("an item removed from another list", of({ id: "a", collectionId: "l2", removed: true }), false);
 
 if (failed) process.exit(1);
 console.log("the app runtime reads formats and sends requests through the page");

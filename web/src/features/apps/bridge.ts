@@ -112,15 +112,70 @@ export async function send(request: BridgeRequest, fetcher: typeof fetch = fetch
   }
 }
 
+/** Where an app last saw an item of its workspace: its list and its type. */
+export interface Place {
+  collectionId?: string;
+  contentTypeId?: string;
+}
+
+/** The live change an app is told of: the item's place now and, when known, where the app saw it before. */
+export type AppChange = Omit<ItemChange, 'workspaceId'> & { from?: Place };
+
+/** The places an app frame has seen, oldest first, up to placesKept. */
+export type Places = Map<string, Place>;
+
+const placesKept = 100_000;
+
+function remember(places: Places, id: string, place: Place) {
+  places.delete(id);
+  places.set(id, place);
+  if (places.size > placesKept) places.delete(places.keys().next().value as string);
+}
+
 /**
- * The live change an app of a workspace is told of, if any: an app hears of
- * its own workspace, whatever else its viewer may see. A resync may have
- * missed changes anywhere, and names no item.
+ * The live change an app of a workspace is told of, if any. An app hears of
+ * its own workspace, whatever else its viewer may see: an item that leaves
+ * it for another is told as removed from where the app last saw it, and an
+ * item the app never saw there is not told of. A change carries the place
+ * the app saw the item in before, so a figure of a list hears of an item
+ * leaving it or changing type. A resync may have missed changes anywhere,
+ * and names no item.
  */
-export function appChange(change: ItemChange, workspaceId: string): Omit<ItemChange, 'workspaceId'> | undefined {
+export function appChange(change: ItemChange, workspaceId: string, places: Places): AppChange | undefined {
   if (change.resync) return { id: '', resync: true };
-  if (change.workspaceId !== workspaceId) return undefined;
-  return { id: change.id, collectionId: change.collectionId, contentTypeId: change.contentTypeId, removed: change.removed };
+  const before = places.get(change.id);
+  if (change.workspaceId !== workspaceId) {
+    if (!before) return undefined;
+    places.delete(change.id);
+    return { id: change.id, ...before, removed: true };
+  }
+  const place = { collectionId: change.collectionId, contentTypeId: change.contentTypeId };
+  if (change.removed) places.delete(change.id);
+  else remember(places, change.id, place);
+  return { id: change.id, ...place, removed: change.removed, created: change.created, ...(before ? { from: before } : {}) };
+}
+
+/**
+ * Remembers where the items an app read are: those of its workspace in a
+ * response, an item or a page of them. A collection's query names its
+ * collection in the path, as compact items do not.
+ */
+export function rememberRead(url: string, response: BridgeResponse, workspaceId: string, places: Places) {
+  if (response.status >= 300 || !response.body.startsWith('{')) return;
+  let body: { id?: unknown; value?: unknown };
+  try {
+    body = JSON.parse(response.body) as typeof body;
+  } catch {
+    return;
+  }
+  const queried = /^\/v1\/resources\/([^/?#]+)\/query(?:\/compact)?(?:[?#]|$)/.exec(new URL(url, 'http://app').pathname)?.[1];
+  type Read = { id?: unknown; workspace_id?: unknown; container_id?: unknown; content_type_id?: unknown };
+  const items = (Array.isArray(body.value) ? body.value : [body]) as Read[];
+  for (const item of items) {
+    if (!item || typeof item.id !== 'string' || item.workspace_id !== workspaceId) continue;
+    const collectionId = typeof item.container_id === 'string' ? item.container_id : queried && decodeURIComponent(queried);
+    remember(places, item.id, { collectionId: collectionId || undefined, contentTypeId: typeof item.content_type_id === 'string' ? item.content_type_id : undefined });
+  }
 }
 
 /** The frame's document: the runtime, the app's code and the start, under a CSP without network. */

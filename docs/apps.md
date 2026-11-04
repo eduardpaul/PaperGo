@@ -90,7 +90,7 @@ The app page puts the app in a sandboxed frame:
    - PaperGo's page allows frames to show only the documents it writes (`frame-src 'none'`), so the frame cannot navigate anywhere. A frame that loads another document all the same is stopped.
 2. Before the app's code runs, the runtime asks the page for a message port, and the page answers that first request only. Every API request the app makes travels over that port.
 3. The page sends each request as the viewer and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
-4. The page passes on the live changes of the items the viewer may see in the app's workspace, so live queries read again, and changes of its theme, so the app follows without restarting.
+4. The page passes on the live changes of the items the viewer may see in the app's workspace, so live queries read again, and changes of its theme, so the app follows without restarting. Each change says where the page last saw the item, so a live figure of a list reads again when an item leaves it or changes type; an item the app saw that moves to another workspace is told as removed, without saying where it went.
 
 An app does what its viewer may, through the API only, and never holds a login, so it cannot act as the viewer once the page is closed.
 

@@ -19,6 +19,8 @@ export interface ItemChange {
   contentTypeId?: string;
   /** The item was deleted or is no longer visible. */
   removed?: boolean;
+  /** The item was created. */
+  created?: boolean;
   /** Changes may have been missed; read everything again. */
   resync?: boolean;
 }
@@ -34,11 +36,11 @@ export function onItemChange(listener: (change: ItemChange) => void): () => void
 function itemChange(data: string): ItemChange | undefined {
   try {
     type Place = { workspace_id?: string; container_id?: string | null; content_type_id?: string | null };
-    const frame = JSON.parse(data) as Place & { id?: string; item?: Place; '@removed'?: unknown };
+    const frame = JSON.parse(data) as Place & { id?: string; action?: string; item?: Place; '@removed'?: unknown };
     if (!frame.id) return undefined;
     // A removal says where the item was, as it can no longer send the item.
     const place = frame.item ?? frame;
-    return { id: frame.id, workspaceId: place.workspace_id, collectionId: place.container_id ?? undefined, contentTypeId: place.content_type_id ?? undefined, removed: frame['@removed'] !== undefined };
+    return { id: frame.id, workspaceId: place.workspace_id, collectionId: place.container_id ?? undefined, contentTypeId: place.content_type_id ?? undefined, removed: frame['@removed'] !== undefined, created: frame.action === 'created' };
   } catch {
     return undefined;
   }
