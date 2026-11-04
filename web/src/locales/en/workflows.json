@@ -187,6 +187,7 @@
   "form": {
     "invalidJson": "Enter valid JSON.",
     "include": "Include",
+    "defaultsToNow": "Left empty, it is the moment you send this.",
     "choose": "Choose…",
     "moveUp": "Move up",
     "moveDown": "Move down",

@@ -1,4 +1,5 @@
 import { numericInput } from "@/api/json";
+import { localDay } from "@/features/fields/values";
 import type { FilterExpr } from "@/api/types";
 
 export interface FormSchema {
@@ -11,7 +12,10 @@ export interface FormSchema {
   additionalProperties?: boolean | FormSchema;
   required?: string[];
   items?: FormSchema;
+  /** date (yyyy-MM-dd) and date-time (RFC 3339) are checked by the server; others are hints. */
   format?: string;
+  /** "now" fills a date or date-time left out with the moment the form is sent. */
+  "x-papergo-default"?: "now";
   readOnly?: boolean;
   minimum?: number;
   maximum?: number;
@@ -72,7 +76,22 @@ export interface WorkflowCatalog {
   triggers: { type: string; description: string }[];
 }
 
-export function normalizeForm(schema: FormSchema, value: unknown): unknown {
+/** Whether a property is a date or date-time that defaults to the moment the form is sent. */
+export function defaultsToNow(schema: FormSchema): boolean {
+  return schema["x-papergo-default"] === "now" && (schema.format === "date" || schema.format === "date-time");
+}
+
+/** The moment the form is sent as a date or date-time property holds it, in the browser's time zone. */
+export function nowValue(schema: FormSchema, now = new Date()): string {
+  return schema.format === "date" ? localDay(now) : now.toISOString();
+}
+
+/**
+ * Typed values as the server reads them: numbers as JSON numbers, a cleared date or date-time left out,
+ * and a date or date-time that defaults to now filled with the moment it is sent, in the person's own
+ * time zone rather than the server's.
+ */
+export function normalizeForm(schema: FormSchema, value: unknown, now = new Date()): unknown {
   if (value === undefined) return undefined;
   if (schema.type === "number" || schema.type === "integer")
     return typeof value === "string"
@@ -80,15 +99,19 @@ export function normalizeForm(schema: FormSchema, value: unknown): unknown {
       : value;
   if (schema.type === "array")
     return (value as unknown[]).map((value) =>
-      normalizeForm(schema.items ?? {}, value),
+      normalizeForm(schema.items ?? {}, value, now),
     );
-  if (schema.type === "object" && schema.properties)
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, value]) => [
-        key,
-        normalizeForm(schema.properties?.[key] ?? {}, value),
-      ]),
-    );
+  if (schema.type === "object" && schema.properties) {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      const property = schema.properties[key] ?? {};
+      if (entry === "" && (property.format === "date" || property.format === "date-time")) continue;
+      out[key] = normalizeForm(property, entry, now);
+    }
+    for (const [key, property] of Object.entries(schema.properties))
+      if (out[key] === undefined && defaultsToNow(property)) out[key] = nowValue(property, now);
+    return out;
+  }
   return value;
 }
 

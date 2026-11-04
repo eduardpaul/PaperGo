@@ -9,6 +9,7 @@ import (
 	"papergo/internal/identity"
 	"strings"
 	"testing"
+	"time"
 )
 
 func schemaOf(t *testing.T, raw string) map[string]any {
@@ -55,6 +56,14 @@ func TestFormSchemaValidation(t *testing.T) {
 		"bad access":                      {`{"type": "object", "properties": {"a": {"type": "string", "x-papergo": {"kind": "people", "access": "own"}}}}`, "access must be"},
 		"hint not text":                   {`{"type": "object", "properties": {}, "x-papergo-selection": {"preview": 1}}`, "not a text hint"},
 		"nested hint":                     {`{"type": "object", "properties": {"a": {"type": "object", "properties": {}, "x-papergo-selection": {}}}}`, "belongs to the root"},
+		"dates":                           {`{"type": "object", "properties": {"d": {"type": "string", "format": "date", "x-papergo-default": "now"}, "t": {"type": "string", "format": "date-time", "default": "2026-11-04T09:30:00+01:00"}, "e": {"type": "string", "format": "email"}}}`, ""},
+		"date on a number":                {`{"type": "object", "properties": {"d": {"type": "number", "format": "date"}}}`, "applies to strings"},
+		"format not a name":               {`{"type": "object", "properties": {"d": {"type": "string", "format": 1}}}`, "format must be a name"},
+		"bad date default":                {`{"type": "object", "properties": {"d": {"type": "string", "format": "date", "default": "4/11/2026"}}}`, "must be a date"},
+		"now without a date":              {`{"type": "object", "properties": {"d": {"type": "string", "x-papergo-default": "now"}}}`, "x-papergo-default must be"},
+		"now on a number":                 {`{"type": "object", "properties": {"d": {"type": "integer", "x-papergo-default": "now"}}}`, "x-papergo-default must be"},
+		"other dynamic default":           {`{"type": "object", "properties": {"d": {"type": "string", "format": "date", "x-papergo-default": "today"}}}`, "x-papergo-default must be"},
+		"two defaults":                    {`{"type": "object", "properties": {"d": {"type": "string", "format": "date", "default": "2026-11-04", "x-papergo-default": "now"}}}`, "cannot both be set"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := ValidateLaunch(schemaOf(t, tc.schema), "input_schema")
@@ -106,6 +115,51 @@ func TestFormValues(t *testing.T) {
 	}
 	if _, err := Values(nil, map[string]any{"a": 1}, "inputs"); err == nil {
 		t.Fatal("values without a form")
+	}
+}
+
+// A date or date-time is checked, and x-papergo-default fills one left out
+// with the moment of the submission; a value given is kept.
+func TestFormDatesAndNowDefaults(t *testing.T) {
+	s := schemaOf(t, `{"type": "object", "required": ["depth_cm", "measured_at"], "properties": {
+		"depth_cm": {"type": "number", "minimum": 0},
+		"measured_at": {"type": "string", "format": "date-time", "x-papergo-default": "now"},
+		"day": {"type": "string", "format": "date", "x-papergo-default": "now"},
+		"due": {"type": "string", "format": "date"}}}`)
+	if err := Validate(s, "input_schema"); err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now().UTC().Truncate(time.Second)
+	got, err := Values(s, map[string]any{"depth_cm": json.Number("41.5")}, "input")
+	after := time.Now().UTC()
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, err := time.Parse(time.RFC3339, got["measured_at"].(string))
+	if err != nil || at.Before(before) || at.After(after) || at.Location() != time.UTC {
+		t.Fatalf("measured_at %v: %v", got["measured_at"], err)
+	}
+	if day := got["day"]; day != before.Format(time.DateOnly) && day != after.Format(time.DateOnly) {
+		t.Fatalf("day %v", day)
+	}
+	if _, set := got["due"]; set {
+		t.Fatalf("due has no default: %v", got)
+	}
+	given, err := Values(s, map[string]any{"depth_cm": 40, "measured_at": "2026-11-02T18:05:00+01:00", "day": "2026-11-02", "due": "2026-11-20"}, "input")
+	if err != nil || given["measured_at"] != "2026-11-02T18:05:00+01:00" || given["day"] != "2026-11-02" {
+		t.Fatalf("given values %v: %v", given, err)
+	}
+	for name, values := range map[string]map[string]any{
+		"date-time without a zone": {"depth_cm": 40, "measured_at": "2026-11-02T18:05"},
+		"date-time as a date":      {"depth_cm": 40, "measured_at": "2026-11-02"},
+		"date with a time":         {"depth_cm": 40, "due": "2026-11-20T10:00:00Z"},
+		"not a calendar date":      {"depth_cm": 40, "due": "2026-02-30"},
+		"empty date":               {"depth_cm": 40, "due": ""},
+		"local date order":         {"depth_cm": 40, "due": "20/11/2026"},
+	} {
+		if _, err := Values(s, values, "input"); err == nil || !strings.Contains(err.Error(), "must be a date") {
+			t.Errorf("%s: error %v", name, err)
+		}
 	}
 }
 

@@ -12,7 +12,7 @@ import { useTranslation } from '@/i18n';
 import { useDebounced } from '@/lib/use-debounced';
 import { useResourceNames, useTermNames } from './names';
 import { usePeopleNames } from './people';
-import { asList, fieldText } from './values';
+import { asList, fieldText, fromLocalInput, toLocalInput } from './values';
 
 export function FieldEditor({
   field,
@@ -92,7 +92,7 @@ function Control({
         id={id}
         type="datetime-local"
         value={toLocalInput(fieldText(value))}
-        onChange={(event) => onChange(event.target.value ? new Date(event.target.value).toISOString() : '')}
+        onChange={(event) => onChange(fromLocalInput(event.target.value))}
       />
     );
   }
@@ -106,14 +106,6 @@ function Control({
       onChange={(event) => onChange(event.target.value)}
     />
   );
-}
-
-function toLocalInput(value: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function ChoiceEditor({

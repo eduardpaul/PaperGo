@@ -383,6 +383,7 @@ Launch inputs, run outputs, built-in parameters and task forms are described by 
 - Structure: `type` (`string`, `number`, `integer`, `boolean`, `array`, `object`), `properties`, `required`, `items`, `additionalProperties` (boolean or a schema). Ordinary forms are closed unless they opt into additional properties.
 - Constraints: `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`.
 - Annotations: `default`, `title`, `description`, `format`, `examples`, `readOnly`, `writeOnly`, `deprecated` and `$comment`.
+- Dates: on a string, `format: "date"` (`2026-11-04`) and `format: "date-time"` (RFC 3339, `2026-11-04T09:30:00Z`) are checked, and the web app shows a date or a date and time picker in the person's time zone. Other formats are presentation hints. `"x-papergo-default": "now"` on such a property fills it, when a value is left out, with the moment the form is sent: the web app fills it in the person's time zone, and the server, for an API client that leaves it out, with today's date in UTC or the current time. It takes the place of `default`.
 - Presentation hints: other `x-*` keys are kept for UIs and ignored by the server.
 - Rejected: a keyword the server would not enforce (`pattern`, `oneOf`, ...), so a form never promises a check that does not happen. A keyword on the wrong type is rejected too.
 
@@ -390,6 +391,7 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 
 **Values.**
 - Defaults fill missing properties, nested objects included.
+- Numbers typed in the web app use the decimal separator of the person's `number_format` [preference](preferences.md): where it is a comma, `41,5` is 41.5. A dot is always a decimal point, and text with both is refused rather than guessed.
 - Missing required values, unknown names, wrong types (an `integer` must be whole), values outside `enum` or the bounds, and duplicate entries under `uniqueItems` are rejected with the failing path, such as `inputs.options.notify`.
 - A manual start is refused before any run starts, and the run keeps the final values: `inputs` in the run detail, and the script's `input`.
 

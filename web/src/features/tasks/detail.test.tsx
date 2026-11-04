@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { parseJSON, stringifyJSON } from '@/api/json';
+import { parseJSON, setDecimalSeparator, stringifyJSON } from '@/api/json';
 import type { Task } from '@/api/types';
 import { TaskDetail } from './detail';
 
@@ -68,6 +68,51 @@ it('answers a custom task with its prefilled form, one button per outcome and a 
   fireEvent.click(screen.getByRole('button', { name: 'Correct' }));
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   expect(parseJSON(String(fetch.mock.calls[1][1]?.body))).toEqual({ outcome: 'correct', comment: 'VAT missing', input: { total: 125 } });
+});
+
+it('files a reading typed with a decimal comma, at the moment it is sent unless a time is chosen', async () => {
+  setDecimalSeparator(',');
+  const task: Task = {
+    ...base,
+    title: 'Measure the diesel barrel',
+    outcomes: [{ key: 'measured', label: 'Save reading', style: 'primary' }],
+    input_schema: {
+      type: 'object',
+      required: ['depth_cm'],
+      properties: {
+        depth_cm: { type: 'number', title: 'Diesel on the dipstick (cm)', minimum: 0 },
+        measured_at: { type: 'string', format: 'date-time', title: 'Measured at', 'x-papergo-default': 'now' },
+      },
+    },
+  };
+  const fetch = stub((path) => (path.endsWith('/responses') ? new Response(stringifyJSON({ ...task, status: 'completed' })) : undefined));
+  try {
+    show(task);
+    expect(screen.getByText('Left empty, it is the moment you send this.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Diesel on the dipstick/), { target: { value: '41,5' } });
+    const before = Date.now();
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const first = parseJSON(String(fetch.mock.calls[0][1]?.body)) as { input: { depth_cm: number; measured_at: string } };
+    expect(first.input.depth_cm).toBe(41.5);
+    expect(Date.parse(first.input.measured_at)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(first.input.measured_at)).toBeLessThanOrEqual(Date.now());
+
+    // Included, the time starts at now and can be changed; it is sent as a UTC moment.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include' }));
+    const time = screen.getByLabelText('Measured at') as HTMLInputElement;
+    expect(time.type).toBe('datetime-local');
+    expect(time.value).not.toBe('');
+    fireEvent.change(time, { target: { value: '2026-11-02T18:05' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(parseJSON(String(fetch.mock.calls[1][1]?.body))).toEqual({
+      outcome: 'measured',
+      input: { depth_cm: 41.5, measured_at: new Date('2026-11-02T18:05').toISOString() },
+    });
+  } finally {
+    setDecimalSeparator('.');
+  }
 });
 
 it('shows a stale review of an approval and the answers given, read only', async () => {

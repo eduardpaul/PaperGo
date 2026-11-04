@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { numericInput } from '@/api/json';
+import { decimalText, numericInput } from '@/api/json';
 import { fileTypes } from '@/api/auth';
 import { fileTypeLabel } from '@/features/files/file-types';
 import type { FieldDefinition, FilterExpr } from '@/api/types';
@@ -25,9 +25,13 @@ export function normalizeFilter(filter: FilterExpr | undefined, fields: FieldDef
   if (filter.not) return { not: normalizeFilter(filter.not, fields) };
   const field = fields.find((field) => field.key === filter.field);
   const normalize = (value: unknown) =>
-    typeof value === 'string' && ['integer', 'number', 'currency'].includes(field?.type ?? '')
-      ? numericInput(value, field?.type === 'integer')
-      : value;
+    typeof value !== 'string'
+      ? value
+      : ['integer', 'number', 'currency'].includes(field?.type ?? '')
+        ? numericInput(value, field?.type === 'integer')
+        : field?.type === 'decimal'
+          ? decimalText(value)
+          : value;
   if (filter.op === 'missing' || filter.op === 'present') return { field: filter.field, op: filter.op };
   if (filter.value_ref) return { field: filter.field, op: filter.op, value_ref: filter.value_ref };
   return {

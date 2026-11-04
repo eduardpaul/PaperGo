@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
+import { fromLocalInput, toLocalInput } from '@/features/fields/values';
 import { typeTree } from '@/features/lists/schema';
 import { useTranslation } from '@/i18n';
-import { formDefaults } from './model';
+import { defaultsToNow, formDefaults, nowValue } from './model';
 import type { FormSchema } from './model';
 
 export function JsonInput({
@@ -105,7 +106,9 @@ function SchemaValue({
   const present = value !== undefined || required;
   const empty =
     schema.default ??
-    (schema.type === 'object'
+    (defaultsToNow(schema)
+      ? nowValue(schema)
+      : schema.type === 'object'
       ? formDefaults(schema)
       : schema.type === 'array'
         ? []
@@ -131,6 +134,7 @@ function SchemaValue({
         )}
       </div>
       {schema.description && <p className="text-xs text-muted">{schema.description}</p>}
+      {defaultsToNow(schema) && <p className="text-xs text-muted">{t('form.defaultsToNow')}</p>}
       <fieldset disabled={!present || schema.readOnly}>
         {schema['x-papergo'] ? (
           <DomainPicker
@@ -171,12 +175,20 @@ function SchemaValue({
           <ArrayValues schema={schema} value={value} onChange={onChange} label={label} workspaceId={workspaceId}/>
         ) : schema.type === 'object' ? (
           <JsonInput value={value ?? {}} onChange={onChange} label={label} />
+        ) : schema.type === 'string' && schema.format === 'date-time' ? (
+          <Input
+            id={id}
+            type="datetime-local"
+            required={required && !defaultsToNow(schema)}
+            value={toLocalInput(String(value ?? ''))}
+            onChange={(event) => onChange(fromLocalInput(event.target.value))}
+          />
         ) : (
           <Input
             id={id}
             type={schema.format === 'date' ? 'date' : schema.format === 'email' ? 'email' : 'text'}
             inputMode={schema.type === 'number' || schema.type === 'integer' ? 'decimal' : undefined}
-            required={required}
+            required={required && !defaultsToNow(schema)}
             minLength={schema.minLength}
             maxLength={schema.maxLength}
             value={String(value ?? '')}

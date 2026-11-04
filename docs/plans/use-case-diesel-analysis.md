@@ -85,7 +85,7 @@ This is the **reactive** backend pattern of [workspace apps](workspace-apps.md#b
 
 ### Measuring reminder
 
-Every morning at 08:00 in the owner's time zone, the reminder looks at the last reading. When it is `every_days` (15) old or more, and no reminder is open, it creates a **task** for `assignees`. The task's form asks for the centimetres on the dipstick. Answering it files the reading, so the person never opens the list or the app: the task in their Tasks screen is the data entry. `diesel-levels` then converts it like any other reading.
+Every morning at 08:00 in the owner's time zone, the reminder looks at the last reading. When it is `every_days` (15) old or more, and no reminder is open, it creates a **task** for `assignees`. The task's form asks for the centimetres on the dipstick and, optionally, when they were measured: left empty, it is the moment of the answer. Answering it files the reading, so the person never opens the list or the app: the task in their Tasks screen is the data entry. `diesel-levels` then converts it like any other reading.
 
 - **15 days after the last reading, not on fixed dates.** Someone who measures on day 10 is next asked on day 25. A fixed calendar (`cron: "0 8 1,16 * *"`) would ask even after a fresh reading. The daily check is cheap: one query, and nothing written on most days.
 - **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task. The run waiting on that task ends quietly.
@@ -141,7 +141,7 @@ export default workflow<unknown, unknown, Params>({
 
     let answer;
     try {
-      answer = await ctx.ask<{ depth_cm: number }>({
+      answer = await ctx.ask<{ depth_cm: number; measured_at: string }>({
         key: KEY,
         title: "Measure the diesel barrel",
         description: at ? `The last reading was on ${String(at).slice(0, 10)}.` : "There is no reading yet.",
@@ -153,6 +153,7 @@ export default workflow<unknown, unknown, Params>({
           required: ["depth_cm"],
           properties: {
             depth_cm: { type: "number", title: "Diesel on the dipstick (cm)", minimum: 0 },
+            measured_at: { type: "string", format: "date-time", title: "Measured at", "x-papergo-default": "now" },
           },
         },
         outcomes: [{ key: "measured", label: "Save reading", style: "primary" }],
@@ -163,7 +164,7 @@ export default workflow<unknown, unknown, Params>({
     }
 
     const depth = Number(answer.input!.depth_cm).toFixed(1);
-    const when = new Date().toISOString();
+    const when = answer.input!.measured_at;
     await api.v1.resources.byId(p.list).children.post({
       kind: "item",
       name: `Reading ${when.slice(0, 10)} · ${depth} cm`,

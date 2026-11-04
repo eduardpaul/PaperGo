@@ -190,6 +190,7 @@
   "form": {
     "invalidJson": "Introduce un JSON válido.",
     "include": "Incluir",
+    "defaultsToNow": "Si lo dejas vacío, se usa el momento en que lo envías.",
     "choose": "Elige…",
     "moveUp": "Subir",
     "moveDown": "Bajar",
