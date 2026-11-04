@@ -311,7 +311,8 @@ export default workflow({
 }
 
 // A unique task is asked once: a second run asking while it is open is
-// refused with task_open and ends, and the first run gets the answer.
+// refused with task_open, updates the open task instead and ends, and the
+// first run gets the answer.
 func TestUniqueTasksAreAskedOnce(t *testing.T) {
 	r := run(t)
 	w := r.workflow(t, "Measure", `import { workflow } from "@papergo/workflow";
@@ -320,11 +321,14 @@ export default workflow({
   triggers: [{ type: "manual", collection_id: "`+r.list+`" }],
   async run(ctx) {
     try {
-      const answer = await ctx.ask({ key: "diesel_measure", unique: true, title: "Measure the diesel barrel" });
+      const answer = await ctx.ask({ key: "diesel_measure", unique: true, title: "Measure the diesel barrel", dueAt: new Date("2030-01-01T08:00:00Z") });
       return answer.outcome;
     } catch (e) {
-      if ((e as { code?: string }).code === "task_open") return "already asked";
-      throw e;
+      const problem = e as { code?: string; openTaskId?: string };
+      if (problem.code !== "task_open") throw e;
+      const open = await ctx.api.v1.tasks.byId(problem.openTaskId!).get();
+      await ctx.api.v1.tasks.byId(problem.openTaskId!).patch({ title: "Measure the diesel barrel today", dueAt: null }, { headers: { "If-Match": '"' + open!.version + '"' } });
+      return "updated";
     }
   },
 });
@@ -333,17 +337,19 @@ export default workflow({
 	first := r.start(t, w, nil, itemID)
 	r.await(t, first, runstore.StatusWaiting)
 	second := r.await(t, r.start(t, w, nil, itemID), runstore.StatusCompleted)
-	if string(second.Result) != `"already asked"` {
+	if string(second.Result) != `"updated"` {
 		t.Fatalf("the second run asked again: %s", second.Result)
 	}
 	var tasks struct {
 		Value []struct {
-			ID string `json:"id"`
+			ID    string     `json:"id"`
+			Title string     `json:"title"`
+			DueAt *time.Time `json:"due_at"`
 		} `json:"value"`
 	}
 	r.call(t, "GET", "/v1/workspaces/"+r.ws+"/tasks?key=diesel_measure", "", 200, &tasks)
-	if len(tasks.Value) != 1 {
-		t.Fatalf("tasks: %+v", tasks)
+	if len(tasks.Value) != 1 || tasks.Value[0].Title != "Measure the diesel barrel today" || tasks.Value[0].DueAt != nil {
+		t.Fatalf("the second run updates the open task: %+v", tasks)
 	}
 	r.call(t, "POST", "/v1/tasks/"+tasks.Value[0].ID+"/responses", `{"outcome":"done"}`, 200, nil)
 	if done := r.await(t, first, runstore.StatusCompleted); string(done.Result) != `"done"` {

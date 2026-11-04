@@ -111,8 +111,8 @@ type Trigger struct {
 	// MediaTypes, on file.added and file.updated triggers, limits them to files of these
 	// media types: exact (application/pdf) or a wildcard (image/*).
 	MediaTypes []string `json:"media_types,omitempty"`
-	// TaskKey, on task.created, task.completed and task.cancelled triggers,
-	// limits them to tasks with this key.
+	// TaskKey, on task.created, task.updated, task.completed and
+	// task.cancelled triggers, limits them to tasks with this key.
 	TaskKey string `json:"task_key,omitempty"`
 	// Actions, on permissions.changed triggers, limits them to these changes
 	// (PermissionActions); the default is all.
@@ -316,7 +316,7 @@ func (d Definition) validate() error {
 			}
 		}
 		if t.TaskKey != "" && (!slices.Contains(tasks.Events, t.Type) || !tasks.ValidKey(t.TaskKey)) {
-			return dms.Invalid(at + "task_key is a task key, on task.created, task.completed and task.cancelled triggers")
+			return dms.Invalid(at + "task_key is a task key, on task.created, task.updated, task.completed and task.cancelled triggers")
 		}
 		switch {
 		case isItemTrigger(t.Type):

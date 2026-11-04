@@ -79,6 +79,16 @@ func (e *OpenError) Error() string {
 	return fmt.Sprintf("task %s with key %s is still open", e.ID, e.Key)
 }
 
+// UpdateInput is what an update of an open task replaces: its title,
+// description, priority, due date (nil clears it) and form prefill (nil
+// clears it). Checking the values belongs to the application transaction.
+type UpdateInput struct {
+	Title, Description string
+	Priority           Priority
+	DueAt              *time.Time
+	Values             map[string]any
+}
+
 type ResponseInput struct {
 	Subject, Assignee, Outcome, Comment string
 	Input                               json.RawMessage
@@ -292,6 +302,28 @@ func (r *Repo) Reassign(ctx context.Context, id string, version int64, assignees
 				complete(&task, *completing)
 			}
 		}
+		result, err = save(ctx, q, task)
+		return err
+	})
+	return result, err
+}
+
+// Update replaces an open task's title, description, priority, due date
+// and form prefill. A stale version or terminal task cannot change.
+func (r *Repo) Update(ctx context.Context, id string, version int64, in UpdateInput) (Task, error) {
+	if in.Title == "" || !in.Priority.Valid() {
+		return Task{}, fmt.Errorf("%w: a task needs a title and a valid priority", dberr.ErrCheckViolation)
+	}
+	var result Task
+	err := r.write(ctx, func(q Queries) error {
+		task, err := mutable(ctx, q, id, version)
+		if err != nil {
+			return err
+		}
+		if task.Status != StatusOpen {
+			return fmt.Errorf("%w: task is %s", dberr.ErrInvalidStateTransition, task.Status)
+		}
+		task.Title, task.Description, task.Priority, task.DueAt, task.Values = in.Title, in.Description, in.Priority, utc(in.DueAt), in.Values
 		result, err = save(ctx, q, task)
 		return err
 	})

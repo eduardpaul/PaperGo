@@ -227,6 +227,41 @@ func runDALTaskSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 			t.Fatalf("another key is free: %v", err)
 		}
 	})
+	t.Run("UpdateOpenTask", func(t *testing.T) {
+		ctx := context.Background()
+		s, in := daltest.TaskFixture(t, newStore)
+		due := time.Now().UTC().Add(time.Hour).Truncate(time.Microsecond)
+		in.DueAt = &due
+		in.InputSchema = map[string]any{"type": "object", "properties": map[string]any{"liters": map[string]any{"type": "number"}}}
+		in.Values = map[string]any{"liters": 40.0}
+		task, err := s.Tasks().Create(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		edit := taskstore.UpdateInput{Title: "Fill the barrel: 12 L left", Description: "Below 50 L", Priority: "high", Values: map[string]any{"liters": 12.0}}
+		updated, err := s.Tasks().Update(ctx, task.ID, task.Version, edit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reloaded, err := s.Tasks().Find(ctx, task.ID)
+		if err != nil || reloaded.Version != task.Version+1 || reloaded.Version != updated.Version || reloaded.Title != edit.Title || reloaded.Description != edit.Description ||
+			reloaded.Priority != "high" || reloaded.DueAt != nil || reloaded.Values["liters"] != 12.0 || reloaded.Status != "open" {
+			t.Fatalf("the update was not stored: %+v %v", reloaded, err)
+		}
+		if _, err := s.Tasks().Update(ctx, task.ID, task.Version, edit); !errors.Is(err, dberr.ErrConcurrentUpdate) {
+			t.Fatalf("a stale update was accepted: %v", err)
+		}
+		if _, err := s.Tasks().Update(ctx, task.ID, updated.Version, taskstore.UpdateInput{Title: "", Priority: "high"}); !errors.Is(err, dberr.ErrCheckViolation) {
+			t.Fatalf("an update without a title: %v", err)
+		}
+		cancelled, err := s.Tasks().Cancel(ctx, task.ID, updated.Version, "alice", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Tasks().Update(ctx, task.ID, cancelled.Version, edit); !errors.Is(err, dberr.ErrInvalidStateTransition) {
+			t.Fatalf("a cancelled task changed: %v", err)
+		}
+	})
 	t.Run("ConcurrentTaskResponsesAndCancellation", func(t *testing.T) {
 		ctx := context.Background()
 		s, in := daltest.TaskFixture(t, newStore)

@@ -15886,7 +15886,7 @@
       "post": {
         "summary": "Create Task",
         "operationId": "createTask",
-        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. A unique task is refused with 409 task_open while a task of the workspace with its key is open. Needs the item.write scope.",
+        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. A unique task is refused with 409 task_open while a task of the workspace with its key is open; the problem's open_task_id names it. Needs the item.write scope.",
         "parameters": [
           {
             "name": "id",
@@ -16182,7 +16182,7 @@
       "get": {
         "summary": "Get Task",
         "operationId": "getTask",
-        "description": "A task with its responses, for its assignees, its creator and the workspace's owners.",
+        "description": "A task with its responses, for its assignees, its creator and the workspace's owners. Its ETag is the version that PATCH takes in If-Match.",
         "parameters": [
           {
             "name": "id",
@@ -16275,6 +16275,167 @@
             }
           },
           "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Task",
+        "operationId": "updateTask",
+        "description": "Changes an open task's title, description, priority, due date or form prefill, for the workspace's owners and the creator of a person's task, who may also reassign it. The form, outcomes, key, kind and completion stay, since the run waiting on the task and the answers so far depend on them. Assignees are not told again. A change raises task.updated with the fields that changed; a request that changes nothing keeps the version. A task that is no longer open is 409; a stale If-Match is 412. Needs the item.write scope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag (the task's version); weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "Request failed",
             "content": {
               "application/problem+json": {
@@ -24092,6 +24253,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The supplied source id of a move-selection name conflict."
+          },
+          "open_task_id": {
+            "type": "string",
+            "description": "On a task_open conflict, the open task with the key a unique task asked for."
           }
         },
         "required": [
@@ -27421,7 +27586,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
@@ -30432,7 +30597,7 @@
           },
           "unique": {
             "type": "boolean",
-            "description": "Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, naming the open task."
+            "description": "Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, and the problem's open_task_id names the open task."
           },
           "title": {
             "type": "string",
@@ -30509,6 +30674,50 @@
           "title"
         ],
         "additionalProperties": false
+      },
+      "TaskUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000,
+            "description": "Empty or null clears it."
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "null clears it."
+          },
+          "values": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true,
+            "description": "Replaces the prefill of the task's form, checked as on creation; null clears it."
+          }
+        },
+        "description": "What PATCH /v1/tasks/{id} changes. Each field given replaces its value; the form, outcomes, key, kind, completion and assignees stay."
       },
       "TaskResponseInput": {
         "type": "object",

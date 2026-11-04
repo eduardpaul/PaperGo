@@ -50,8 +50,26 @@ func TestTaskRoutes(t *testing.T) {
 	}
 	// A unique task is refused while the task with its key is open.
 	if w = request(h, "POST", "/v1/workspaces/"+ws.ID+"/tasks", `{"title": "Confirm it again", "key": "amount_check", "unique": true}`, testToken, "", json_); w.Code != 409 ||
-		!strings.Contains(w.Body.String(), `"code":"task_open"`) || !strings.Contains(w.Body.String(), standalone.ID) {
+		!strings.Contains(w.Body.String(), `"code":"task_open"`) || !strings.Contains(w.Body.String(), `"open_task_id":"`+standalone.ID+`"`) {
 		t.Fatalf("unique task while one is open: %d %s", w.Code, w.Body)
+	}
+	// The open task's details change at its ETag; null clears its due date.
+	if w = request(h, "GET", "/v1/tasks/"+standalone.ID, "", testToken, "", ""); w.Header().Get("ETag") != `"1"` {
+		t.Fatalf("task ETag: %q", w.Header().Get("ETag"))
+	}
+	if w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"title": "Confirm the new amount"}`, testToken, "", json_); w.Code != 428 {
+		t.Fatalf("update without If-Match: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"outcomes": []}`, testToken, `"1"`, json_); w.Code != 422 {
+		t.Fatalf("update of the outcomes: %d %s", w.Code, w.Body)
+	}
+	w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"title": "Confirm the new amount", "due_at": null, "values": {"amount": 20}}`, testToken, `"1"`, json_)
+	if w.Code != 200 || w.Header().Get("ETag") != `"2"` || !strings.Contains(w.Body.String(), `"title":"Confirm the new amount"`) ||
+		strings.Contains(w.Body.String(), `"due_at"`) || !strings.Contains(w.Body.String(), `"values":{"amount":20}`) {
+		t.Fatalf("update: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "PATCH", "/v1/tasks/"+standalone.ID, `{"priority": "high"}`, testToken, `"1"`, json_); w.Code != 412 {
+		t.Fatalf("stale update: %d %s", w.Code, w.Body)
 	}
 	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/responses", `{"outcome": "maybe"}`, testToken, "", json_); w.Code != 422 {
 		t.Fatalf("bad outcome: %d %s", w.Code, w.Body)

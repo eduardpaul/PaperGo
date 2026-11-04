@@ -3189,6 +3189,24 @@ export function createTaskResponseInputFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskUpdate_values}
+ */
+// @ts-ignore
+export function createTaskUpdate_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskUpdate_values;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskUpdate}
+ */
+// @ts-ignore
+export function createTaskUpdateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskUpdate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {TaxonomyDecisionRequest_context}
  */
 // @ts-ignore
@@ -5578,6 +5596,7 @@ export function deserializeIntoProblem(problem: Partial<Problem> | undefined = {
         "code": n => { problem.code = n.getStringValue(); },
         "detail": n => { problem.detail = n.getStringValue(); },
         "existing_item": n => { problem.existingItem = n.getObjectValue<Problem_existing_item>(createProblem_existing_itemFromDiscriminatorValue); },
+        "open_task_id": n => { problem.openTaskId = n.getStringValue(); },
         "operation_index": n => { problem.operationIndex = n.getNumberValue(); },
         "request_id": n => { problem.requestId = n.getStringValue(); },
         "source_item_id": n => { problem.sourceItemId = n.getGuidValue(); },
@@ -6780,6 +6799,31 @@ export function deserializeIntoTaskResponseInput(taskResponseInput: Partial<Task
  */
 // @ts-ignore
 export function deserializeIntoTaskResponseInput_input(taskResponseInput_input: Partial<TaskResponseInput_input> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskUpdate The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskUpdate(taskUpdate: Partial<TaskUpdate> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "description": n => { taskUpdate.description = n.getStringValue(); },
+        "due_at": n => { taskUpdate.dueAt = n.getDateValue(); },
+        "priority": n => { taskUpdate.priority = n.getEnumValue<TaskUpdate_priority>(TaskUpdate_priorityObject); },
+        "title": n => { taskUpdate.title = n.getStringValue(); },
+        "values": n => { taskUpdate.values = n.getObjectValue<TaskUpdate_values>(createTaskUpdate_valuesFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskUpdate_values The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskUpdate_values(taskUpdate_values: Partial<TaskUpdate_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
     }
 }
@@ -8719,6 +8763,10 @@ export interface Problem extends ApiError, Parsable {
      * On an upload or move-selection name_conflict, the existing writable file available for conditional replacement. Omitted for inaccessible items and folders.
      */
     existingItem?: Problem_existing_item | null;
+    /**
+     * On a task_open conflict, the open task with the key a unique task asked for.
+     */
+    openTaskId?: string | null;
     /**
      * Zero-based failing operation index for bulk item errors. Omitted for batch-wide errors.
      */
@@ -11663,6 +11711,7 @@ export function serializeProblem(writer: SerializationWriter, problem: Partial<P
     writer.writeStringValue("code", problem.code);
     writer.writeStringValue("detail", problem.detail);
     writer.writeObjectValue<Problem_existing_item>("existing_item", problem.existingItem, serializeProblem_existing_item);
+    writer.writeStringValue("open_task_id", problem.openTaskId);
     writer.writeNumberValue("operation_index", problem.operationIndex);
     writer.writeStringValue("request_id", problem.requestId);
     writer.writeGuidValue("source_item_id", problem.sourceItemId);
@@ -12890,6 +12939,32 @@ export function serializeTaskResponseInput(writer: SerializationWriter, taskResp
 export function serializeTaskResponseInput_input(writer: SerializationWriter, taskResponseInput_input: Partial<TaskResponseInput_input> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!taskResponseInput_input || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(taskResponseInput_input.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskUpdate The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskUpdate(writer: SerializationWriter, taskUpdate: Partial<TaskUpdate> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskUpdate || isSerializingDerivedType) { return; }
+    writer.writeStringValue("description", taskUpdate.description);
+    writer.writeDateValue("due_at", taskUpdate.dueAt);
+    writer.writeEnumValue<TaskUpdate_priority>("priority", taskUpdate.priority);
+    writer.writeStringValue("title", taskUpdate.title);
+    writer.writeObjectValue<TaskUpdate_values>("values", taskUpdate.values, serializeTaskUpdate_values);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskUpdate_values The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskUpdate_values(writer: SerializationWriter, taskUpdate_values: Partial<TaskUpdate_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskUpdate_values || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(taskUpdate_values.additionalData);
 }
 /**
  * Serializes information the current object
@@ -14249,7 +14324,7 @@ export interface TaskCreate extends Parsable {
      */
     title?: string | null;
     /**
-     * Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, naming the open task.
+     * Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, and the problem's open_task_id names the open task.
      */
     unique?: boolean | null;
     /**
@@ -14342,6 +14417,37 @@ export interface TaskResponseInput extends Parsable {
  * Values of the task's form.
  */
 export interface TaskResponseInput_input extends AdditionalDataHolder, Parsable {
+}
+/**
+ * What PATCH /v1/tasks/{id} changes. Each field given replaces its value; the form, outcomes, key, kind, completion and assignees stay.
+ */
+export interface TaskUpdate extends Parsable {
+    /**
+     * Empty or null clears it.
+     */
+    description?: string | null;
+    /**
+     * null clears it.
+     */
+    dueAt?: Date | null;
+    /**
+     * The priority property
+     */
+    priority?: TaskUpdate_priority | null;
+    /**
+     * The title property
+     */
+    title?: string | null;
+    /**
+     * Replaces the prefill of the task's form, checked as on creation; null clears it.
+     */
+    values?: TaskUpdate_values | null;
+}
+export type TaskUpdate_priority = (typeof TaskUpdate_priorityObject)[keyof typeof TaskUpdate_priorityObject];
+/**
+ * Replaces the prefill of the task's form, checked as on creation; null clears it.
+ */
+export interface TaskUpdate_values extends AdditionalDataHolder, Parsable {
 }
 /**
  * Picks active terms of an organization term set for text, data or a document.
@@ -15804,6 +15910,11 @@ export const TaskOutcome_styleObject = {
     Primary: "primary",
     Danger: "danger",
     DefaultEscaped: "default",
+} as const;
+export const TaskUpdate_priorityObject = {
+    Low: "low",
+    Normal: "normal",
+    High: "high",
 } as const;
 /**
  * multiple (the default) compares each term independently; single makes one joint choice.

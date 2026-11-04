@@ -191,7 +191,7 @@ export default workflow<unknown, unknown, Params>({
 When `diesel-levels` finishes a reading, `diesel-refill` reads its output. If the level is below `threshold_l`, it creates a high-priority task for `buyers`, linked to the reading. The task's form is the purchase: litres, total price, optionally when (left empty, the moment of the answer) and the supplier. Answering it files the purchase, and `diesel-levels` then works out its price per litre. It is the measuring reminder's pattern, applied to buying.
 
 - **No separate notification.** Assigning a task already tells its assignees in PaperGo, so the task is the alert and the record at once.
-- **One refill task at a time.** The task is unique and stays open until someone buys. Readings that stay low are refused with `task_open` and add nothing, also when two runs ask at once.
+- **One refill task at a time.** The task is unique and stays open until someone buys. A reading that stays low is refused with `task_open`, also when two runs ask at once, and [updates](../workflows.md#tasks) the open task's title and description to its own level instead, so the task always shows how much is left.
 - **A purchase filed any other way closes it.** The same workflow starts on every new purchase and cancels the open `diesel_refill` task with a reason naming the purchase, from the app, the list or anywhere else. Its notification goes with it, and a 409 from a task answered meanwhile is ignored.
 - **The next one comes after a refill.** Once the task is answered or cancelled, the next reading below the threshold asks again.
 - **Buyers** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after installing.
@@ -249,14 +249,16 @@ export default workflow<unknown, unknown, Params>({
     const levels = ctx.run.event.data.outputs as Levels | undefined;
     if (!levels || Number(levels.level_liters) >= p.threshold_l) return;
 
+    const title = `Fill the diesel barrel: ${levels.level_liters} L left`;
+    const description = `The barrel is at ${levels.fill_percent} %, below ${p.threshold_l} L.`;
     let answer;
     try {
       // Unique: while the refill task is open, asking again is refused.
       answer = await ctx.ask<{ bought_liters: number; total_price: number; purchased_at: string; supplier?: string }>({
         key: KEY,
         unique: true,
-        title: `Fill the diesel barrel: ${levels.level_liters} L left`,
-        description: `The barrel is at ${levels.fill_percent} %, below ${p.threshold_l} L.`,
+        title,
+        description,
         itemId: ctx.itemId,
         assignees: p.buyers,
         priority: "high",
@@ -273,7 +275,20 @@ export default workflow<unknown, unknown, Params>({
         outcomes: [{ key: "bought", label: "Save purchase", style: "primary" }],
       });
     } catch (e) {
-      if ((e as { code?: string }).code === "task_open") return "already asked";
+      const problem = e as { code?: string; openTaskId?: string };
+      if (problem.code === "task_open") {
+        // Already asked: the open task shows this reading's level instead.
+        const task = api.v1.tasks.byId(problem.openTaskId!);
+        const current = await task.get();
+        try {
+          await task.patch({ title, description }, { headers: { "If-Match": `"${current!.version}"` } });
+        } catch (err) {
+          // Answered (409), or changed by another reading (412), meanwhile.
+          const status = (err as { responseStatusCode?: number }).responseStatusCode;
+          if (status !== 409 && status !== 412) throw err;
+        }
+        return "updated";
+      }
       if (e instanceof OperationError) return "bought elsewhere";
       throw e;
     }

@@ -112,6 +112,8 @@ func (q Queries) UpdateTask(ctx context.Context, t tasks.Task, from int64) error
 		UpdatedAt: omit.From(t.UpdatedAt), Version: omit.From(t.Version), Assignees: omit.From(types.NewJSON(t.Assignees)),
 		Status: omit.From(string(t.Status)), Outcome: nullable.String(t.Outcome), CompletedBy: nullable.String(t.CompletedBy),
 		CompletedAt: nullable.Time(t.CompletedAt), Comment: omit.From(t.Comment), Input: nullable.JSON(t.Input),
+		Title: omit.From(t.Title), Description: omit.From(t.Description), Priority: omit.From(string(t.Priority)),
+		DueAt: nullable.Time(t.DueAt), Values: nullable.Object(t.Values),
 	}
 	w := models.UpdateWhere.Tasks
 	n, err := models.Tasks.Update(set.UpdateMod(), w.ID.EQ(t.ID), w.Version.EQ(from)).Exec(ctx, q.exec)

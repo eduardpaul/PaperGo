@@ -471,7 +471,10 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, dms.ErrProtectedHome):
 		problem(409, "protected_home", err.Error())
 	case errors.As(err, &openTask):
-		problem(409, "task_open", openTask.Error())
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusConflict)
+		requestID, _ := r.Context().Value(requestKey{}).(string)
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "task_open", "detail": openTask.Error(), "request_id": requestID, "open_task_id": openTask.ID})
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

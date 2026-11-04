@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 	"strconv"
@@ -19,6 +21,7 @@ func (a *API) registerTasks(api *router) {
 	api.HandleFunc("POST /v1/workspaces/{id}/tasks", a.createTask)
 	api.HandleFunc("GET /v1/items/{id}/tasks", a.itemTasks)
 	api.HandleFunc("GET /v1/tasks/{id}", a.getTask)
+	api.HandleFunc("PATCH /v1/tasks/{id}", a.updateTask)
 	api.HandleFunc("POST /v1/tasks/{id}/responses", a.respondTask)
 	api.HandleFunc("POST /v1/tasks/{id}/reassign", a.reassignTask)
 	api.HandleFunc("POST /v1/tasks/{id}/cancel", a.cancelTask)
@@ -100,6 +103,59 @@ func (a *API) getTask(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
+	etag(w, out.Version)
+	respond(w, r, 200, out)
+}
+
+// updateTask changes an open task's title, description, priority, due date
+// or form prefill at the version If-Match names. null clears due_at and
+// values.
+func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
+	version, ok := a.version(w, r)
+	if !ok {
+		return
+	}
+	var in map[string]json.RawMessage
+	if !a.decode(w, r, &in) {
+		return
+	}
+	var p tasks.Patch
+	for key, raw := range in {
+		null := string(raw) == "null"
+		var err error
+		switch key {
+		case "title":
+			err = json.Unmarshal(raw, &p.Title)
+		case "description":
+			p.Description = new(string)
+			if !null {
+				err = json.Unmarshal(raw, p.Description)
+			}
+		case "priority":
+			err = json.Unmarshal(raw, &p.Priority)
+		case "due_at":
+			p.SetDueAt = true
+			err = json.Unmarshal(raw, &p.DueAt)
+		case "values":
+			p.SetValues = true
+			err = json.Unmarshal(raw, &p.Values)
+		default:
+			err = errors.New("a task update has no field " + key)
+		}
+		if err == nil && null && (key == "title" || key == "priority") {
+			err = errors.New(key + " cannot be null")
+		}
+		if err != nil {
+			a.failure(w, r, dms.Invalid(err.Error()))
+			return
+		}
+	}
+	out, err := a.tasks(r).Update(r.Context(), subject(r), r.PathValue("id"), int64(version), p)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	etag(w, out.Version)
 	respond(w, r, 200, out)
 }
 
