@@ -60,7 +60,7 @@ After importing, set these in **Workspace settings → Workflows**:
 - **Actions:** **+ Medición**, **+ Llenado** and the heating button open a dialog.
   - Typing a stick reading shows what it means before it is saved, worked out with the Diesel levels workflow's settings.
   - Decimals are typed in your number format, so `86,8` is 86.8 cm where the decimal separator is a comma.
-  - Dates are dates: today keeps the current time, so a reading before and one after a fill stay in order; another day is noon.
+  - Dates are dates in your time zone: today keeps the current time, so a reading before and one after a fill stay in order; another day is noon.
 - **Lists:** the last five readings and fills, with the supplier, and the whole history in the list.
 - **Tasks and checks:** the measuring and refill tasks waiting for you, and the readings that need a look.
 

@@ -1,7 +1,9 @@
 // A small kit in PaperGo's theme, for apps: tiles, charts, a table, buttons
 // and fields. Charts are plain SVG, since apps load nothing from the network.
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { RuntimeContext } from "./context.js";
+import { wallClock, type WallClock, type WallTime } from "./format.js";
 
 /** Phones and narrow windows: at most this wide, the kit lays out for touch. */
 export const narrowWidth = 640;
@@ -262,37 +264,44 @@ export function TextField({ label, value, onChange, error, required, maxLength }
   );
 }
 
-function localInput(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// The viewer's clock: dates are picked and shown in their time zone, as
+// ctx.format shows them, whatever the device's zone.
+function useClock(): WallClock {
+  const zone = useContext(RuntimeContext)?.ctx.user.preferences.time_zone || "UTC";
+  return useMemo(() => wallClock(zone), [zone]);
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
+const dateInput = (x: WallTime) => `${x.year}-${pad2(x.month)}-${pad2(x.day)}`;
+
+// The wall time an ISO timestamp is in the viewer's zone, or undefined.
+function wallOf(clock: WallClock, iso: string): WallTime | undefined {
+  const d = new Date(iso);
+  return iso && !Number.isNaN(d.getTime()) ? clock.at(d) : undefined;
+}
 
 /**
- * A date; value and onChange use ISO timestamps. Today keeps the current
- * time, so entries of one day stay in the order they were made; another
- * day is noon.
+ * A date in the viewer's time zone; value and onChange use ISO timestamps.
+ * Today keeps the current time, so entries of one day stay in the order
+ * they were made; another day is noon there.
  */
 export function DateField({ label, value, onChange, error, required }: FieldProps) {
-  const d = new Date(value);
-  const local = Number.isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const clock = useClock();
+  const wall = wallOf(clock, value);
   return (
     <Field label={label} error={error}>
       {(id) => (
         <input
           id={id}
           type="date"
-          value={local}
+          value={wall ? dateInput(wall) : ""}
           required={required}
           onChange={(e) => {
             const [y, m, day] = e.target.value.split("-").map(Number);
-            if (!y) return onChange("");
+            if (!y || !m || !day) return onChange("");
             const now = new Date();
-            const today = now.getFullYear() === y && now.getMonth() + 1 === m && now.getDate() === day;
-            onChange((today ? now : new Date(y, m - 1, day, 12, 0)).toISOString());
+            const today = dateInput(clock.at(now)) === e.target.value;
+            onChange((today ? now : clock.instant(y, m, day, 12, 0)).toISOString());
           }}
         />
       )}
@@ -300,19 +309,21 @@ export function DateField({ label, value, onChange, error, required }: FieldProp
   );
 }
 
-/** A date and time; value and onChange use ISO timestamps. */
+/** A date and time in the viewer's time zone; value and onChange use ISO timestamps. */
 export function DateTimeField({ label, value, onChange, error, required }: FieldProps) {
+  const clock = useClock();
+  const wall = wallOf(clock, value);
   return (
     <Field label={label} error={error}>
       {(id) => (
         <input
           id={id}
           type="datetime-local"
-          value={value ? localInput(value) : ""}
+          value={wall ? `${dateInput(wall)}T${pad2(wall.hour)}:${pad2(wall.minute)}` : ""}
           required={required}
           onChange={(e) => {
-            const d = new Date(e.target.value);
-            onChange(Number.isNaN(d.getTime()) ? "" : d.toISOString());
+            const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(e.target.value);
+            onChange(m ? clock.instant(+m[1], +m[2], +m[3], +m[4], +m[5]).toISOString() : "");
           }}
         />
       )}

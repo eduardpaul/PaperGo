@@ -4,7 +4,7 @@
 
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
 import { appContext, RequestError, type Init } from "../../src/app/context.js";
-import { formatter } from "../../src/app/format.js";
+import { formatter, wallClock } from "../../src/app/format.js";
 import { json } from "../../src/values.js";
 
 declare const process: { exit(code: number): never };
@@ -32,6 +32,20 @@ expect("41,5 in a dot format", dot.parseDecimal("41,5"), undefined);
 expect("a 12-hour time", dot.dateTime("2026-11-03T13:05:00Z"), "2026-11-03 1:05 PM");
 expect("a number", dot.number(1234.567), "1,234.57");
 expect("days ago", dot.relative("2026-11-01T00:00:00Z", new Date("2026-11-04T00:00:00Z")), "3 days ago");
+
+// The date fields pick and show dates on the viewer's clock, whatever the
+// device's zone.
+const madrid = wallClock("Europe/Madrid");
+expect("Madrid's clock at an instant", madrid.at(new Date("2026-11-03T23:30:00Z")), { year: 2026, month: 11, day: 4, hour: 0, minute: 30 });
+expect("noon in Madrid in winter", madrid.instant(2026, 11, 4, 12).toISOString(), "2026-11-04T11:00:00.000Z");
+expect("noon in Madrid in summer", madrid.instant(2026, 7, 1, 12).toISOString(), "2026-07-01T10:00:00.000Z");
+expect("the first minutes of a day in Madrid", madrid.instant(2026, 11, 4, 0, 30).toISOString(), "2026-11-03T23:30:00.000Z");
+const york = wallClock("America/New_York");
+expect("the day after the clocks go back", york.instant(2026, 11, 2, 0).toISOString(), "2026-11-02T05:00:00.000Z");
+expect("a time the clocks skip is the time after", york.instant(2026, 3, 8, 2, 30).toISOString(), "2026-03-08T07:30:00.000Z");
+expect("a time the clocks show twice is the first", york.instant(2026, 11, 1, 1, 30).toISOString(), "2026-11-01T05:30:00.000Z");
+expect("just before Madrid's clocks go forward", madrid.instant(2026, 3, 29, 1, 30).toISOString(), "2026-03-29T00:30:00.000Z");
+expect("an unknown zone is UTC", wallClock("Nowhere/Else").instant(2026, 11, 4, 12).toISOString(), "2026-11-04T12:00:00.000Z");
 
 // A page that answers every request with what answer returns.
 function page(answer: (m: Extract<AppMessage, { type: "papergo:request" }>) => { status: number; body: unknown }) {

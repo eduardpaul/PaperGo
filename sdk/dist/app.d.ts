@@ -14168,12 +14168,12 @@ export declare function TextField({ label, value, onChange, error, required, max
 	maxLength?: number;
 }): import("react").JSX.Element;
 /**
- * A date; value and onChange use ISO timestamps. Today keeps the current
- * time, so entries of one day stay in the order they were made; another
- * day is noon.
+ * A date in the viewer's time zone; value and onChange use ISO timestamps.
+ * Today keeps the current time, so entries of one day stay in the order
+ * they were made; another day is noon there.
  */
 export declare function DateField({ label, value, onChange, error, required }: FieldProps): import("react").JSX.Element;
-/** A date and time; value and onChange use ISO timestamps. */
+/** A date and time in the viewer's time zone; value and onChange use ISO timestamps. */
 export declare function DateTimeField({ label, value, onChange, error, required }: FieldProps): import("react").JSX.Element;
 export interface Column<R> {
 	key: string;

@@ -54,6 +54,61 @@ export function decimalSeparator(locale: string): string {
   }
 }
 
+/** A date and time as a clock on the wall shows it: month 1 to 12, hour 0 to 23. */
+export interface WallTime {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+/** The clock of a time zone: what it shows at an instant, and the instant it shows a time. */
+export interface WallClock {
+  at(instant: Date): WallTime;
+  /** The instant the zone's clock shows this date and time; in a gap of a daylight saving change, the time after it. */
+  instant(year: number, month: number, day: number, hour?: number, minute?: number): Date;
+}
+
+/** The clock of zone, an IANA time zone; UTC when the zone is unknown. */
+export function wallClock(zone: string): WallClock {
+  let format: Intl.DateTimeFormat;
+  const options: Intl.DateTimeFormatOptions = { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23" };
+  try {
+    format = new Intl.DateTimeFormat("en-US", { ...options, timeZone: zone || "UTC" });
+  } catch {
+    format = new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" });
+  }
+  const read = (t: number) => {
+    const out: Record<string, number> = {};
+    for (const part of format.formatToParts(new Date(t))) if (part.type !== "literal") out[part.type] = Number(part.value);
+    return out;
+  };
+  // How far the zone's clock is ahead of UTC at instant t, in milliseconds.
+  const offset = (t: number) => {
+    const x = read(t);
+    return Date.UTC(x.year, x.month - 1, x.day, x.hour, x.minute, x.second) - Math.floor(t / 1000) * 1000;
+  };
+  return {
+    at(instant) {
+      const x = read(instant.getTime());
+      return { year: x.year, month: x.month, day: x.day, hour: x.hour, minute: x.minute };
+    },
+    instant(year, month, day, hour = 0, minute = 0) {
+      const wall = Date.UTC(year, month - 1, day, hour, minute);
+      // The zone's offset at the wall time read as UTC may be the other side
+      // of a daylight saving change: try both guesses. A time in a gap,
+      // which the clock skips, matches neither; the later is after the gap.
+      const first = wall - offset(wall);
+      const second = wall - offset(first);
+      const shows = (t: number) => offset(t) === wall - t;
+      return new Date(shows(first) ? first : shows(second) ? second : Math.max(first, second));
+    },
+  };
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
 export function formatter(p: Preferences): Format {
   const locale = p.number_format || "en";
   const zone = p.time_zone || "UTC";
@@ -66,33 +121,24 @@ export function formatter(p: Preferences): Format {
     if (!format) numbers.set(key, (format = new Intl.NumberFormat(locale, options())));
     return format;
   };
-  let calendar: Intl.DateTimeFormat | undefined;
-  const parts = (d: Date) => {
-    const out: Record<string, string> = {};
-    calendar ??= new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    for (const part of calendar.formatToParts(d)) {
-      out[part.type] = part.value;
-    }
-    return out;
-  };
+  const clock = wallClock(zone);
   const date = (d: Date) => {
-    const x = parts(d);
+    const x = clock.at(d);
     return (p.date_format || "yyyy-MM-dd").replace(/y+|M+|d+/g, (token) => {
       switch (token[0]) {
         case "y":
-          return token.length === 2 ? x.year.slice(-2) : x.year;
+          return token.length === 2 ? String(x.year).slice(-2) : String(x.year);
         case "M":
-          return token.length === 1 ? String(Number(x.month)) : x.month;
+          return token.length === 1 ? String(x.month) : pad(x.month);
         default:
-          return token.length === 1 ? String(Number(x.day)) : x.day;
+          return token.length === 1 ? String(x.day) : pad(x.day);
       }
     });
   };
   const time = (d: Date) => {
-    const x = parts(d);
-    if (p.time_format !== "12h") return `${x.hour}:${x.minute}`;
-    const h = Number(x.hour);
-    return `${h % 12 || 12}:${x.minute} ${h < 12 ? "AM" : "PM"}`;
+    const x = clock.at(d);
+    if (p.time_format !== "12h") return `${pad(x.hour)}:${pad(x.minute)}`;
+    return `${x.hour % 12 || 12}:${pad(x.minute)} ${x.hour < 12 ? "AM" : "PM"}`;
   };
   return {
     number(value, digits = 2) {
