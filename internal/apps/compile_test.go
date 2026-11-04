@@ -54,6 +54,30 @@ export default app({ render() { useSyncExternalStore; return <Boundary>{[wide, f
 	}
 }
 
+// The server loads an app as the frame does, as a classic script: sloppy
+// code the browser runs loads here too, and the workflow host is not there.
+func TestAppsLoadAsTheBrowserRunsThem(t *testing.T) {
+	c, err := Compile(context.Background(), `import { app } from "@papergo/app";
+declare const __papergo: unknown;
+// @ts-ignore
+counter = 1;
+function self(this: unknown) { return this; }
+const frozen = Object.freeze({ n: 1 }) as { n: number };
+frozen.n = 2;
+export default app({
+  parameters: { type: "object", title: typeof __papergo + " " + typeof self(), properties: {} },
+  render() { return null; },
+});
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || schema["title"] != "undefined object" {
+		t.Fatalf("parameters form: %s %v", c.ParametersSchema, err)
+	}
+}
+
 // An app compiles to code that reads the runtime's modules, and declares
 // its parameters form.
 func TestAppsCompileAndDeclareTheirParameters(t *testing.T) {

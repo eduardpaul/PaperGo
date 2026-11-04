@@ -252,12 +252,16 @@ func (h *host) settle(value goja.Value) error {
 const manifestSlice = time.Second
 
 // evaluate runs programs in order in a runtime of their own, then read, and
-// returns read's value as text. The code runs under the limits of a run and
-// may make no requests, waits or sleeps; running longer than budget stops it
-// with tooLong.
-func evaluate(ctx context.Context, budget time.Duration, tooLong error, programs []*goja.Program, read func(*goja.Runtime) (goja.Value, error)) (string, error) {
+// returns read's value as text. The code runs under the call stack limit of a
+// run; running longer than budget stops it with tooLong. A workflow's code
+// gets the workflow host, which refuses requests, waits and sleeps here;
+// other code gets only the language and text codecs.
+func evaluate(ctx context.Context, budget time.Duration, tooLong error, workflow bool, programs []*goja.Program, read func(*goja.Runtime) (goja.Value, error)) (string, error) {
 	h := &host{ctx: ctx, manifest: true}
-	rt := h.runtime()
+	rt := h.bare()
+	if workflow {
+		rt = h.runtime()
+	}
 	h.watch = newWatchdog(budget, func() { rt.Interrupt(tooLong) })
 	defer h.watch.stop()
 	stopCancel := context.AfterFunc(ctx, func() { rt.Interrupt(ctx.Err()) })
@@ -290,7 +294,7 @@ func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[str
 	if err != nil {
 		return nil, err
 	}
-	out, err := evaluate(ctx, manifestSlice, errSlice, []*goja.Program{sdkCode, program}, func(rt *goja.Runtime) (goja.Value, error) {
+	out, err := evaluate(ctx, manifestSlice, errSlice, true, []*goja.Program{sdkCode, program}, func(rt *goja.Runtime) (goja.Value, error) {
 		manifest, ok := goja.AssertFunction(rt.Get("__papergoManifest"))
 		if !ok {
 			return nil, errors.New("the script has no workflow entry point")
@@ -313,17 +317,19 @@ type Declarations struct {
 }
 
 // Declare runs code for what it declares as it loads, as Manifest does for a
-// workflow. An error that does not come from ctx is the code's own.
+// workflow, but as a browser runs a classic script: in sloppy mode unless the
+// code asks for strict, and without the workflow host. An error that does not
+// come from ctx is the code's own.
 func Declare(ctx context.Context, in Declarations) (string, error) {
 	programs := make([]*goja.Program, 2)
 	for i, code := range []string{in.Prelude, in.Code} {
-		program, err := goja.Compile("declarations.js", code, true)
+		program, err := goja.Compile("declarations.js", code, false)
 		if err != nil {
 			return "", err
 		}
 		programs[i] = program
 	}
-	out, err := evaluate(ctx, in.Budget, errors.New(in.TooLong), programs, func(rt *goja.Runtime) (goja.Value, error) { return rt.RunString(in.Read) })
+	out, err := evaluate(ctx, in.Budget, errors.New(in.TooLong), false, programs, func(rt *goja.Runtime) (goja.Value, error) { return rt.RunString(in.Read) })
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
