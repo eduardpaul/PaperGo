@@ -1,155 +1,185 @@
 # Workspace apps (plan)
 
-Status: proposal. Nothing here is implemented. Phase 1 needs the core changes listed under [Core changes](#core-changes), which need approval first (Extension-First Protocol, [AGENTS.md](../../AGENTS.md)). The first app is the [diesel tracker](use-case-diesel-analysis.md).
+Status: phase 0, approved. Nothing here is implemented yet. The end result of phase 0 is working app infrastructure and the [diesel tracker](use-case-diesel-analysis.md) running on it as a complete sample.
+
+Decisions taken: apps run in a sandboxed frame and act with the viewer's own credentials; writing apps needs the new `app.manage` scope; apps join workspace packages later. Packaging lists, workflows and apps together ("solutions") comes after phase 0.
 
 ## What an app is
 
-An **app** is a React screen installed into a workspace. Members open it from the sidebar.
+An **app** is a React screen that belongs to a workspace, as a workflow does. Members open it from the sidebar. It reads and changes the workspace's data through the PaperGo REST API, as the person viewing it.
 
-- **It does full CRUD by itself.** It creates, reads, queries, updates and deletes items of the workspace's lists through the PaperGo REST API, as the person using it. No workflow is needed for that.
-- **It can bring workflows.** An app may install workflows it owns, start them and read their results, and find the tasks they create. Workflows do what the viewer may not, or what must happen whoever writes the data.
-- **It is its own feature.** Apps are installed from an **app package**, not through workspace export and import. A workspace export only says which apps the workspace needs.
+An app is built like a workflow and never creates lists. It points at lists that already exist through its parameters:
 
-```
- Browser                                   PaperGo server
- ───────                                   ─────────────────────────────────────
- PaperGo page ── sandboxed frame: app  ──►  REST API (as the viewer, limited to
-                 React + @papergo/app       the app's workspace) ── lists & items
-                                            │
-                                            └─ app-owned workflows (as the installer)
-                                                 └─ their tasks
-```
+| | Workflow | App |
+| --- | --- | --- |
+| Belongs to | a workspace | a workspace |
+| Source | one TypeScript file, compiled by the server | one TSX file, compiled by the server |
+| Declares | triggers, forms, concurrency | its parameters form |
+| Points at data with | `parameters` | `parameters`, chosen with pickers |
+| Versions | every save is an immutable version; draft or published | the same |
+| Edited in | Workspace settings → Workflows | Workspace settings → Apps |
+| Acts as | the author of its version | the person viewing it |
+| Creates lists | no | no |
 
-## The app package
+An app works with workflows through the existing API: it starts their manual runs and reads the results, and it finds, answers and updates their tasks. A workflow decides who may start it by hand with its manual trigger's `access`.
 
-A ZIP with one manifest, one screen and the app's workflows (the manifest below is shortened):
-
-```
-diesel.zip
-  app.json
-  app.tsx
-  workflows/diesel-levels.ts
-  workflows/diesel-measure-reminder.ts
-  workflows/diesel-refill.ts
-```
-
-```json
-{
-  "key": "diesel",
-  "name": "Diesel tracker",
-  "version": "1.0.0",
-  "setup": {
-    "fields": [{ "key": "depth_cm", "label": "Depth (cm)", "type": "decimal", "scale": 1, "required": true }],
-    "content_types": [{ "key": "diesel_reading", "name": "Reading", "fields": ["measured_at", "depth_cm", "level_liters"] }],
-    "lists": [{ "key": "diesel", "name": "Diesel", "content_types": ["diesel_reading", "diesel_purchase"] }]
-  },
-  "parameters": { "list": "$list.diesel" },
-  "workflows": [
-    { "key": "diesel-levels", "script": "workflows/diesel-levels.ts", "parameters": { "list": "$list.diesel", "capacity_l": 200 } }
-  ]
-}
-```
-
-- **`setup`** declares the fields, content types and lists the app needs. Installing creates them in the workspace, or reuses a field or type whose definition already matches by key. `$list.<key>` and `$type.<key>` in parameters become the IDs installation creates.
-- **`parameters`** are the app's own settings, which `app.tsx` reads as `ctx.params`. The owner can change them after installing.
-- **`workflows`** are ordinary workflow scripts with their parameters. Installing creates them as workflows **owned by the app**, authored by the installer.
-
-## Installing and removing
-
-**Install.** In **Workspace settings → Apps → Install**, a workspace owner uploads the ZIP. PaperGo checks the manifest, compiles `app.tsx` and every workflow, and lists what it will create. Then it creates the setup, the workflows and the app in one transaction.
-
-**Uninstall.** **Remove** deletes the app and the workflows it owns. Deleting a workflow already cancels its runs and open tasks, and removes their notifications. **Answered tasks are kept.** The lists and their items are workspace data and stay. The owner can choose **also delete its lists** to remove them too, which moves them to the recycle bin like any deleted list.
-
-**Workspace export and import.** A workspace package carries the lists and their data as today. It leaves out apps and the workflows they own, and lists the apps the workspace needs instead:
-
-```json
-"apps": [{ "key": "diesel", "name": "Diesel tracker", "version": "1.0.0" }]
-```
-
-The import's dry run and result say "This workspace uses Diesel tracker 1.0.0. Install it from its app package."
-
-## The screen
+## Writing an app
 
 ```tsx
-import { app, json, useQuery } from "@papergo/app";
+import { app, useQuery, Stat } from "@papergo/app";
 
-export default app<{ list: string }>({
-  render: (ctx) => {
+export default app({
+  parameters: {
+    type: "object",
+    required: ["list"],
+    properties: {
+      list: { type: "string", title: "Diesel list", "x-papergo": { kind: "collection" } },
+    },
+  },
+  render(ctx) {
     const rows = useQuery(ctx.params.list, { sort: [{ field: "measured_at", direction: "desc" }] }, { live: true });
-    const add = (depth: string) =>
-      ctx.api.v1.resources.byId(ctx.params.list).children.post({ kind: "item", name: "Reading", values: json({ depth_cm: depth }) });
-    return <Dashboard rows={rows.data} onAdd={add} />;
+    const last = rows.data[0];
+    return <Stat label="Now" value={last ? ctx.format.number(last.values.level_liters) + " L" : "No reading yet"} />;
   },
 });
 ```
 
+- **`parameters`** is a [form](../workflows.md#forms): Workspace settings shows it with pickers, and saving checks the values against the workspace and the person who saves.
+- **`render(ctx)`** is a React component.
+
 | `ctx` | What it is |
 | --- | --- |
-| `ctx.api` | The generated REST client (the workflow SDK's), sent as the viewer. Full item CRUD on the workspace's lists. |
-| `ctx.params` | The app's parameters. |
-| `ctx.user`, `ctx.workspace` | Who is viewing, and where. |
-| `ctx.run(key, input, { itemId })` | Starts one of the app's workflows and resolves with its output. |
-| `ctx.workflows()` | The app's workflows: key, name, manual input form. |
-| `ctx.tasks({ status })` | The tasks of the app's workflows, and those created through the app, that the viewer may see. |
+| `ctx.api` | The generated REST client, the same as the workflow SDK's, sent as the viewer |
+| `ctx.params` | The app's parameters |
+| `ctx.user` | Who is viewing: subject, name, and preferences (language, time zone, number and date formats) |
+| `ctx.workspace` | Where: ID, name and the viewer's role |
+| `ctx.format` | Numbers, decimals, currencies and dates in the viewer's preferences; `parseDecimal` reads typed decimals with their decimal separator |
+| `ctx.open(target)` | Opens an item, a task or a list in PaperGo; the app cannot navigate itself |
 
-`useQuery` and `useItem` re-read when the list changes, through the page's live stream.
+| Hook | What it does |
+| --- | --- |
+| `useQuery(list, query, { live, all })` | A collection query; `all` reads every page; `live` reads it again when an item of the list changes |
+| `useItem(id, { live })` | One item |
+
+The runtime also ships a small kit in PaperGo's theme: `Stat`, `LineChart`, `BarChart`, `Table`, `Button`, `NumberField`, `DateTimeField` and `Notice`. Everything else is the app's own React.
 
 ## How it runs
 
-1. The PaperGo page reads the app's compiled code with the viewer's login. It starts a sandboxed frame (`sandbox="allow-scripts allow-forms"`, no network) and hands the code in.
-2. The app's requests travel to the page by `postMessage`. The page sends each one as the viewer, with `PaperGo-App: <app id>`, to the routes apps may call: items, folders, queries, views, content types, comments, tasks, and the app's own workflows and runs.
-3. With that header, the server limits the request to the app's workspace (the place limit [limited access tokens](../identity.md) already apply), and applies the viewer's own permissions.
+1. The app page reads the app's compiled bundle with the viewer's login (`GET /v1/apps/{id}/bundle`).
+2. It starts a sandboxed frame:
+   - `sandbox="allow-scripts"`, so the frame has no origin of its own and cannot read PaperGo's storage, where the login is kept;
+   - a document that holds the runtime and the bundle inline, under the CSP `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:`. The frame has no network, no form posts and no navigation.
+3. The app's API calls travel to the page by `postMessage`. The page sends each one as the viewer, with the viewer's login, and returns the status, the body and the `ETag` and `Location` headers.
 
-An app never does more than its viewer may, and only in its workspace. Its frame never sees a login, so an app author cannot act through an administrator who opens it.
+The app can do what the viewer may, and only through the API. It never sees a login, so it cannot keep acting as the viewer once the page closes.
 
-**Workflows and tasks of an app.**
-- Each workflow keeps an `app_id`. A task keeps an `app_id` when an app-owned workflow's run or a request through the app creates it.
-- `ctx.workflows()` and `ctx.tasks()` filter by it.
-- Anyone who may open an app may start its workflows' manual runs. The runs act as the workflow's author, as every run does.
+The page refuses two kinds of request:
+- paths outside `/v1`;
+- the administration routes, whoever views: identity users, groups, roles and tokens, organization settings and preferences, trusted hosts, portability and WebDAV credentials. Without this, an administrator who opens an app would let it change who administers the organization.
 
-## Phase 1: make it work
+The page passes on the live changes of the items the app's queries read, so `live` queries refresh. Errors in the app show inside its frame, without affecting the page.
 
-The diesel tracker, end to end, with nothing more than it needs.
+## Who may do what
 
-| Piece | Change |
+| Action | Needs |
 | --- | --- |
-| Storage | An `apps` table: workspace, key, name, version, manifest, source, bundle, parameters, installer. `app_id` on `workflows` and `tasks`. Deleting a workspace deletes its apps. |
-| Install and remove | `POST /v1/workspaces/{id}/apps` (the ZIP), `GET /v1/workspaces/{id}/apps`, `GET`, `PATCH` (parameters) and `DELETE /v1/apps/{id}` (`delete_lists=true` optional). |
-| Compile | `app.tsx` with the esbuild the server already embeds (TSX, imports `react` and `@papergo/app` only); workflows with the existing workflow compiler. |
-| Requests | The `PaperGo-App` header limits a request to the app's workspace and stamps `app_id` on tasks it creates. `app_id` filters on workflow and task lists. App-owned manual workflows can be started by anyone who can open the app. |
-| Export | Workspace packages leave out apps and app-owned workflows, and list `apps` in the manifest. Import reports them. |
-| SDK | `@papergo/app`: the generated client over a `postMessage` host, `app()`, `useQuery`, `useItem`, `ctx.run`, `ctx.workflows`, `ctx.tasks`. React ships in the runtime bundle. |
-| Web | Apps in the sidebar; the app page with its sandboxed frame and bridge; **Workspace settings → Apps** with Install and Remove. |
-| Sample | `samples/diesel-app/diesel.zip`, built from its sources. |
+| See and open the published apps | read access to the workspace |
+| Create, change, publish, delete; open drafts | manage access to the workspace and the `app.manage` scope |
 
-Not in phase 1: an in-browser editor (apps are written as files and installed as a ZIP), version history, a UI kit, upgrades, per-list access.
+An app acts as everyone who opens it, so `app.manage` is not granted to the Member role: Administrators have it, and organizations grant it as they grant administration. A limited access token cannot hold it.
 
-## Phase 2: make it right
+## Storage and API
 
-In order of need:
+Two tables in both DAL schema masters:
+- **`apps`**: workspace, key, name, description, state (`draft` or `published`), parameters, current version, who created and last changed it, and an ETag version;
+- **`app_versions`**: app, number, source, compiled bundle and its hash, the parameters form, and who saved it.
 
-1. **Upgrade in place.** Install a newer version of the same app key. The app and its workflows are replaced by key, missing setup is added, and nothing is deleted.
-2. **Install into an imported workspace.** Installing an app the import listed reuses its imported lists instead of creating new ones.
-3. **Per-list access.** The manifest declares the lists the app reads or writes, and the server limits requests to them.
-4. **Editor.** Apps in the workflow editor's Monaco, with type checking, a live preview, versions and drafts.
-5. **UI kit.** Forms from content types, stat tiles, tables and charts in PaperGo's theme.
-6. **Package identity.** App workflows run as an identity that reaches only their workspace.
-7. **About.** Publisher, readme and required features (AI, OCR, search), checked on install.
+Deleting an app deletes it and its versions. Apps of a deleted workspace are out of reach, like its other content, and go when it is purged.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, or create one: `{"name", "description", "source", "parameters", "state"}` |
+| GET / PUT / DELETE | `/v1/apps/{id}` | Read, replace (`If-Match`), delete (`If-Match`) |
+| GET | `/v1/apps/{id}/versions` | Versions with their sources, newest first |
+| GET | `/v1/apps/{id}/bundle` | The current version's compiled code, for the app page |
+
+Creating, changing and deleting an app are audited (`app.create`, `app.update`, `app.delete`).
+
+## Compiling
+
+Saving compiles the source with the esbuild the server embeds, as workflows are compiled:
+- **TSX, automatic JSX.** The only imports are `react`, `react/jsx-runtime` and `@papergo/app`, which the runtime provides. Any other import is refused, naming it.
+- **One file, up to 1 MiB.**
+- **The parameters form** is read by evaluating the bundle in the script engine, with React replaced by stubs, and is checked like any form. A source that does not compile, or declares an invalid form, is refused with the reason.
+
+## Runtime SDK
+
+`@papergo/app` lives in `sdk/` beside the workflow SDK and reuses its generated client and request builders, over a `postMessage` transport. Its build adds two files, which the web app embeds:
+- `sdk/dist/app-runtime.js`: React, the runtime and the kit;
+- `sdk/dist/app.d.ts`: its declarations, for the editor.
+
+## Web
+
+- **Sidebar:** the workspace's published apps, under Apps.
+- **App page:** the frame, the bridge, and the app's name and description.
+- **Workspace settings → Apps:**
+  - the list of apps, with Add, Publish and Delete;
+  - the editor: Monaco with the app's declarations, beside the parameters form;
+  - Open, to view a draft.
+
+## The diesel sample
+
+`samples/diesel/` holds the complete sample, built from its sources like the [receipts package](../../samples/receipts-package/README.md):
+- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading and Purchase content types, the saved views, and the three workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`);
+- **`diesel-app.tsx`**, the dashboard: the tiles and charts of the use case, the Add reading and Add purchase forms, and the open reminder or refill task with a link to answer it;
+- **a README** with the two install steps:
+  1. Import the package.
+  2. Add the app with its parameters chosen by the pickers.
+
+  Phase 0 has no way to install both at once: that comes with solutions.
+
+The sample takes the corrections from the [use case review](use-case-diesel-analysis.md#phase-0-sample).
+
+## Delivery
+
+Each step is a commit with the narrowest tests that prove it:
+
+1. **Scope.** `app.manage` in the scope catalog, for Administrators. Tests: `internal/identity`.
+2. **Storage.** The `apps` and `app_versions` tables in both schema masters, the regenerated Bob models, and the repository. Tests: `internal/dal/apps` on both engines.
+3. **Compiler.** TSX bundling, the import rules, and reading the parameters form. Tests: `internal/apps`.
+4. **Service and routes.** Permissions, versions, audit, the OpenAPI contract and `docs/apps.md`. Tests: `internal/apps` and the apps routes in `internal/httpapi`.
+5. **Runtime SDK.** `app()`, the transport, the hooks, `ctx.format`, the kit, and the two build outputs. Tests: the SDK's tests for the app runtime.
+6. **Web.** The frame host and bridge with their refusals and live changes, the sidebar, the app page and the settings page. Tests: vitest for the bridge and the pages.
+7. **Diesel sample.**
+   - The package sources and ZIP, the app and the README.
+   - Tests:
+     - the sample package test;
+     - a `scriptrun` test of the three workflows;
+     - a browser check that imports the package, adds the app and sees a reading turn into litres on the dashboard.
 
 ## Core changes
 
-These need approval before phase 1. Each is generic beyond apps.
+Only `app.manage` in the scope catalog (approved). The tables, routes, compiler and runtime belong to the apps feature. The bridge and pages are web feature code. It needs no change to workflows, tasks or items: manual trigger `access`, `unique` tasks and task updates already serve it.
 
-| Change | Also useful for |
-| --- | --- |
-| `app_id` on workflows and tasks, with list filters | Any feature that owns workflows, such as integrations |
-| A request header that limits a request to one workspace and names its source in tasks | Embedded views, scoped MCP connections |
-| Workspace packages leave out owned workflows and list required apps | Any installable extension |
-| Members may start the manual runs of an app's workflows | Buttons in other clients |
-| A sandboxed frame host and `postMessage` bridge in the web app | Custom views and item panels |
+## Phase 0 is done when
 
-The `apps` table, its routes and the runtime belong to the apps feature itself.
+- A workspace manager with `app.manage` adds, edits, publishes and deletes an app in Workspace settings, choosing its parameters with pickers.
+- A member opens it from the sidebar and reads and changes items with their own permissions. What they may not do is refused as it would be anywhere else.
+- The app cannot reach the network, read the login, navigate, or call the refused routes.
+- The diesel sample installs with its two steps and works end to end:
+  - a reading becomes litres;
+  - a low level asks the buyers;
+  - a purchase closes the task;
+  - the dashboard shows the figures of the use case.
+
+## Later
+
+1. **Apps in workspace packages.** This needs a core hook that lets a module export and import its own objects, with the IDs in parameters remapped.
+2. **Solutions.** Lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together.
+3. **Narrower access.** Limit an app to the lists it declares, or to a short-lived limited credential.
+4. **Editor.** Live preview, type checking on save, several files.
+5. **A larger kit.** Forms from content types.
 
 ## Out of scope
 
-A store, licences or payments: a package is a file. Network access from apps. Public or anonymous apps. Native mobile apps.
+A store, licences or payments; network access from apps; public or anonymous apps; native mobile apps.

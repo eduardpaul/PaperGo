@@ -1,6 +1,6 @@
 # Use case analysis: diesel tracker
 
-Status: proposal. This is the first concrete app for [workspace apps](workspace-apps.md), which describes how apps are written, run and limited. This document covers only what the diesel tracker needs and how it maps onto that architecture.
+Status: proposal; the complete sample of [workspace apps](workspace-apps.md) phase 0, which describes how apps are written, run and limited. This document covers only what the diesel tracker needs and how it maps onto that architecture.
 
 ## The problem
 
@@ -40,7 +40,7 @@ A barrel lying on its side is **not** linear: the litres follow the circular seg
 
 ## Data model
 
-One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the app's prefix because content type keys are organization-wide, and the [app package](workspace-apps.md#the-app-package) reuses a type only when its definition matches.
+One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the `diesel_` prefix because content type and field keys are organization-wide; the sample's fields carry it too (`diesel_depth_cm` and so on), which this document leaves out for reading.
 
 | Content type | Field | Type | Notes |
 | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and
 
 The two types use different field keys (`level_liters` and `bought_liters`), so a level is never added to a quantity bought by mistake. Both timestamps are datetimes, not dates. Readings are taken on the same day as refills, and the consumption maths needs to know which came first.
 
-Saved views: **Readings** (table, type Reading, `measured_at` desc), **Purchases** (table, type Purchase, `purchased_at` desc) and **Calendar** (both). D7 is met by the existing list screens with no extra work.
+Saved views: **Readings** (table, type Reading, `measured_at` desc) and **Purchases** (table, type Purchase, `purchased_at` desc). A calendar view groups by one date field, and the two types keep theirs apart, so there is none. D7 is met by the existing list screens with no extra work.
 
 ## Backend: three workflows
 
@@ -71,12 +71,15 @@ They are three workflows rather than one, so the owner can turn the reminder or 
 
 ### Levels
 
-`diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. The app package fills the list and type IDs when it is installed, so nobody edits IDs.
+`diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. The workspace package carries the list and type IDs, which an import remaps, so nobody edits IDs.
 
 - **Reading:** compute `level_liters` and `fill_percent`. Then read the previous reading and the purchases between the two. If the new level exceeds the previous level plus what was bought, plus a 5 L tolerance, set `flag = check`.
 - **Purchase:** `price_per_liter = total_price / bought_liters`.
 - **Writes back** with `If-Match`, and only when a value actually changes. Its own write raises `item.updated` again, finds nothing to change and stops. Event depth stops any loop at 5 levels regardless.
-- **Recalculate:** a manual trigger on a selected item re-runs it after the owner changes the barrel (D5).
+- **Recalculate all:** a standalone manual trigger (`access: "manage"`) converts every reading again, a page at a time with `continueAsNew`, after the owner changes the barrel (D5). The app offers it to owners as a button.
+- **A reading the owner checked stays checked.** `flag` has a third value, `reviewed`, which the owner sets on a reading they confirmed; the workflow never changes it back to `check`.
+- **A purchase entered late re-checks the reading after it**, so a forgotten purchase filed afterwards clears that reading's `check`.
+- **Nothing to change, nothing returned.** A run that finds the values already right returns no output, so its own write-back does not ask the refill workflow again.
 - **Returns** `{ level_liters, fill_percent, previous_level_liters }` for a reading. The run's output reaches the workflows that follow it through the `wf.diesel-levels.completed` event, which the refill task uses.
 
 Values are exact decimal strings in PaperGo, so the script computes in tenths of a litre and thousandths of a currency unit before writing.
@@ -91,7 +94,7 @@ Every morning at 08:00 in the owner's time zone, the reminder looks at the last 
 - **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task with a reason naming the reading, which the cancelled task shows. Its "task assigned" notification goes with it, and the run waiting on it ends quietly. A task answered at the same moment is no longer open; the cancel's 409 is ignored.
 - **One reminder at a time.** The task is [unique](../workflows.md#tasks): while one is open, the daily check is refused with `task_open` and asks nothing.
 - **Nothing nags.** The task stays open until someone measures. It is due two days after it was created, which shows it as overdue but does not repeat it. Assignees are told when it is created, as for every task.
-- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. The app package can name neither people nor groups of the instance it is installed on, so it ships `["role:owners"]`, and the owner names the person after installing.
+- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. A workspace package can name neither people nor groups of the instance it is imported into, so it ships `["role:owners"]`, and the owner names the person after importing.
 
 ```ts
 // Every morning, asks someone to dip the barrel when the last reading is
@@ -194,7 +197,7 @@ When `diesel-levels` finishes a reading, `diesel-refill` reads its output. If th
 - **One refill task at a time.** The task is unique and stays open until someone buys. A reading that stays low is refused with `task_open`, also when two runs ask at once, and [updates](../workflows.md#tasks) the open task's title and description to its own level instead, so the task always shows how much is left.
 - **A purchase filed any other way closes it.** The same workflow starts on every new purchase and cancels the open `diesel_refill` task with a reason naming the purchase, from the app, the list or anywhere else. Its notification goes with it, and a 409 from a task answered meanwhile is ignored.
 - **The next one comes after a refill.** Once the task is answered or cancelled, the next reading below the threshold asks again.
-- **Buyers** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after installing.
+- **Buyers** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after importing.
 
 ```ts
 // When a reading falls below threshold_l, asks the buyers to fill the
@@ -311,7 +314,7 @@ export default workflow<unknown, unknown, Params>({
 
 Both workflows reach people through tasks, inside PaperGo: assigning a task notifies its assignees, through the bell and its unread count, the Notifications page, the Tasks screen, and live updates while PaperGo is open. PaperGo sends no email or push, by design: people act on the tasks where the data lives.
 
-### What the owner sets after installing
+### What the owner sets after importing
 
 | Workflow | Parameter | Ships as | Set to |
 | --- | --- | --- | --- |
@@ -319,7 +322,7 @@ Both workflows reach people through tasks, inside PaperGo: assigning a task noti
 | `diesel-measure-reminder` | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC` | how often, who measures, where |
 | `diesel-refill` | `threshold_l`, `buyers` | 50, `["role:owners"]` | when to ask, and whom |
 
-The list and type IDs in all three are set by the app package when it is installed.
+The list and type IDs in all three come with the workspace package. `time_zone` ships as `UTC`; the README asks the owner to set theirs.
 
 ## Dashboard: figures and formulas
 
@@ -350,41 +353,61 @@ The screen also has two forms, **Add reading** and **Add purchase**. They are la
 
 ## How it maps onto workspace apps
 
+In phase 0 the sample is a workspace package and an app, installed one after the other (see [the diesel sample](workspace-apps.md#the-diesel-sample)):
+
 | Piece | What it is |
 | --- | --- |
-| Diesel list, two content types, three views | the app package's `setup`, created in the workspace when it is installed |
-| `diesel-levels`, `diesel-measure-reminder`, `diesel-refill` | the app's workflows, owned by it and authored by the installer |
-| Diesel tracker screen | `app.tsx`: the dashboard and the two forms, with item CRUD through `ctx.api` |
-| Distribution | one [app package](workspace-apps.md#the-app-package), `diesel.zip`, installed into an existing workspace |
-| After install | the owner sets the [parameters](#what-the-owner-sets-after-installing) of the three workflows; the app shows a setup message until the barrel's size is set |
-| Uninstall | removes the app and its three workflows, cancels their open tasks and keeps the answered ones; the Diesel list and its history stay unless the owner deletes them too |
+| Diesel list, two content types, two views | `diesel.zip`, a workspace package, imported as a new workspace |
+| `diesel-levels`, `diesel-measure-reminder`, `diesel-refill` | ordinary workflows in the same package, authored by the importer |
+| Diesel tracker screen | `diesel-app.tsx`, an app added in Workspace settings → Apps; its parameters (the list and the two types) are chosen with pickers |
+| After importing | the owner sets the [parameters](#what-the-owner-sets-after-importing) of the three workflows |
 
-The screen finds its own open tasks with `ctx.tasks({ status: "open" })` and shows "A reading is due" or "Diesel is low, buy some" with a link to answer them.
+The screen reads the whole list with one live query, computes the figures above, and has the two forms. It finds the viewer's open reminder or refill task with `GET /v1/me/tasks?key=…&status=open` and shows "A reading is due" or "Diesel is low, buy some", which opens the task with `ctx.open`. Owners also get **Recalculate all**, which starts the levels workflow's standalone manual run.
 
 ```tsx
-import { app, json, useQuery } from "@papergo/app";
+import { app, useQuery, json } from "@papergo/app";
 
-export default app<{ list: string; reading: string; purchase: string }>({
-  render: (ctx) => {
-    const rows = useQuery(ctx.params.list, { sort: [{ field: "$id", direction: "asc" }] }, { all: true, live: true });
+export default app({
+  parameters: {
+    type: "object",
+    required: ["list", "reading", "purchase"],
+    properties: {
+      list: { type: "string", title: "Diesel list", "x-papergo": { kind: "collection" } },
+      reading: { type: "string", title: "Reading type", "x-papergo": { kind: "content_type" } },
+      purchase: { type: "string", title: "Purchase type", "x-papergo": { kind: "content_type" } },
+    },
+  },
+  render(ctx) {
+    const rows = useQuery(ctx.params.list, {}, { all: true, live: true });
     const add = (depth: string) =>
       ctx.api.v1.resources.byId(ctx.params.list).children.post({
         kind: "item", name: "Reading", contentTypeId: ctx.params.reading,
-        values: json({ measured_at: new Date().toISOString(), depth_cm: depth }),
+        values: json({ measured_at: new Date().toISOString(), depth_cm: ctx.format.parseDecimal(depth) }),
       });
     // compute the figures above from rows.data, then render the tiles, charts and forms
-    return <Dashboard rows={rows.data} onAddReading={add} />;
+    return <Dashboard ctx={ctx} rows={rows.data} onAddReading={add} />;
   },
 });
 ```
+
+## Phase 0 sample
+
+The sample takes these corrections from the review of this analysis:
+- **Fields carry the `diesel_` prefix**, so they never collide with another package's fields in the organization catalog.
+- **No calendar view**, since readings and purchases keep separate date fields.
+- **Recalculate all**, the `reviewed` flag and the re-check after a late purchase, described under [Levels](#levels).
+- **Refills are asked once**: `diesel-refill` has `concurrency: "skip"`, its task is unique, and a low reading updates the open task to its level.
+- **"Now" estimates today's level**, the last reading less the average rate times the days since, and says when that reading was taken.
+- **"Days left" needs two readings** and a positive rate; otherwise it says why it has no estimate.
+- **Both barrel geometries**, upright and horizontal.
 
 ## Product notes
 
 - **Measure before refilling.** Ask for an optional reading right after the **Add purchase** form ("Dip it now?"). Two readings around a refill make that interval exact and catch mistakes at once.
 - **One barrel.** Version one keeps the barrel in the workflow's parameters. Several tanks (a tractor tank, a heating tank) would become a third content type, **Tank**, and a lookup field on readings and purchases. The data model allows it without breaking anything, so it can wait until someone asks for it.
-- **Currency** comes from the workspace default, which already exists.
-- **Without the app**, the list, the workflows and the views are already useful today, set up by hand or copied with a workspace package.
+- **Currency** is fixed on the `total_price` field (`options.currency_code`), which the package ships as EUR; the README says how to change it before the first purchase.
+- **Without the app**, the package alone is already useful: the list, the workflows and the views work on their own.
 
-## Decisions needed
+## Decisions taken
 
-1. Barrel geometry for version one: upright only, or upright and horizontal (recommended).
+1. Barrel geometry: upright and horizontal, both in version one.
