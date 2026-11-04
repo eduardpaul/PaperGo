@@ -15,12 +15,18 @@
       "@papergo/workflow": [
         "./src/index.ts"
       ]
-    }
+    },
+    "types": []
   },
   "include": [
     "src",
     "test",
     "../internal/workflow/builtin",
     "../samples"
+  ],
+  "exclude": [
+    "src/app",
+    "test/app",
+    "../samples/**/*.tsx"
   ]
 }

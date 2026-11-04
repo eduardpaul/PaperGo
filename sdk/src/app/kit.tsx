@@ -1,0 +1,307 @@
+// A small kit in PaperGo's theme, for apps: tiles, charts, a table, buttons
+// and fields. Charts are plain SVG, since apps load nothing from the network.
+
+import { useId, type ReactNode } from "react";
+
+/** The kit's stylesheet; the runtime adds it to the app's document. */
+export const styles = `
+:root { color-scheme: light; --pg-bg: #ffffff; --pg-surface: #f7f7f8; --pg-border: #e4e4e7; --pg-text: #18181b; --pg-muted: #71717a;
+  --pg-primary: #2563eb; --pg-primary-text: #ffffff; --pg-danger: #dc2626; --pg-warning: #d97706; --pg-success: #16a34a;
+  --pg-series-1: #2563eb; --pg-series-2: #d97706; --pg-series-3: #16a34a; --pg-radius: 10px; }
+:root[data-theme="dark"] { color-scheme: dark; --pg-bg: #09090b; --pg-surface: #18181b; --pg-border: #27272a; --pg-text: #fafafa; --pg-muted: #a1a1aa;
+  --pg-primary: #3b82f6; --pg-series-1: #60a5fa; --pg-series-2: #fbbf24; --pg-series-3: #4ade80; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--pg-bg); color: var(--pg-text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { padding: 16px; }
+h1, h2, h3 { margin: 0 0 8px; line-height: 1.2; }
+h1 { font-size: 20px; } h2 { font-size: 16px; } h3 { font-size: 14px; }
+.pg-card { background: var(--pg-surface); border: 1px solid var(--pg-border); border-radius: var(--pg-radius); padding: 14px 16px; min-width: 0; }
+.pg-card > .pg-card-title { font-weight: 600; margin-bottom: 8px; }
+.pg-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(var(--pg-min, 180px), 1fr)); margin-bottom: 12px; }
+.pg-stat-label { color: var(--pg-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.pg-stat-value { font-size: 26px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pg-stat-hint { color: var(--pg-muted); font-size: 12px; margin-top: 2px; }
+.pg-tone-warning .pg-stat-value { color: var(--pg-warning); } .pg-tone-danger .pg-stat-value { color: var(--pg-danger); } .pg-tone-success .pg-stat-value { color: var(--pg-success); }
+.pg-button { font: inherit; border-radius: 8px; border: 1px solid var(--pg-border); background: var(--pg-bg); color: var(--pg-text); padding: 8px 14px; cursor: pointer; min-height: 40px; }
+.pg-button:disabled { opacity: .55; cursor: default; }
+.pg-button-primary { background: var(--pg-primary); border-color: var(--pg-primary); color: var(--pg-primary-text); }
+.pg-button-danger { color: var(--pg-danger); }
+.pg-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.pg-field label { font-size: 12px; color: var(--pg-muted); }
+.pg-field-row { display: flex; align-items: center; gap: 8px; }
+.pg-field input { font: inherit; font-size: 18px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--pg-border); background: var(--pg-bg); color: var(--pg-text); width: 100%; min-height: 44px; }
+.pg-field-unit { color: var(--pg-muted); }
+.pg-field-error { color: var(--pg-danger); font-size: 12px; }
+.pg-notice { border-radius: var(--pg-radius); padding: 10px 14px; border: 1px solid var(--pg-border); display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pg-notice-warning { border-color: var(--pg-warning); } .pg-notice-danger { border-color: var(--pg-danger); } .pg-notice-success { border-color: var(--pg-success); }
+.pg-notice-title { font-weight: 600; }
+.pg-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.pg-table th, .pg-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--pg-border); }
+.pg-table th { color: var(--pg-muted); font-weight: 500; font-size: 12px; }
+.pg-table .pg-right { text-align: right; }
+.pg-table tr.pg-clickable { cursor: pointer; } .pg-table tr.pg-clickable:hover td { background: var(--pg-bg); }
+.pg-chart { width: 100%; height: auto; display: block; }
+.pg-chart text { fill: var(--pg-muted); font-size: 11px; }
+.pg-chart .pg-axis { stroke: var(--pg-border); }
+.pg-empty { color: var(--pg-muted); padding: 24px 0; text-align: center; }
+.pg-error { color: var(--pg-danger); white-space: pre-wrap; }
+`;
+
+type Tone = "default" | "warning" | "danger" | "success";
+
+/** A surface with an optional title. */
+export function Card({ title, children }: { title?: ReactNode; children?: ReactNode }) {
+  return (
+    <section className="pg-card">
+      {title !== undefined && <div className="pg-card-title">{title}</div>}
+      {children}
+    </section>
+  );
+}
+
+/** Columns that wrap on narrow screens; min is a column's narrowest width in pixels. */
+export function Grid({ min = 180, children }: { min?: number; children?: ReactNode }) {
+  return (
+    <div className="pg-grid" style={{ ["--pg-min" as string]: `${min}px` }}>
+      {children}
+    </div>
+  );
+}
+
+/** A figure with its label and an optional hint below it. */
+export function Stat({ label, value, hint, tone = "default" }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: Tone }) {
+  return (
+    <div className={`pg-card pg-tone-${tone}`}>
+      <div className="pg-stat-label">{label}</div>
+      <div className="pg-stat-value">{value}</div>
+      {hint !== undefined && <div className="pg-stat-hint">{hint}</div>}
+    </div>
+  );
+}
+
+export function Button({ children, onClick, variant = "default", disabled, type = "button" }: { children?: ReactNode; onClick?: () => void; variant?: "default" | "primary" | "danger"; disabled?: boolean; type?: "button" | "submit" }) {
+  return (
+    <button type={type} className={`pg-button pg-button-${variant}`} onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
+}
+
+/** A message with an optional action, such as an open task. */
+export function Notice({ title, children, tone = "default", action }: { title?: ReactNode; children?: ReactNode; tone?: Tone; action?: { label: ReactNode; onClick: () => void } }) {
+  return (
+    <div className={`pg-notice pg-notice-${tone}`} role="status">
+      <div>
+        {title !== undefined && <div className="pg-notice-title">{title}</div>}
+        {children}
+      </div>
+      {action && <Button onClick={action.onClick}>{action.label}</Button>}
+    </div>
+  );
+}
+
+interface FieldProps {
+  label: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  error?: ReactNode;
+  required?: boolean;
+}
+
+function Field({ label, error, children }: { label: ReactNode; error?: ReactNode; children: (id: string) => ReactNode }) {
+  const id = useId();
+  return (
+    <div className="pg-field">
+      <label htmlFor={id}>{label}</label>
+      {children(id)}
+      {error !== undefined && error !== null && error !== false && <div className="pg-field-error">{error}</div>}
+    </div>
+  );
+}
+
+/**
+ * A decimal typed as text, with a phone's numeric keyboard; read it with
+ * ctx.format.parseDecimal, which knows the viewer's decimal separator.
+ */
+export function NumberField({ label, value, onChange, unit, error, required }: FieldProps & { unit?: ReactNode }) {
+  return (
+    <Field label={label} error={error}>
+      {(id) => (
+        <div className="pg-field-row">
+          <input id={id} type="text" inputMode="decimal" autoComplete="off" value={value} required={required} onChange={(e) => onChange(e.target.value)} />
+          {unit !== undefined && <span className="pg-field-unit">{unit}</span>}
+        </div>
+      )}
+    </Field>
+  );
+}
+
+export function TextField({ label, value, onChange, error, required, maxLength }: FieldProps & { maxLength?: number }) {
+  return (
+    <Field label={label} error={error}>
+      {(id) => <input id={id} type="text" value={value} required={required} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} />}
+    </Field>
+  );
+}
+
+function localInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** A date and time; value and onChange use ISO timestamps. */
+export function DateTimeField({ label, value, onChange, error, required }: FieldProps) {
+  return (
+    <Field label={label} error={error}>
+      {(id) => (
+        <input
+          id={id}
+          type="datetime-local"
+          value={value ? localInput(value) : ""}
+          required={required}
+          onChange={(e) => {
+            const d = new Date(e.target.value);
+            onChange(Number.isNaN(d.getTime()) ? "" : d.toISOString());
+          }}
+        />
+      )}
+    </Field>
+  );
+}
+
+export interface Column<R> {
+  key: string;
+  label: ReactNode;
+  align?: "left" | "right";
+  render?: (row: R) => ReactNode;
+}
+
+export function Table<R extends Record<string, unknown>>({ columns, rows, onRowClick, empty = "Nothing yet" }: { columns: Column<R>[]; rows: R[]; onRowClick?: (row: R) => void; empty?: ReactNode }) {
+  if (rows.length === 0) return <div className="pg-empty">{empty}</div>;
+  return (
+    <table className="pg-table">
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c.key} className={c.align === "right" ? "pg-right" : undefined}>
+              {c.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={String(row.id ?? i)} className={onRowClick ? "pg-clickable" : undefined} onClick={onRowClick ? () => onRowClick(row) : undefined}>
+            {columns.map((c) => (
+              <td key={c.key} className={c.align === "right" ? "pg-right" : undefined}>
+                {c.render ? c.render(row) : String(row[c.key] ?? "")}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+const width = 640;
+const pad = { top: 12, right: 12, bottom: 28, left: 48 };
+
+function ticks(min: number, max: number, count = 4): number[] {
+  if (min === max) return [min];
+  const step = (max - min) / count;
+  return Array.from({ length: count + 1 }, (_, i) => min + step * i);
+}
+
+export interface Series {
+  name: string;
+  points: { x: number | Date; y: number }[];
+}
+
+/**
+ * Lines over a numeric or time axis, with optional markers on the x axis,
+ * such as purchases on a level chart.
+ */
+export function LineChart({ series, markers = [], height = 220, formatX = (x) => new Date(x).toLocaleDateString(), formatY = (y) => String(Math.round(y)), yMin }: { series: Series[]; markers?: { x: number | Date; label?: string }[]; height?: number; formatX?: (x: number) => string; formatY?: (y: number) => string; yMin?: number }) {
+  const points = series.flatMap((s) => s.points.map((p) => ({ x: +p.x, y: p.y })));
+  if (points.length === 0) return <div className="pg-empty">No data yet</div>;
+  const xs = points.map((p) => p.x).concat(markers.map((m) => +m.x));
+  const ys = points.map((p) => p.y);
+  const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+  const [y0, y1] = [yMin ?? Math.min(0, ...ys), Math.max(...ys)];
+  const sx = (x: number) => pad.left + (x1 === x0 ? 0.5 : (x - x0) / (x1 - x0)) * (width - pad.left - pad.right);
+  const sy = (y: number) => height - pad.bottom - (y1 === y0 ? 0.5 : (y - y0) / (y1 - y0)) * (height - pad.top - pad.bottom);
+  return (
+    <svg className="pg-chart" viewBox={`0 0 ${width} ${height}`} role="img">
+      {ticks(y0, y1).map((t) => (
+        <g key={t}>
+          <line className="pg-axis" x1={pad.left} x2={width - pad.right} y1={sy(t)} y2={sy(t)} />
+          <text x={pad.left - 6} y={sy(t) + 4} textAnchor="end">
+            {formatY(t)}
+          </text>
+        </g>
+      ))}
+      <text x={pad.left} y={height - 8}>
+        {formatX(x0)}
+      </text>
+      <text x={width - pad.right} y={height - 8} textAnchor="end">
+        {formatX(x1)}
+      </text>
+      {markers.map((m, i) => (
+        <line key={i} x1={sx(+m.x)} x2={sx(+m.x)} y1={pad.top} y2={height - pad.bottom} stroke="var(--pg-series-2)" strokeDasharray="4 3">
+          {m.label && <title>{m.label}</title>}
+        </line>
+      ))}
+      {series.map((s, i) => {
+        const color = `var(--pg-series-${(i % 3) + 1})`;
+        const sorted = [...s.points].sort((a, b) => +a.x - +b.x);
+        return (
+          <g key={s.name}>
+            <polyline fill="none" stroke={color} strokeWidth={2} points={sorted.map((p) => `${sx(+p.x)},${sy(p.y)}`).join(" ")} />
+            {sorted.map((p, j) => (
+              <circle key={j} cx={sx(+p.x)} cy={sy(p.y)} r={3} fill={color}>
+                <title>{`${s.name}: ${formatX(+p.x)} · ${formatY(p.y)}`}</title>
+              </circle>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** Bars, one per label, such as a month. */
+export function BarChart({ data, height = 200, formatY = (y) => String(Math.round(y)) }: { data: { label: string; value: number }[]; height?: number; formatY?: (y: number) => string }) {
+  if (data.length === 0) return <div className="pg-empty">No data yet</div>;
+  const max = Math.max(0, ...data.map((d) => d.value));
+  const y1 = max === 0 ? 1 : max;
+  const band = (width - pad.left - pad.right) / data.length;
+  const sy = (y: number) => height - pad.bottom - (y / y1) * (height - pad.top - pad.bottom);
+  const every = Math.max(1, Math.ceil(data.length / 12));
+  return (
+    <svg className="pg-chart" viewBox={`0 0 ${width} ${height}`} role="img">
+      {ticks(0, y1).map((t) => (
+        <g key={t}>
+          <line className="pg-axis" x1={pad.left} x2={width - pad.right} y1={sy(t)} y2={sy(t)} />
+          <text x={pad.left - 6} y={sy(t) + 4} textAnchor="end">
+            {formatY(t)}
+          </text>
+        </g>
+      ))}
+      {data.map((d, i) => (
+        <g key={d.label}>
+          <rect x={pad.left + i * band + band * 0.15} width={band * 0.7} y={sy(Math.max(0, d.value))} height={Math.max(0, sy(0) - sy(Math.max(0, d.value)))} fill="var(--pg-series-1)" rx={3}>
+            <title>{`${d.label}: ${formatY(d.value)}`}</title>
+          </rect>
+          {i % every === 0 && (
+            <text x={pad.left + i * band + band / 2} y={height - 8} textAnchor="middle">
+              {d.label}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}

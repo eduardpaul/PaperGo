@@ -41,6 +41,36 @@ The server then loads the code with stand-ins for those modules to read the para
 - their types and picks always, so a draft can be saved before its lists are chosen;
 - the form's required fields once the app is published.
 
+## The runtime
+
+`@papergo/app` is what apps are written against. Its runtime renders the app in the browser, with React 19 and the context `render` receives:
+
+| `ctx` | What it is |
+| --- | --- |
+| `ctx.api` | The generated REST client, the workflow SDK's, sent as the viewer |
+| `ctx.request(method, path, { body, headers })` | Any API route, such as `GET /v1/me/tasks?key=diesel_measure&status=open`, as the viewer; JSON bodies are sent and read as JSON, and a status of 400 or more throws a `RequestError` with the problem's `code` and `detail` |
+| `ctx.params` | The app's parameters |
+| `ctx.user` | Who is viewing: `subject`, `name` and `preferences` (language, time zone, date, time and number formats) |
+| `ctx.workspace` | `id`, `name` and the viewer's `role`: `owner`, `member` or `visitor` |
+| `ctx.app` | The app's `id`, `key`, `name` and the `version` running |
+| `ctx.format` | `number`, `decimal`, `currency`, `date`, `dateTime` and `relative` in the viewer's preferences; `parseDecimal` reads a typed decimal with the viewer's decimal separator, as PaperGo's own fields do, and returns its canonical text, such as `"41.5"` |
+| `ctx.open({ itemId } \| { taskId } \| { listId })` | Opens it in PaperGo; an app cannot navigate itself |
+
+| Hook | What it does |
+| --- | --- |
+| `useQuery(listId, query, { all, live, top, select })` | The list's items that match a [collection query](application-foundation.md) (`filter`, `sort`, `contentTypeId`, `search`), as plain JSON; `all` reads every page; `live` reads again when one of the list's items changes |
+| `useItem(id, { live })` | One item |
+| `useApp()` | The context, in components below `render` |
+
+The kit draws in PaperGo's theme, light or dark as the viewer's:
+- **Layout:** `Card` and `Grid`.
+- **Figures:** `Stat`.
+- **Charts:** `LineChart` (series over numbers or dates, with markers) and `BarChart`, drawn as SVG.
+- **Data:** `Table`.
+- **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard), `TextField` and `DateTimeField`.
+
+`json()` wraps free-form values, such as an item's, for the generated client, and `plain()` turns its untyped answers into JSON. An error in the app shows inside its screen.
+
 ## Who may do what
 
 | Action | Needs |

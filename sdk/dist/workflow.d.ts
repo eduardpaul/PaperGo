@@ -13929,6 +13929,15 @@ export interface PaperGoClient extends BaseRequestBuilder<PaperGoClient> {
 	 */
 	get v1(): V1RequestBuilder;
 }
+/** Converts Kiota untyped values, such as an operation's result, to plain JSON values. */
+export declare function plain(value: UntypedNode | null | undefined): unknown;
+/**
+ * Wraps a free-form JSON object for a request field the API leaves open,
+ * such as an item's values or an output schema.
+ */
+export declare function json<T extends Record<string, unknown>>(value: T): {
+	additionalData: T;
+};
 /**
  * When a workflow runs. Item and folder events, schedules, manual starts,
  * task events, permission changes, term changes, and events of other
@@ -14199,15 +14208,6 @@ export declare class OperationError extends Error {
 	readonly operations: Operation[];
 	constructor(operation: Operation, operations: Operation[]);
 }
-/** Converts Kiota untyped values, such as an operation's result, to plain JSON values. */
-export declare function plain(value: UntypedNode | null | undefined): unknown;
-/**
- * Wraps a free-form JSON object for a request field the API leaves open,
- * such as an item's values or an output schema.
- */
-export declare function json<T extends Record<string, unknown>>(value: T): {
-	additionalData: T;
-};
 /**
  * Runs definition for the engine; scripts do not call it. run is the run's
  * JSON with its input; the promise resolves to the output as JSON text.

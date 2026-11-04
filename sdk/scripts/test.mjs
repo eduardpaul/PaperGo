@@ -1,5 +1,5 @@
-// Runs the SDK's tests: each test/*.test.ts is bundled for Node, with the
-// aliases the SDK build uses, and run.
+// Runs the SDK's tests: each test/**/*.test.ts is bundled for Node, with the
+// aliases the SDK build uses, and run. test/app holds the app runtime's.
 import { readdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -10,8 +10,9 @@ import { build } from "esbuild";
 const sdk = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = await mkdtemp(join(tmpdir(), "papergo-sdk-test-"));
 try {
-  for (const name of (await readdir(join(sdk, "test"))).filter((f) => f.endsWith(".test.ts"))) {
-    const file = join(out, name.replace(/\.ts$/, ".mjs"));
+  const tests = (await readdir(join(sdk, "test"), { recursive: true })).filter((f) => f.endsWith(".test.ts"));
+  for (const name of tests) {
+    const file = join(out, name.replace(/[\\/]/g, "-").replace(/\.ts$/, ".mjs"));
     await build({
       entryPoints: [join(sdk, "test", name)],
       outfile: file,

@@ -1,9 +1,11 @@
 /// <reference path="./globals.d.ts" />
 
-// HostRequestAdapter sends Kiota requests to the workflow engine instead of the
-// network. The engine runs each request in-process as the workflow version's
-// author and records it as one exactly-once step, so a replay returns the
-// recorded response without calling the API again.
+// HostRequestAdapter sends Kiota requests to a transport instead of the
+// network. In a workflow the transport is the engine, which runs each request
+// in-process as the workflow version's author and records it as one
+// exactly-once step, so a replay returns the recorded response without
+// calling the API again. In an app it is the page, which sends the request as
+// the viewer.
 
 import {
   DefaultApiError,
@@ -40,8 +42,14 @@ export function parseCollection<T extends Parsable>(text: string, factory: Parsa
   return new HostParseNode(JSON.parse(text), undefined).getCollectionOfObjectValues(factory) ?? [];
 }
 
+/** Sends one API request and answers with its response. */
+export type Transport = (method: string, url: string, headers: Record<string, string>, body: string | ArrayBuffer | undefined) => HostResponse | Promise<HostResponse>;
+
 export class HostRequestAdapter implements RequestAdapter {
   baseUrl = baseUrl;
+
+  /** transport is the workflow engine's unless given. */
+  constructor(private readonly transport: Transport = (method, url, headers, body) => host.request(method, url, headers, body)) {}
   private readonly parseNodes = new ParseNodeFactoryRegistry();
   private readonly writers = new SerializationWriterFactoryRegistry();
   private readonly store = new InMemoryBackingStoreFactory();
@@ -63,25 +71,25 @@ export class HostRequestAdapter implements RequestAdapter {
   }
 
   async send<T extends Parsable>(info: RequestInformation, factory: ParsableFactory<T>, errors: ErrorMappings | undefined): Promise<T | undefined> {
-    return this.content(this.exchange(info), errors)?.getObjectValue(factory);
+    return this.content(await this.exchange(info), errors)?.getObjectValue(factory);
   }
   async sendCollection<T extends Parsable>(info: RequestInformation, factory: ParsableFactory<T>, errors: ErrorMappings | undefined): Promise<T[] | undefined> {
-    return this.content(this.exchange(info), errors)?.getCollectionOfObjectValues(factory);
+    return this.content(await this.exchange(info), errors)?.getCollectionOfObjectValues(factory);
   }
   async sendCollectionOfPrimitive<T>(info: RequestInformation, type: PrimitiveTypesForDeserializationForCollection, errors: ErrorMappings | undefined): Promise<T[] | undefined> {
-    return this.content(this.exchange(info), errors)?.getCollectionOfPrimitiveValues<T>(type);
+    return this.content(await this.exchange(info), errors)?.getCollectionOfPrimitiveValues<T>(type);
   }
   async sendPrimitive<T>(info: RequestInformation, type: PrimitiveTypesForDeserialization, errors: ErrorMappings | undefined): Promise<T | undefined> {
-    return this.primitive(this.exchange(info), type, errors) as T | undefined;
+    return this.primitive(await this.exchange(info), type, errors) as T | undefined;
   }
   async sendNoResponseContent(info: RequestInformation, errors: ErrorMappings | undefined): Promise<void> {
-    this.check(this.exchange(info), errors);
+    this.check(await this.exchange(info), errors);
   }
   async sendEnum<E extends Record<string, unknown>>(info: RequestInformation, type: E, errors: ErrorMappings | undefined): Promise<E[keyof E] | undefined> {
-    return this.content(this.exchange(info), errors)?.getEnumValue(type);
+    return this.content(await this.exchange(info), errors)?.getEnumValue(type);
   }
   async sendCollectionOfEnum<E extends Record<string, unknown>>(info: RequestInformation, type: E, errors: ErrorMappings | undefined): Promise<E[keyof E][] | undefined> {
-    return this.content(this.exchange(info), errors)?.getCollectionOfEnumValues(type);
+    return this.content(await this.exchange(info), errors)?.getCollectionOfEnumValues(type);
   }
 
   /**
@@ -90,7 +98,7 @@ export class HostRequestAdapter implements RequestAdapter {
    * lower-case names.
    */
   async call(metadata: RequestMetadata, method: string, url: string, headers: Record<string, string>, content: ArrayBuffer | undefined): Promise<unknown> {
-    const response = this.request(method, url, headers, content);
+    const response = await this.request(method, url, headers, content);
     const errors = metadata.errorMappings;
     const factory = metadata.responseBodyFactory as ParsableFactory<Parsable>;
     switch (metadata.adapterMethodName) {
@@ -141,7 +149,7 @@ export class HostRequestAdapter implements RequestAdapter {
     }
   }
 
-  private exchange(info: RequestInformation): HostResponse {
+  private exchange(info: RequestInformation): HostResponse | Promise<HostResponse> {
     info.pathParameters["baseurl"] = this.baseUrl;
     const headers: Record<string, string> = {};
     // Kiota's Headers keeps its values outside the Map it extends; only its
@@ -155,10 +163,10 @@ export class HostRequestAdapter implements RequestAdapter {
     return this.request(info.httpMethod ?? "GET", url, headers, info.content);
   }
 
-  private request(method: string, url: string, headers: Record<string, string>, content: ArrayBuffer | undefined): HostResponse {
+  private request(method: string, url: string, headers: Record<string, string>, content: ArrayBuffer | undefined): HostResponse | Promise<HostResponse> {
     let body: string | ArrayBuffer | undefined = content;
     if (body !== undefined && textType.test(mediaType(headers["content-type"]))) body = new TextDecoder().decode(body);
-    return host.request(method, url, headers, body);
+    return this.transport(method, url, headers, body);
   }
 
   private content(response: HostResponse, errors: ErrorMappings | undefined): ParseNode | undefined {
