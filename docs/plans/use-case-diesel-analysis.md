@@ -60,7 +60,7 @@ One list, **Diesel**, with four content types: **Reading**, **Purchase**, **Heat
 | | `diesel_supplier` | text | optional |
 | **Heating** | `diesel_heating_at` | datetime, required, indexed | |
 | | `diesel_heating` | choice: `on`, `off`, required | |
-| **Temperature** | `diesel_temperature_at` | datetime, required, indexed | |
+| **Temperature** | `diesel_temperature_at` | datetime, required, indexed | the app asks for a date and time: temperatures change through the day |
 | | `diesel_indoor_c`, `diesel_outdoor_c` | decimal, scale 1 | either or both; outdoor goes below zero |
 
 Readings and purchases keep separate date fields, and every timestamp is a datetime. The tank is often measured on the day it is filled, and the maths needs to know which came first. Saved views: **Readings**, **Purchases**, **Heating**, **Temperatures** and **Needs a look** (flag `check`). Temperatures are a type of their own, not fields of a reading: they are taken when the tank is not read, and a reading stays what the stick says. D9 is met by the ordinary list screens.

@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   DateField,
+  DateTimeField,
   Gauge,
   Grid,
   Legend,
@@ -65,7 +66,7 @@ const words = {
     purchaseTitle: "New fill", bought: "Litres bought", total: "Total price", boughtAt: "Date", supplier: "Supplier", pricePreview: "{price}/L",
     heatingTitle: "Heating", heatingIs: "The heating is {state} since {date}.", heatingNow: "The heating is {state} ({assumed}).", changedAt: "Since", turnOn: "It went on", turnOff: "It went off",
     save: "Save", cancel: "Cancel", invalid: "Type a number",
-    temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average",
+    temperature: "Temperature and heating", addTemperature: "+ Temperature", temperatureTitle: "New temperature", indoor: "Indoor", outdoor: "Outdoor", takenAt: "Date and time", takenOn: "Taken on {date}", noTemperature: "No temperature yet", oneTemperature: "Type at least one temperature", outdoorAverage: "Outdoor average",
     measureDue: "A reading is due", refillDue: "Diesel is low: buy some", answer: "Answer", check: "Needs a look", checkHint: "Higher than the reading before and what was bought since. Open it to correct it, or mark it reviewed.",
     readings: "Readings", purchases: "Fills", date: "Date", stickCol: "Stick", litersCol: "Litres", fill: "Level", perLiter: "€/L", supplierCol: "Supplier", history: "See the whole history", setUp: "Choose the Diesel list and its types in Workspace settings → Apps.",
   },
@@ -81,7 +82,7 @@ const words = {
     purchaseTitle: "Nuevo llenado", bought: "Litros comprados", total: "Precio total", boughtAt: "Fecha", supplier: "Proveedor", pricePreview: "{price}/L",
     heatingTitle: "Calefacción", heatingIs: "La calefacción está {state} desde el {date}.", heatingNow: "La calefacción está {state} ({assumed}).", changedAt: "Desde", turnOn: "Se ha encendido", turnOff: "Se ha apagado",
     save: "Guardar", cancel: "Cancelar", invalid: "Escribe un número",
-    temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio",
+    temperature: "Temperatura y calefacción", addTemperature: "+ Temperatura", temperatureTitle: "Nueva temperatura", indoor: "Interior", outdoor: "Exterior", takenAt: "Fecha y hora", takenOn: "Tomada el {date}", noTemperature: "Aún no hay temperaturas", oneTemperature: "Escribe al menos una temperatura", outdoorAverage: "Exterior medio",
     measureDue: "Toca medir", refillDue: "Queda poco gasóleo: hay que pedir", answer: "Responder", check: "Para revisar", checkHint: "Más alta que la medición anterior y lo comprado desde entonces. Ábrela para corregirla o márcala como revisada.",
     readings: "Mediciones", purchases: "Llenados", date: "Fecha", stickCol: "Palo", litersCol: "Litros", fill: "Nivel", perLiter: "€/L", supplierCol: "Proveedor", history: "Ver historial completo", setUp: "Elige la lista Diesel y sus tipos en Ajustes del espacio de trabajo → Aplicaciones.",
   },
@@ -438,9 +439,11 @@ function Dashboard({ w }: { w: Words }) {
                 { name: w.outdoor, points: m.temperatures.filter((c) => c.outdoor !== undefined).map((c) => ({ x: c.at, y: c.outdoor! })) },
                 { name: w.indoor, points: m.temperatures.filter((c) => c.indoor !== undefined).map((c) => ({ x: c.at, y: c.indoor! })) },
               ]}
-              formatX={(x) => f.date(x)}
+              // A tapped point says when it was taken, to the minute.
+              formatX={(x) => f.dateTime(x)}
               formatTick={monthName}
-              formatY={(y) => `${f.number(y, 0)} °C`}
+              // One decimal, as the temperatures are taken: a tapped point reads 18,5 °C, not 19.
+              formatY={(y) => `${f.number(y, 1)} °C`}
             />
           </>
         ) : (
@@ -597,7 +600,7 @@ function TemperatureDialog({ w, open, onClose }: { w: Words; open: boolean; onCl
     run(async () => {
       await ctx.api.v1.resources.byId(ctx.params.list).children.post({
         kind: "item",
-        name: `Temperature ${when.slice(0, 10)} · ${i ?? "–"} / ${o ?? "–"} °C`,
+        name: `Temperature ${f.dateTime(when)} · ${i ?? "–"} / ${o ?? "–"} °C`,
         contentTypeId: ctx.params.temperature as never,
         values: json({ diesel_temperature_at: when, ...(i !== null ? { diesel_indoor_c: i } : {}), ...(o !== null ? { diesel_outdoor_c: o } : {}) }),
       });
@@ -609,7 +612,8 @@ function TemperatureDialog({ w, open, onClose }: { w: Words; open: boolean; onCl
       <NumberField autoFocus label={w.indoor} unit="°C" value={indoor} onChange={setIndoor} error={i === undefined ? w.invalid : undefined} />
       <NumberField signed label={w.outdoor} unit="°C" value={outdoor} onChange={setOutdoor} error={o === undefined ? w.invalid : undefined} />
       {empty && <p className="pg-stat-hint">{w.oneTemperature}</p>}
-      <DateField label={w.takenAt} value={when} onChange={setWhen} />
+      {/* Temperatures change through the day: they are taken at a time, now unless changed. */}
+      <DateTimeField label={w.takenAt} value={when} onChange={setWhen} required />
       {failed && <p className="pg-error">{failed}</p>}
     </Modal>
   );

@@ -155,7 +155,7 @@ func TestDieselSample(t *testing.T) {
 	}
 	frost := false
 	for _, item := range temperatures {
-		if item.Name == "Temperature 2026-01-02 · 19.8 / -1.5 °C" {
+		if item.Name == "Temperature 2026-01-02 10:05 UTC · 19.8 / -1.5 °C" {
 			frost = fmt.Sprint(item.Values["diesel_outdoor_c"]) == "-1.5" && fmt.Sprint(item.Values["diesel_indoor_c"]) == "19.8"
 		}
 	}

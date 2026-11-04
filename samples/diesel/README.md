@@ -9,7 +9,7 @@ A heating-oil tank, read with a dipstick: how much is left, what it is worth, ho
      - **Reading**: when, the stick reading from the mouth in cm, and the litres, fill and check the levels workflow works out;
      - **Purchase**: when, litres, total price in EUR, price per litre, supplier;
      - **Heating**: when the heating went on or off;
-     - **Temperature**: when, and the indoor and outdoor °C, either or both;
+     - **Temperature**: the date and time, and the indoor and outdoor °C, either or both;
    - five saved views: Readings, Purchases, Heating, Temperatures and Needs a look;
    - the four workflows below.
 
@@ -57,7 +57,7 @@ After importing, set these in **Workspace settings → Workflows**:
   - **The level over time:** the heating seasons shaded, fills marked, a tick every three months, the reserve as a dashed line, and the forecast to the next order.
   - **The price per litre of each fill:** its axis fits the prices, so a rise shows.
   - **The cost of the diesel used each month:** what was burnt between readings, valued at the price of the fill it came from.
-- **Temperature and heating:** the last indoor and outdoor temperatures, and both over time against the heating seasons. **+ Temperatura** on the card records them; the ± button types a temperature below zero, which phones' decimal keyboards cannot.
+- **Temperature and heating:** the last indoor and outdoor temperatures, and both over time against the heating seasons. **+ Temperatura** on the card records them at a date and time, now unless changed, since temperatures change through the day; the ± button types a temperature below zero, which phones' decimal keyboards cannot. Tapping a point says when it was taken.
 - **Consumption:** what each season actually burnt between readings, beside the rates the forecast uses, so the rates can be tuned, and the season's average outdoor temperature.
 - **Actions:** **+ Medición**, **+ Llenado** and the heating button open a dialog.
   - Typing a stick reading shows what it means before it is saved, worked out with the Diesel levels workflow's settings.

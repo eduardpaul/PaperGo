@@ -86,7 +86,7 @@ export default workflow<unknown, unknown, Params>({
       ...readings.map((r) => ({ at: r.at, name: `Reading ${r.at.slice(0, 10)} · ${r.stick} cm`, type: p.reading_type, values: { diesel_measured_at: r.at, diesel_stick_cm: r.stick } })),
       ...purchases.map((b) => ({ at: b.at, name: `Purchase ${b.at.slice(0, 10)} · ${b.liters} L`, type: p.purchase_type, values: { diesel_purchased_at: b.at, diesel_bought_liters: b.liters, diesel_total_price: b.total } })),
       ...heating.map((h) => ({ at: h.at, name: `Heating ${h.state} ${h.at.slice(0, 10)}`, type: p.heating_type, values: { diesel_heating_at: h.at, diesel_heating: h.state } })),
-      ...temperatures.map((c) => ({ at: c.at, name: `Temperature ${c.at.slice(0, 10)} · ${c.indoor} / ${c.outdoor} °C`, type: p.temperature_type, values: { diesel_temperature_at: c.at, diesel_indoor_c: c.indoor, diesel_outdoor_c: c.outdoor } })),
+      ...temperatures.map((c) => ({ at: c.at, name: `Temperature ${c.at.slice(0, 10)} ${c.at.slice(11, 16)} UTC · ${c.indoor} / ${c.outdoor} °C`, type: p.temperature_type, values: { diesel_temperature_at: c.at, diesel_indoor_c: c.indoor, diesel_outdoor_c: c.outdoor } })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     for (const entry of entries) {
       await api.v1.resources.byId(p.list).children.post({ kind: "item", name: entry.name, contentTypeId: entry.type as never, values: json(entry.values) });
