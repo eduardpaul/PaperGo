@@ -72,6 +72,9 @@ func TestCompactQueryEnvelope(t *testing.T) {
 	if code, _ = page("/v1/resources/"+list.ID+"/query", `{"envelope":"tiny"}`); code != 422 {
 		t.Fatalf("an unknown envelope: %d", code)
 	}
+	if code, _ = page("/v1/resources/"+list.ID+"/query/groups", `{"envelope":"compact","query":{"group_by":"outdoor"}}`); code != 422 {
+		t.Fatalf("an envelope on group counts: %d", code)
+	}
 
 	// What a query asks for stays: selected built-in columns, and whether an
 	// item is archived.
@@ -114,5 +117,8 @@ func TestCompactQueryEnvelope(t *testing.T) {
 	}
 	if code, rows := page("/v1/views/"+view.ID+"/query", `{"envelope":"compact"}`); code != 200 || len(rows) != 2 || rows[0]["head_revision_id"] != nil || string(rows[0]["values"]) != `{"outdoor":"-1.5"}` {
 		t.Fatalf("a compact view query: %d %v", code, rows)
+	}
+	if code, _ = page("/v1/views/"+view.ID+"/query/groups", `{"envelope":"compact"}`); code != 422 {
+		t.Fatalf("an envelope on a view's group counts: %d", code)
 	}
 }

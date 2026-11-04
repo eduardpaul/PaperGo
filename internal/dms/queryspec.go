@@ -710,6 +710,9 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
+	if in.Envelope != "" {
+		return Page[QueryGroup]{}, invalid("envelope belongs to item queries")
+	}
 	ctx, err := s.matchQueryText(ctx, subject, containerID, in.Query.Search, in.Query.Archive.Default())
 	if err != nil {
 		return Page[QueryGroup]{}, err

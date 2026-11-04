@@ -25781,7 +25781,7 @@
               "compact"
             ],
             "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           }
         },
         "required": [],
@@ -25827,7 +25827,7 @@
               "compact"
             ],
             "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           },
           "selected": {
             "type": "array",
@@ -27257,7 +27257,7 @@
               "compact"
             ],
             "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for reading many items. full returns the whole resource. Group queries refuse it, as they do select."
           }
         },
         "additionalProperties": false,

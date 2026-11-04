@@ -255,6 +255,9 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 	})
 }
 func (s *Service) QueryViewGroups(ctx context.Context, subject, id string, in ViewQueryRequest) (Page[QueryGroup], error) {
+	if in.Envelope != "" {
+		return Page[QueryGroup]{}, invalid("envelope belongs to item queries")
+	}
 	return read(ctx, s, func(t *Service) (Page[QueryGroup], error) {
 		v, e := t.View(ctx, subject, id)
 		if e != nil {
