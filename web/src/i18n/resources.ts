@@ -2,6 +2,7 @@
 // A new namespace is a JSON file in each src/locales/<code> folder and a line here.
 
 import admin from '@/locales/en/admin.json';
+import apps from '@/locales/en/apps.json';
 import archive from '@/locales/en/archive.json';
 import auth from '@/locales/en/auth.json';
 import comments from '@/locales/en/comments.json';
@@ -24,6 +25,7 @@ import workspaces from '@/locales/en/workspaces.json';
 
 export const en = {
   admin,
+  apps,
   archive,
   auth,
   comments,

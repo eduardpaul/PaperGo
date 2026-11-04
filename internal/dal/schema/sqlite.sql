@@ -735,6 +735,11 @@ CREATE INDEX operation_group ON operations(kind, group_key, created_at) WHERE st
 CREATE INDEX operation_pending_workspace ON operations(workspace_id) WHERE status = 'pending';
 CREATE INDEX operation_pending_creator ON operations(created_by) WHERE status = 'pending';
 CREATE INDEX operation_execution_id ON operations(execution_id) WHERE execution_id <> '';
+-- A worker's next due operation of a kind, pending and not parked by an
+-- external execution: the earliest attempt, and the earliest claim to
+-- expire. One seek a kind, however many operations of other kinds wait.
+CREATE INDEX operation_next_attempt ON operations(kind, attempt_at) WHERE status = 'pending' AND execution_id = '';
+CREATE INDEX operation_next_claim ON operations(kind, claim_until) WHERE status = 'pending' AND execution_id = '' AND claim_until IS NOT NULL;
 CREATE UNIQUE INDEX operation_idempotency ON operations(created_by, kind, COALESCE(container_id, ''), idempotency_key) WHERE idempotency_key <> '';
 
 CREATE TABLE operation_items (
@@ -786,6 +791,37 @@ CREATE TABLE workflow_versions (
     created_by TEXT NOT NULL
 );
 CREATE UNIQUE INDEX workflowversion_workflow_id_number ON workflow_versions(workflow_id, number);
+
+CREATE TABLE apps (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    "key" TEXT NOT NULL CHECK (length("key") BETWEEN 1 AND 100),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+    description TEXT NOT NULL DEFAULT '' CHECK (length(description) <= 2000),
+    state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'published')),
+    parameters TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(parameters) AND json_type(parameters) = 'object'),
+    current_version INTEGER NOT NULL CHECK (current_version > 0),
+    created_by TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+CREATE UNIQUE INDEX app_workspace_id_key ON apps(workspace_id, "key");
+CREATE UNIQUE INDEX app_workspace_id_name ON apps(workspace_id, name);
+
+CREATE TABLE app_versions (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    app_id TEXT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    number INTEGER NOT NULL CHECK (number > 0),
+    source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 1048576),
+    bundle TEXT NOT NULL CHECK (length(bundle) >= 1),
+    bundle_hash TEXT NOT NULL CHECK (length(bundle_hash) = 64),
+    parameters_schema TEXT NOT NULL CHECK (json_valid(parameters_schema) AND json_type(parameters_schema) = 'object'),
+    created_by TEXT NOT NULL
+);
+CREATE UNIQUE INDEX appversion_app_id_number ON app_versions(app_id, number);
 
 CREATE TABLE workflow_triggers (
     id TEXT PRIMARY KEY NOT NULL,

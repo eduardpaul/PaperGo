@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "paths": {
+      "@papergo/workflow": [
+        "./src/index.ts"
+      ],
+      "@papergo/app": [
+        "./src/app/index.ts"
+      ],
+      "react": [
+        "./node_modules/@types/react"
+      ],
+      "react/jsx-runtime": [
+        "./node_modules/@types/react/jsx-runtime"
+      ]
+    },
+    "types": [
+      "react",
+      "react-dom"
+    ]
+  },
+  "include": [
+    "src/app",
+    "test/app",
+    "../samples/**/*.tsx"
+  ],
+  "exclude": []
+}

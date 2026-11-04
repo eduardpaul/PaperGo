@@ -496,6 +496,17 @@
     "surface": "Schema surface",
     "visible": "Visible version"
   },
+  "search": {
+    "title": "Search",
+    "description": "Whether the items of this list are kept in search, with their fields, terms and keywords.",
+    "label": "Search the items",
+    "on": "On",
+    "off": "Off: names only",
+    "onHint": "Every change updates the search index.",
+    "offHint": "Searching inside the list matches names only, and changes skip the index: right for lists of readings or measurements.",
+    "customHint": "The workflow \"{{name}}\" keeps this list's search. Change it from the workspace's workflows.",
+    "saved": "Search setting saved"
+  },
   "sheet": {
     "actions": "Item actions",
     "addToSmartFolder": "Add to smart folder…",

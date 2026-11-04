@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppLauncherRouteImport } from './routes/_app/launcher'
 import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -42,7 +43,9 @@ import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w/$works
 import { Route as AppWWorkspaceIdKeywordsRouteImport } from './routes/_app/w/$workspaceId/keywords'
 import { Route as AppWWorkspaceIdRelationshipsRouteImport } from './routes/_app/w/$workspaceId/relationships'
 import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/_app/w/$workspaceId/settings'
+import { Route as AppWWorkspaceIdAAppIdRouteImport } from './routes/_app/w/$workspaceId/a/$appId'
 import { Route as AppWWorkspaceIdSettingsIndexRouteImport } from './routes/_app/w/$workspaceId/settings/index'
+import { Route as AppWWorkspaceIdSettingsAppsRouteImport } from './routes/_app/w/$workspaceId/settings/apps'
 import { Route as AppWWorkspaceIdSettingsMembersRouteImport } from './routes/_app/w/$workspaceId/settings/members'
 import { Route as AppWWorkspaceIdSettingsRunsRouteImport } from './routes/_app/w/$workspaceId/settings/runs'
 import { Route as AppWWorkspaceIdSettingsWorkflowsRouteImport } from './routes/_app/w/$workspaceId/settings/workflows'
@@ -83,6 +86,11 @@ const AppArchiveRoute = AppArchiveRouteImport.update({
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLauncherRoute = AppLauncherRouteImport.update({
+  id: '/launcher',
+  path: '/launcher',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
@@ -222,10 +230,21 @@ const AppWWorkspaceIdSettingsRoute = AppWWorkspaceIdSettingsRouteImport.update({
   path: '/w/$workspaceId/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWWorkspaceIdAAppIdRoute = AppWWorkspaceIdAAppIdRouteImport.update({
+  id: '/w/$workspaceId/a/$appId',
+  path: '/w/$workspaceId/a/$appId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWWorkspaceIdSettingsIndexRoute =
   AppWWorkspaceIdSettingsIndexRouteImport.update({
     id: '/',
     path: '/',
+    getParentRoute: () => AppWWorkspaceIdSettingsRoute,
+  } as any)
+const AppWWorkspaceIdSettingsAppsRoute =
+  AppWWorkspaceIdSettingsAppsRouteImport.update({
+    id: '/apps',
+    path: '/apps',
     getParentRoute: () => AppWWorkspaceIdSettingsRoute,
   } as any)
 const AppWWorkspaceIdSettingsMembersRoute =
@@ -307,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AppAdminRouteWithChildren
   '/archive': typeof AppArchiveRoute
   '/inbox': typeof AppInboxRoute
+  '/launcher': typeof AppLauncherRoute
   '/notifications': typeof AppNotificationsRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
@@ -334,6 +354,8 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
+  '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
@@ -352,6 +374,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/archive': typeof AppArchiveRoute
   '/inbox': typeof AppInboxRoute
+  '/launcher': typeof AppLauncherRoute
   '/notifications': typeof AppNotificationsRoute
   '/search': typeof AppSearchRoute
   '/tasks': typeof AppTasksRoute
@@ -378,6 +401,8 @@ export interface FileRoutesByTo {
   '/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
   '/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
+  '/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
+  '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
@@ -398,6 +423,7 @@ export interface FileRoutesById {
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/archive': typeof AppArchiveRoute
   '/_app/inbox': typeof AppInboxRoute
+  '/_app/launcher': typeof AppLauncherRoute
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
@@ -426,6 +452,8 @@ export interface FileRoutesById {
   '/_app/w/$workspaceId/relationships': typeof AppWWorkspaceIdRelationshipsRoute
   '/_app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/_app/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
+  '/_app/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/_app/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/_app/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/_app/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
@@ -448,6 +476,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/archive'
     | '/inbox'
+    | '/launcher'
     | '/notifications'
     | '/search'
     | '/settings'
@@ -475,6 +504,8 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/relationships'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/'
+    | '/w/$workspaceId/a/$appId'
+    | '/w/$workspaceId/settings/apps'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
     | '/w/$workspaceId/settings/workflows'
@@ -493,6 +524,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/archive'
     | '/inbox'
+    | '/launcher'
     | '/notifications'
     | '/search'
     | '/tasks'
@@ -519,6 +551,8 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/keywords'
     | '/w/$workspaceId/relationships'
     | '/w/$workspaceId'
+    | '/w/$workspaceId/a/$appId'
+    | '/w/$workspaceId/settings/apps'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
     | '/w/$workspaceId/settings/workflows'
@@ -538,6 +572,7 @@ export interface FileRouteTypes {
     | '/_app/admin'
     | '/_app/archive'
     | '/_app/inbox'
+    | '/_app/launcher'
     | '/_app/notifications'
     | '/_app/search'
     | '/_app/settings'
@@ -566,6 +601,8 @@ export interface FileRouteTypes {
     | '/_app/w/$workspaceId/relationships'
     | '/_app/w/$workspaceId/settings'
     | '/_app/w/$workspaceId/'
+    | '/_app/w/$workspaceId/a/$appId'
+    | '/_app/w/$workspaceId/settings/apps'
     | '/_app/w/$workspaceId/settings/members'
     | '/_app/w/$workspaceId/settings/runs'
     | '/_app/w/$workspaceId/settings/workflows'
@@ -629,6 +666,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/launcher': {
+      id: '/_app/launcher'
+      path: '/launcher'
+      fullPath: '/launcher'
+      preLoaderRoute: typeof AppLauncherRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/notifications': {
@@ -820,11 +864,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/w/$workspaceId/a/$appId': {
+      id: '/_app/w/$workspaceId/a/$appId'
+      path: '/w/$workspaceId/a/$appId'
+      fullPath: '/w/$workspaceId/a/$appId'
+      preLoaderRoute: typeof AppWWorkspaceIdAAppIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/w/$workspaceId/settings/': {
       id: '/_app/w/$workspaceId/settings/'
       path: '/'
       fullPath: '/w/$workspaceId/settings/'
       preLoaderRoute: typeof AppWWorkspaceIdSettingsIndexRouteImport
+      parentRoute: typeof AppWWorkspaceIdSettingsRoute
+    }
+    '/_app/w/$workspaceId/settings/apps': {
+      id: '/_app/w/$workspaceId/settings/apps'
+      path: '/apps'
+      fullPath: '/w/$workspaceId/settings/apps'
+      preLoaderRoute: typeof AppWWorkspaceIdSettingsAppsRouteImport
       parentRoute: typeof AppWWorkspaceIdSettingsRoute
     }
     '/_app/w/$workspaceId/settings/members': {
@@ -967,6 +1025,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppWWorkspaceIdSettingsRouteChildren {
+  AppWWorkspaceIdSettingsAppsRoute: typeof AppWWorkspaceIdSettingsAppsRoute
   AppWWorkspaceIdSettingsMembersRoute: typeof AppWWorkspaceIdSettingsMembersRoute
   AppWWorkspaceIdSettingsRunsRoute: typeof AppWWorkspaceIdSettingsRunsRoute
   AppWWorkspaceIdSettingsWorkflowsRoute: typeof AppWWorkspaceIdSettingsWorkflowsRoute
@@ -975,6 +1034,7 @@ interface AppWWorkspaceIdSettingsRouteChildren {
 
 const AppWWorkspaceIdSettingsRouteChildren: AppWWorkspaceIdSettingsRouteChildren =
   {
+    AppWWorkspaceIdSettingsAppsRoute: AppWWorkspaceIdSettingsAppsRoute,
     AppWWorkspaceIdSettingsMembersRoute: AppWWorkspaceIdSettingsMembersRoute,
     AppWWorkspaceIdSettingsRunsRoute: AppWWorkspaceIdSettingsRunsRoute,
     AppWWorkspaceIdSettingsWorkflowsRoute:
@@ -1021,6 +1081,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppArchiveRoute: typeof AppArchiveRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppLauncherRoute: typeof AppLauncherRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
@@ -1032,6 +1093,7 @@ interface AppRouteChildren {
   AppWWorkspaceIdRelationshipsRoute: typeof AppWWorkspaceIdRelationshipsRoute
   AppWWorkspaceIdSettingsRoute: typeof AppWWorkspaceIdSettingsRouteWithChildren
   AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
+  AppWWorkspaceIdAAppIdRoute: typeof AppWWorkspaceIdAAppIdRoute
   AppWWorkspaceIdLListIdRecycleBinRoute: typeof AppWWorkspaceIdLListIdRecycleBinRoute
   AppWWorkspaceIdLListIdSettingsRoute: typeof AppWWorkspaceIdLListIdSettingsRouteWithChildren
   AppWWorkspaceIdLListIdIndexRoute: typeof AppWWorkspaceIdLListIdIndexRoute
@@ -1041,6 +1103,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppArchiveRoute: AppArchiveRoute,
   AppInboxRoute: AppInboxRoute,
+  AppLauncherRoute: AppLauncherRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
@@ -1052,6 +1115,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppWWorkspaceIdRelationshipsRoute: AppWWorkspaceIdRelationshipsRoute,
   AppWWorkspaceIdSettingsRoute: AppWWorkspaceIdSettingsRouteWithChildren,
   AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
+  AppWWorkspaceIdAAppIdRoute: AppWWorkspaceIdAAppIdRoute,
   AppWWorkspaceIdLListIdRecycleBinRoute: AppWWorkspaceIdLListIdRecycleBinRoute,
   AppWWorkspaceIdLListIdSettingsRoute:
     AppWWorkspaceIdLListIdSettingsRouteWithChildren,

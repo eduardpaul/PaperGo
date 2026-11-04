@@ -38,6 +38,8 @@ var Catalog = []Scope{
 	{"group.read", true}, {"group.manage", false},
 	{"role.read", false}, {"role.manage", false},
 	{"organization.manage", false}, {"audit.read", false},
+	// app.manage writes apps, whose code acts as everyone who opens them.
+	{"app.manage", false},
 }
 
 func RequireScope(ctx context.Context, store *dal.Store, subject, scope string) error {

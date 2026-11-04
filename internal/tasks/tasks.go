@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -35,10 +36,11 @@ const (
 	EventCreated   = "task.created"
 	EventCompleted = "task.completed"
 	EventCancelled = "task.cancelled"
+	EventUpdated   = "task.updated"
 )
 
 // Events lists the task events workflows can be triggered by.
-var Events = []string{EventCreated, EventCompleted, EventCancelled}
+var Events = []string{EventCreated, EventUpdated, EventCompleted, EventCancelled}
 
 // Outcome settings.
 const (
@@ -85,6 +87,10 @@ type Input struct {
 	ItemID      string
 	Kind        taskstore.Kind
 	Key         string
+	// Unique creates the task only when no open task of the workspace has
+	// its key, which it then needs; otherwise Create returns a
+	// *taskstore.OpenError naming the open one.
+	Unique      bool
 	Title       string
 	Description string
 	Assignees   []string
@@ -183,7 +189,7 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (task
 	input := taskstore.CreateInput{
 		WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title, Description: in.Description,
 		Assignees: assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values, Review: in.Review,
-		Priority: in.Priority, DueAt: in.DueAt, CreatedBy: subject, Source: taskstore.SourceUser,
+		Priority: in.Priority, DueAt: in.DueAt, CreatedBy: subject, Source: taskstore.SourceUser, Unique: in.Unique,
 	}
 	if in.Workflow != nil {
 		input.ID = uuid.NewString()
@@ -240,6 +246,9 @@ func (in *Input) normalize() error {
 	}
 	if in.Key != "" && !keyPattern.MatchString(in.Key) {
 		return dms.Invalid("key is a lowercase name such as legal_review")
+	}
+	if in.Unique && in.Key == "" {
+		return dms.Invalid("a unique task needs a key")
 	}
 	if in.Completion == "" {
 		in.Completion = taskstore.CompletionAny
@@ -624,6 +633,121 @@ func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries [
 	return tk, nil
 }
 
+// Patch changes an open task. Each field set replaces its value; the form,
+// outcomes, key, kind and completion stay as the task was created, since a
+// waiting run and the answers so far depend on them.
+type Patch struct {
+	Title, Description *string
+	Priority           *taskstore.Priority
+	// SetDueAt replaces the due date with DueAt; nil clears it.
+	SetDueAt bool
+	DueAt    *time.Time
+	// SetValues replaces the form's prefill with Values; nil clears it.
+	SetValues bool
+	Values    map[string]any
+}
+
+// Update changes an open task at version, as an owner of its workspace or
+// the creator of a person's task, the people who may reassign it. Assignees
+// are not told again; a task that does not change keeps its version.
+func Update(ctx context.Context, t *dms.Service, subject, id string, version int64, p Patch) (taskstore.Task, error) {
+	tk, err := t.DAL.Tasks().Find(ctx, id)
+	if dberr.IsNotFound(err) {
+		return taskstore.Task{}, dms.ErrNotFound
+	}
+	if err != nil {
+		return taskstore.Task{}, err
+	}
+	groups, err := t.GroupIDs(ctx, subject)
+	if err != nil {
+		return taskstore.Task{}, err
+	}
+	if !visibleTo(ctx, t, tk, subject, groups) {
+		return taskstore.Task{}, dms.ErrNotFound
+	}
+	if !manages(ctx, t, subject, tk.WorkspaceID) && (tk.CreatedBy != subject || tk.Source == taskstore.SourceWorkflow) {
+		return taskstore.Task{}, dms.ErrForbidden
+	}
+	if tk.Status != taskstore.StatusOpen {
+		return taskstore.Task{}, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
+	}
+	if tk.Version != version {
+		return taskstore.Task{}, dms.ErrPreconditionFailed
+	}
+	in := taskstore.UpdateInput{Title: tk.Title, Description: tk.Description, Priority: tk.Priority, DueAt: tk.DueAt, Values: tk.Values}
+	var changed []string
+	if p.Title != nil {
+		in.Title = strings.TrimSpace(*p.Title)
+		if in.Title == "" || utf8.RuneCountInString(in.Title) > 500 {
+			return taskstore.Task{}, dms.Invalid("the title must have 1 to 500 characters")
+		}
+		if in.Title != tk.Title {
+			changed = append(changed, "title")
+		}
+	}
+	if p.Description != nil {
+		in.Description = *p.Description
+		if utf8.RuneCountInString(in.Description) > 4000 {
+			return taskstore.Task{}, dms.Invalid("the description is limited to 4000 characters")
+		}
+		if in.Description != tk.Description {
+			changed = append(changed, "description")
+		}
+	}
+	if p.Priority != nil {
+		if !p.Priority.Valid() {
+			return taskstore.Task{}, dms.Invalid("priority is low, normal or high")
+		}
+		if in.Priority = *p.Priority; in.Priority != tk.Priority {
+			changed = append(changed, "priority")
+		}
+	}
+	if p.SetDueAt {
+		in.DueAt = nil
+		if p.DueAt != nil {
+			due := p.DueAt.UTC()
+			in.DueAt = &due
+		}
+		if (in.DueAt == nil) != (tk.DueAt == nil) || in.DueAt != nil && !in.DueAt.Equal(*tk.DueAt) {
+			changed = append(changed, "due_at")
+		}
+	}
+	if p.SetValues {
+		in.Values = nil
+		if p.Values != nil {
+			if tk.InputSchema == nil {
+				return taskstore.Task{}, dms.Invalid("values prefill a form; this task has none")
+			}
+			if err = checkPrefill(tk.InputSchema, p.Values); err != nil {
+				return taskstore.Task{}, err
+			}
+			in.Values = forms.Plain(p.Values).(map[string]any)
+			if err = forms.CheckValues(ctx, t, subject, tk.WorkspaceID, tk.InputSchema, in.Values, "values"); err != nil {
+				return taskstore.Task{}, err
+			}
+		}
+		if !reflect.DeepEqual(in.Values, tk.Values) {
+			changed = append(changed, "values")
+		}
+	}
+	if len(changed) == 0 {
+		return tk, nil
+	}
+	tk, err = t.DAL.Tasks().Update(ctx, id, version, in)
+	if err != nil {
+		return taskstore.Task{}, taskError(err)
+	}
+
+	ws, err := t.Authorize(ctx, subject, tk.WorkspaceID, "read")
+	if err != nil {
+		return taskstore.Task{}, err
+	}
+	if err = t.Record(ctx, subject, "task.update", ws, map[string]any{"task_id": id, "changed": changed}); err != nil {
+		return taskstore.Task{}, err
+	}
+	return tk, raiseWith(ctx, t, tk, EventUpdated, subject, map[string]any{"changed": changed})
+}
+
 // assigned tells the people a task's assignees name that it waits for
 // them, once each: a reassignment tells only those it adds. People who
 // cannot review the task are left out, and so is actor, who assigned it.
@@ -697,6 +821,11 @@ func eventData(tk taskstore.Task) map[string]any {
 }
 
 func raise(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor string) error {
+	return raiseWith(ctx, t, tk, typ, actor, nil)
+}
+
+// raiseWith raises a task event whose data adds extra to the task's.
+func raiseWith(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor string, extra map[string]any) error {
 	var collection *string
 	if tk.ItemID != "" {
 		item, err := t.DAL.Resources().Resource(ctx, tk.ItemID)
@@ -707,7 +836,11 @@ func raise(ctx context.Context, t *dms.Service, tk taskstore.Task, typ, actor st
 			collection = item.ContainerID
 		}
 	}
-	t.Raise(ctx, typ, actor, tk.WorkspaceID, collection, tk.ItemID, eventData(tk))
+	data := eventData(tk)
+	for k, v := range extra {
+		data[k] = v
+	}
+	t.Raise(ctx, typ, actor, tk.WorkspaceID, collection, tk.ItemID, data)
 	return nil
 }
 

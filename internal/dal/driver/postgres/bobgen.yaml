@@ -32,6 +32,8 @@ psql:
     grants: []
     group_inboxes: []
     workflow_versions: []
+    apps: []
+    app_versions: []
     blobs: []
     blob_leases: []
     resources: []
@@ -171,6 +173,14 @@ replacements:
   - tables: ["workflow_versions"]
     match:
       name: "definition"
+    replace: "types.JSON[json.RawMessage]"
+  - tables: ["apps"]
+    match:
+      name: "parameters"
+    replace: "types.JSON[model.JSONMap]"
+  - tables: ["app_versions"]
+    match:
+      name: "parameters_schema"
     replace: "types.JSON[json.RawMessage]"
   - tables: ["operations"]
     match:

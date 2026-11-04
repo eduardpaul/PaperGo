@@ -57,7 +57,7 @@ type View struct {
 	// CanRespond tells the reader whether they may answer now.
 	CanRespond bool `json:"can_respond"`
 	// CanReassign tells the reader of an open task whether they may change
-	// its assignees; set when one task is read.
+	// its assignees and update it; set when one task is read.
 	CanReassign bool `json:"can_reassign,omitempty"`
 }
 
@@ -408,6 +408,20 @@ func (s *Service) Reassign(ctx context.Context, subject, id string, assignees []
 	var out View
 	err := s.DMS.Write(ctx, func(t *dms.Service) error {
 		tk, err := Reassign(ctx, t, subject, id, assignees)
+		if err != nil {
+			return err
+		}
+		out, err = view(ctx, t, tk, subject, nil)
+		return err
+	})
+	return out, err
+}
+
+// Update changes an open task at version.
+func (s *Service) Update(ctx context.Context, subject, id string, version int64, p Patch) (View, error) {
+	var out View
+	err := s.DMS.Write(ctx, func(t *dms.Service) error {
+		tk, err := Update(ctx, t, subject, id, version, p)
 		if err != nil {
 			return err
 		}

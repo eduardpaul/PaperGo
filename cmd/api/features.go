@@ -4,6 +4,7 @@ import (
 	"papergo/extensions/mcp"
 	mcpserver "papergo/extensions/mcp/server"
 	"papergo/internal/aiops"
+	"papergo/internal/apps"
 	"papergo/internal/dms"
 	"papergo/internal/documentfiles"
 	"papergo/internal/documentpreview"
@@ -44,7 +45,7 @@ func (f features) register(s *dms.Service) error {
 
 // modules are the feature modules whose routes the API serves.
 func (f features) modules() []httpapi.Module {
-	modules := []httpapi.Module{f.text.Module(), f.preview.Module(), f.ai.Module(), f.files.Module()}
+	modules := []httpapi.Module{f.text.Module(), f.preview.Module(), f.ai.Module(), f.files.Module(), apps.Module()}
 	if f.search != nil {
 		modules = append(modules, f.search.Module())
 	}

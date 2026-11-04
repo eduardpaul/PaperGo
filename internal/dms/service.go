@@ -141,11 +141,22 @@ func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, acce
 
 // A consistent snapshot binds authorization, surface selection and hydration.
 func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) (out T, err error) {
+	return readAt(ctx, s, sql.LevelSerializable, fn)
+}
+
+// snapshot is read for reports that scan many rows: one snapshot, without
+// the predicate locks of a serializable read that would make writers of the
+// scanned rows fail, and that nothing can make it repeat.
+func snapshot[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) (T, error) {
+	return readAt(ctx, s, sql.LevelRepeatableRead, fn)
+}
+
+func readAt[T any](ctx context.Context, s *Service, level sql.IsolationLevel, fn func(*Service) (T, error)) (out T, err error) {
 	if s.transaction {
 		return fn(s)
 	}
 	err = dal.Retry(ctx, func() error {
-		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: level, ReadOnly: true})
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <!-- Frames show only documents the page writes (srcdoc), such as apps' sandboxed screens, which cannot navigate away. -->
+    <meta http-equiv="Content-Security-Policy" content="frame-src 'none'" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>PaperGo</title>
     <script src="/theme.js"></script>

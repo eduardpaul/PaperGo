@@ -64,6 +64,29 @@ type CreateInput struct {
 	Source                         Source
 	WorkflowID, RunID, OperationID string
 	CreatedBy                      string
+	// Unique creates the task only when no open task of its workspace has
+	// its key; otherwise Create returns an *OpenError.
+	Unique bool
+}
+
+// OpenError refuses a unique task while the open task ID of its workspace
+// has the same key.
+type OpenError struct {
+	Key, ID string
+}
+
+func (e *OpenError) Error() string {
+	return fmt.Sprintf("task %s with key %s is still open", e.ID, e.Key)
+}
+
+// UpdateInput is what an update of an open task replaces: its title,
+// description, priority, due date (nil clears it) and form prefill (nil
+// clears it). Checking the values belongs to the application transaction.
+type UpdateInput struct {
+	Title, Description string
+	Priority           Priority
+	DueAt              *time.Time
+	Values             map[string]any
 }
 
 type ResponseInput struct {
@@ -165,6 +188,20 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Task, error) {
 		if err := validateAssignees(ctx, q, in.Assignees); err != nil {
 			return err
 		}
+		if in.Unique {
+			// The workspace lock queues every task creation of the
+			// workspace, so two unique tasks cannot both find none open.
+			if in.Key == "" {
+				return fmt.Errorf("%w: a unique task needs a key", dberr.ErrCheckViolation)
+			}
+			open, err := q.Tasks(ctx, Filter{WorkspaceID: in.WorkspaceID, Key: in.Key, Status: StatusOpen, Limit: 1})
+			if err != nil {
+				return err
+			}
+			if len(open) > 0 {
+				return &OpenError{Key: in.Key, ID: open[0].ID}
+			}
+		}
 		if len(in.Outcomes) < 1 || len(in.Outcomes) > 10 {
 			return fmt.Errorf("%w: tasks need 1 to 10 outcomes", dberr.ErrCheckViolation)
 		}
@@ -265,6 +302,28 @@ func (r *Repo) Reassign(ctx context.Context, id string, version int64, assignees
 				complete(&task, *completing)
 			}
 		}
+		result, err = save(ctx, q, task)
+		return err
+	})
+	return result, err
+}
+
+// Update replaces an open task's title, description, priority, due date
+// and form prefill. A stale version or terminal task cannot change.
+func (r *Repo) Update(ctx context.Context, id string, version int64, in UpdateInput) (Task, error) {
+	if in.Title == "" || !in.Priority.Valid() {
+		return Task{}, fmt.Errorf("%w: a task needs a title and a valid priority", dberr.ErrCheckViolation)
+	}
+	var result Task
+	err := r.write(ctx, func(q Queries) error {
+		task, err := mutable(ctx, q, id, version)
+		if err != nil {
+			return err
+		}
+		if task.Status != StatusOpen {
+			return fmt.Errorf("%w: task is %s", dberr.ErrInvalidStateTransition, task.Status)
+		}
+		task.Title, task.Description, task.Priority, task.DueAt, task.Values = in.Title, in.Description, in.Priority, utc(in.DueAt), in.Values
 		result, err = save(ctx, q, task)
 		return err
 	})

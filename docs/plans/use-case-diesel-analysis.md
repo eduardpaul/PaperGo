@@ -1,373 +1,137 @@
 # Use case analysis: diesel tracker
 
-Status: proposal. This is the first concrete app for [workspace apps](workspace-apps.md), which describes how apps are written, run and limited. This document covers only what the diesel tracker needs and how it maps onto that architecture.
+Status: implemented as the complete sample of [workspace apps](workspace-apps.md) phase 0, in [`samples/diesel`](../../samples/diesel/README.md). This document covers what the tracker needs and why it is built the way it is; the sample's README says how to install and set it up.
 
 ## The problem
 
-A farm or house keeps diesel in a barrel. Two things happen:
+A house keeps heating oil in a 750 L tank. Three things happen:
 
-1. **Measure.** Someone dips a stick into the barrel and reads how many centimetres of diesel are left.
-2. **Buy.** Someone buys N litres for a price on a date, and pours them in.
+1. **Measure.** Someone puts a 2 m stick down the filling mouth and reads where the diesel starts.
+2. **Buy.** Someone buys some litres for a price on a date, and the tank is filled.
+3. **Heat.** The heating goes on in autumn and off in spring; without it the tank only feeds hot water, and lasts several times longer.
+4. **Feel.** Someone notes how warm it is inside the house and outside.
 
-They want to open one screen, type a number, and see how much diesel is left, how fast it goes, what it costs, and when the barrel will be empty.
+They want one screen that says how much is left, what it is worth, how fast it goes in each season, how warm the house is for it, and when to order.
 
 ## User stories
 
 | # | As | I want to | So that |
 | --- | --- | --- | --- |
-| D1 | anyone in the workspace | enter a dipstick reading in cm, in two taps on a phone | recording it is quicker than not recording it |
-| D2 | anyone | see the litres for that reading at once | I don't have to do the arithmetic |
-| D3 | anyone | record a purchase: litres, total price, date, optionally the supplier | spend is tracked |
-| D4 | the owner | see the current level, litres per day and month, spend per month, price per litre over time, and the projected empty date | I know when to buy and what diesel costs us |
-| D5 | the owner | set the barrel's size once and fix it later | every reading, including old ones, converts correctly |
-| D6 | the owner | be told when a reading makes no sense (higher than the last one with no purchase in between) | a typo or a forgotten purchase doesn't corrupt the figures |
-| D7 | anyone | correct a wrong entry in the normal list screen | the app is not the only way in |
-| D8 | the person who measures | be asked to measure when 15 days have passed since the last reading, and answer with the reading itself | readings happen regularly without anyone keeping a calendar |
-| D9 | the people who buy | be asked to fill the barrel when it falls below a level the owner chooses, and answer with the purchase itself | we fill it up before it runs dry, and the purchase is recorded |
+| D1 | anyone in the workspace | enter a stick reading in cm, on a phone, with my decimal comma | recording it is quicker than not recording it |
+| D2 | anyone | see the litres and percentage of that reading at once | I don't have to do the arithmetic |
+| D3 | anyone | record a purchase: litres, total price, date, optionally the supplier | spend and price per litre are tracked |
+| D4 | anyone | record when the heating goes on or off | consumption and forecasts follow the season |
+| D5 | the owner | see today's estimated level, litres and their value, the days to the reserve, the date to order and the daily cost | I know when to buy and what heating costs us |
+| D6 | the owner | see the level over time against the heating seasons, the price per litre and the monthly cost | I understand where the diesel goes |
+| D7 | the owner | set the tank's size and how the stick is read, and fix it later | every reading, old ones included, converts correctly |
+| D8 | the owner | be told when a reading makes no sense, and say it is right | a typo or a forgotten purchase does not corrupt the figures |
+| D9 | anyone | correct an entry in the ordinary list screen | the app is not the only way in |
+| D10 | the person who measures | be asked to measure when 15 days have passed, and answer with the reading itself | readings happen without anyone keeping a calendar |
+| D11 | the people who buy | be asked to fill the tank when it falls below 200 L, and answer with the purchase | it is filled before it runs dry, and the purchase is recorded |
+| D12 | anyone | record the indoor and outdoor temperature, below zero too, on a phone | we see how cold it was and how warm the house kept |
+| D13 | the owner | see the temperatures beside the heating seasons and each season's consumption | I know what the cold costs, and whether the heating keeps the house warm |
 
-## Converting centimetres to litres
+## From the stick to litres
 
-For an upright cylindrical barrel the level is linear in the height, so it is a rule of three. If the full height `H` cm holds `C` litres:
+The tank holds diesel over a useful height of 125 cm. The filling mouth is 200 cm above the bottom, so there are 75 cm of margin above the diesel. The stick measures from the mouth down to the diesel:
 
 ```
-litres = depth_cm × C / H        (clamped to 0 … C)
-fill % = litres / C × 100
+wet cm  = 200 − stick cm                  (within 0 … 125)
+litres  = wet cm × 750 / 125              (6 L a centimetre)
+fill %  = litres / 750 × 100
 ```
 
-Example: a 200 L drum, 88 cm high, reading 41 cm → 41 × 200 / 88 = 93.2 L, 46.6 %.
-
-A barrel lying on its side is **not** linear: the litres follow the circular segment, `C × (θ − sin θ) / 2π` with `θ = 2·acos(1 − 2h/D)`. Because the conversion is a workflow script, it is a parameter (`orientation: "upright" | "horizontal"`) and a few lines, not a product change. Version one should ship both. Otherwise a horizontal tank silently reads up to about 6 % of its capacity wrong (12 L on a 200 L drum) when it is a fifth or four-fifths full.
+A stick reading of 86.8 cm leaves 113.2 cm of diesel: 679.2 L, 90.6 %. The workflow takes the capacity, the useful height, the stick's length and the way it is read (`from_top`, or `depth` for the wet length) as parameters. A tank lying on its side is a parameter too (`orientation: horizontal`): its litres follow the circular segment, `C × (θ − sin θ) / 2π` with `θ = 2·acos(1 − 2h/D)`.
 
 ## Data model
 
-One list, **Diesel**, with two content types, `diesel_reading` (**Reading**) and `diesel_purchase` (**Purchase**). One list keeps the history in one place and lets the app read everything with one query. The keys carry the app's prefix because content type keys are organization-wide, and the [app package](workspace-apps.md#the-app-package) reuses a type only when its definition matches.
+One list, **Diesel**, with four content types: **Reading**, **Purchase**, **Heating** and **Temperature**. One list keeps the history in one place, and the app reads each type with one live query. Every field and type key carries the `diesel_` prefix, because catalog keys are organization-wide.
 
 | Content type | Field | Type | Notes |
 | --- | --- | --- | --- |
-| **Reading** | `measured_at` | datetime, required, indexed | defaults to now in the app |
-| | `depth_cm` | decimal, scale 1, required, min 0 | what the person types |
-| | `level_liters` | decimal, scale 1 | written by the workflow |
-| | `fill_percent` | decimal, scale 1 | written by the workflow |
-| | `flag` | choice: `ok`, `check`, indexed | written by the workflow (D6) |
-| **Purchase** | `purchased_at` | datetime, required, indexed | |
-| | `bought_liters` | decimal, scale 1, required, min 0 | |
-| | `total_price` | currency (workspace default, e.g. EUR), required | |
-| | `price_per_liter` | decimal, scale 3 | written by the workflow |
-| | `supplier` | text | optional |
+| **Reading** | `diesel_measured_at` | datetime, required, indexed | defaults to now in the app |
+| | `diesel_stick_cm` | decimal, scale 1, required | what the person reads |
+| | `diesel_level_liters`, `diesel_fill_percent` | decimal, scale 1 | written by the workflow |
+| | `diesel_flag` | choice: `ok`, `check`, `reviewed` | written by the workflow; people set `reviewed` |
+| **Purchase** | `diesel_purchased_at` | datetime, required, indexed | |
+| | `diesel_bought_liters` | decimal, scale 1, required | |
+| | `diesel_total_price` | currency EUR, required | |
+| | `diesel_price_per_liter` | decimal, scale 3 | written by the workflow |
+| | `diesel_supplier` | text | optional |
+| **Heating** | `diesel_heating_at` | datetime, required, indexed | |
+| | `diesel_heating` | choice: `on`, `off`, required | |
+| **Temperature** | `diesel_temperature_at` | datetime, required, indexed | the app asks for a date and time: temperatures change through the day |
+| | `diesel_indoor_c`, `diesel_outdoor_c` | decimal, scale 1 | either or both; outdoor goes below zero |
 
-The two types use different field keys (`level_liters` and `bought_liters`), so a level is never added to a quantity bought by mistake. Both timestamps are datetimes, not dates. Readings are taken on the same day as refills, and the consumption maths needs to know which came first.
+Readings and purchases keep separate date fields, and every timestamp is a datetime. The tank is often measured on the day it is filled, and the maths needs to know which came first. Saved views: **Readings**, **Purchases**, **Heating**, **Temperatures** and **Needs a look** (flag `check`). Temperatures are a type of their own, not fields of a reading: they are taken when the tank is not read, and a reading stays what the stick says. D9 is met by the ordinary list screens.
 
-Saved views: **Readings** (table, type Reading, `measured_at` desc), **Purchases** (table, type Purchase, `purchased_at` desc) and **Calendar** (both). D7 is met by the existing list screens with no extra work.
-
-## Backend: three workflows
+## Backend: workflows
 
 | Workflow | Starts on | Does |
 | --- | --- | --- |
-| `diesel-levels` | a reading or purchase created or changed | litres, fill %, price per litre and the consistency flag (D2, D5, D6) |
-| `diesel-measure-reminder` | every morning, and every new reading | a measuring task when the last reading is 15 days old (D8) |
-| `diesel-refill` | `diesel-levels` finishing a reading, and every new purchase | a refill task when the level falls below the threshold (D9) |
+| `diesel-levels` | a reading or purchase created or changed; a manual run for owners | litres, fill % and the consistency flag of readings, the price per litre of purchases (D2, D7, D8) |
+| `diesel-measure-reminder` | every morning; every new reading; a manual run for owners | a measuring task when the last reading is 15 days old (D10) |
+| `diesel-refill` | `diesel-levels` converting a reading; every new purchase | a refill task when the level falls below the threshold (D11) |
+| `diesel-sample-data` | a manual run for owners | files eighteen months of a real tank into an empty list |
 
-They are three workflows rather than one, so the owner can turn the reminder or the refill task off, or change who gets them, without touching the arithmetic. All three compile with the server's workflow compiler and type-check against the SDK as written here.
+**Levels.**
+- **The flag.** A reading higher than the one before, plus what was bought between them, plus 5 L, is marked `check`. A reading someone marked `reviewed` stays so.
+- **Late purchases.** A purchase checks the reading after it again, so a forgotten purchase filed late clears that reading.
+- **Write-back.** The workflow writes back at the item's version, and only what changed. Its own update finds nothing to change. Only a reading whose values changed returns its levels, so the write-back does not ask the refill workflow again.
+- **Recalculate all.** The manual run converts every reading again after the tank's settings change (D7).
 
-### Levels
+**Reminder and refill.**
+- **The task is the form.** Each asks with a [unique](../workflows.md#tasks) task whose form is the record itself: answering the reminder files the reading, and answering the refill files the purchase. A record filed any other way cancels the open task with a reason.
+- **One refill task.** The refill workflow skips a second run on the same reading. A later low reading that finds the task open updates its title and description to the new level, instead of asking twice.
+- **Assignees.** A workspace package can name neither people nor groups of the instance it is imported into, so both ship `["role:owners"]`.
+- **Notifications.** Assigning a task notifies its assignees in PaperGo; nothing else is sent.
 
-`diesel-levels` reacts to `item.created` and `item.updated` of both types in the Diesel list. Its parameters are the barrel: `list`, `capacity_l`, `height_cm` and `orientation`. The app package fills the list and type IDs when it is installed, so nobody edits IDs.
+## The dashboard
 
-- **Reading:** compute `level_liters` and `fill_percent`. Then read the previous reading and the purchases between the two. If the new level exceeds the previous level plus what was bought, plus a 5 L tolerance, set `flag = check`.
-- **Purchase:** `price_per_liter = total_price / bought_liters`.
-- **Writes back** with `If-Match`, and only when a value actually changes. Its own write raises `item.updated` again, finds nothing to change and stops. Event depth stops any loop at 5 levels regardless.
-- **Recalculate:** a manual trigger on a selected item re-runs it after the owner changes the barrel (D5).
-- **Returns** `{ level_liters, fill_percent, previous_level_liters }` for a reading. The run's output reaches the workflows that follow it through the `wf.diesel-levels.completed` event, which the refill task uses.
+The app computes the tank's figures in the browser from the readings, purchases and heating changes, about 150 items a year, read as compact items of the fields it uses. Temperatures can come every hour from a sensor, 8,760 a year, so the server works them out into daily averages in the viewer's time zone ([aggregates](../application-foundation.md)), and the app reads the latest indoor and outdoor ones alone.
 
-Values are exact decimal strings in PaperGo, so the script computes in tenths of a litre and thousandths of a currency unit before writing.
+**Rates.** The forecast uses one rate a day, by season:
 
-The app only writes items; the workflow derives. A reading entered from the list screen, over MCP by an assistant, or by another app gets its litres too, and the formula lives in one script the owner can read and change.
+| Season | Litres a day | Daily cost at 1.594 €/L |
+| --- | --- | --- |
+| Heating off (hot water only) | 1.5 | 2.39 € |
+| Heating on | 4.5 | 7.17 € |
+| Heating on, December to February | 7.5 | 11.96 € |
 
-### Measuring reminder
+**The heating.**
+- **Recorded.** The heating is as recorded.
+- **After the last change.** It is assumed to go on and off on its usual days: the average day of the year of the recorded switches-on and switches-off. The dashboard says when the state is assumed and offers to record it.
 
-Every morning at 08:00 in the owner's time zone, the reminder looks at the last reading. When it is `every_days` (15) old or more, and no reminder is open, it creates a **task** for `assignees`. The task's form asks for the centimetres on the dipstick and, optionally, when they were measured: left empty, it is the moment of the answer. Answering it files the reading, so the person never opens the list or the app: the task in their Tasks screen is the data entry. `diesel-levels` then converts it like any other reading.
+**Figures.**
 
-- **15 days after the last reading, not on fixed dates.** Someone who measures on day 10 is next asked on day 25. A fixed calendar (`cron: "0 8 1,16 * *"`) would ask even after a fresh reading. The daily check is cheap: one query, and nothing written on most days.
-- **A reading filed any other way closes the reminder.** The same workflow starts on every new reading and cancels the open `diesel_measure` task with a reason naming the reading, which the cancelled task shows. Its "task assigned" notification goes with it, and the run waiting on it ends quietly. A task answered at the same moment is no longer open; the cancel's 409 is ignored.
-- **One reminder at a time.** Workflow concurrency applies only to runs on items, and a schedule run has none, so the script checks for an open task itself.
-- **Nothing nags.** The task stays open until someone measures. It is due two days after it was created, which shows it as overdue but does not repeat it. Assignees are told when it is created, as for every task.
-- **Assignees** are a parameter: a person, `group:<id>`, `role:owners` or `role:members`. The app package can name neither people nor groups of the instance it is installed on, so it ships `["role:owners"]`, and the owner names the person after installing.
-
-```ts
-// Every morning, asks someone to dip the barrel when the last reading is
-// older than every_days. The task's form is the reading: answering it
-// files the reading, and a reading filed any other way closes the task.
-// The task stays open until then; nothing asks twice.
-import { OperationError, json, workflow } from "@papergo/workflow";
-import type { PaperGoClient } from "@papergo/workflow";
-
-interface Params {
-  list: string;
-  reading_type: string;
-  every_days: number;
-  // People, group:<id>, role:owners or role:members.
-  assignees: string[];
-  time_zone: string;
-}
-
-const KEY = "diesel_measure";
-const DAY = 24 * 3600 * 1000;
-
-// close cancels an open task for reason. A task answered or cancelled
-// meanwhile is no longer open (409), which is what close wants anyway.
-async function close(api: PaperGoClient, id: string, reason: string): Promise<void> {
-  try {
-    await api.v1.tasks.byId(id).cancel.post({ reason });
-  } catch (e) {
-    if ((e as { responseStatusCode?: number }).responseStatusCode !== 409) throw e;
-  }
-}
-
-export default workflow<unknown, unknown, Params>({
-  triggers: (p) => [
-    { type: "schedule", cron: "0 8 * * *", time_zone: p.time_zone },
-    { type: "item.created", collection_id: p.list, content_type_id: p.reading_type },
-  ],
-  async run(ctx) {
-    const p = ctx.params;
-    const api = ctx.api;
-    const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
-
-    if (ctx.trigger?.kind === "item") {
-      // Someone measured: close the open reminder, whose run then ends.
-      for (const task of open?.value ?? []) await close(api, task.id!, `Measured: ${ctx.trigger.item.name}.`);
-      return;
-    }
-    // Concurrency applies to runs on items only, so a schedule run checks
-    // for the reminder still waiting itself.
-    if (open?.value?.length) return;
-
-    const last = await api.v1.resources.byId(p.list).query.post(
-      { query: { contentTypeId: p.reading_type, sort: [{ field: "measured_at", direction: "desc" }] }, select: ["measured_at"] },
-      { queryParameters: { top: 1 } },
-    );
-    const at = last?.value?.[0]?.values?.additionalData?.measured_at;
-    const now = new Date();
-    if (at && now.getTime() - new Date(String(at)).getTime() < p.every_days * DAY) return;
-
-    let answer;
-    try {
-      answer = await ctx.ask<{ depth_cm: number }>({
-        key: KEY,
-        title: "Measure the diesel barrel",
-        description: at ? `The last reading was on ${String(at).slice(0, 10)}.` : "There is no reading yet.",
-        assignees: p.assignees,
-        priority: "normal",
-        dueAt: new Date(now.getTime() + 2 * DAY),
-        inputSchema: {
-          type: "object",
-          required: ["depth_cm"],
-          properties: {
-            depth_cm: { type: "number", title: "Diesel on the dipstick (cm)", minimum: 0 },
-          },
-        },
-        outcomes: [{ key: "measured", label: "Save reading", style: "primary" }],
-      });
-    } catch (e) {
-      if (e instanceof OperationError) return "measured elsewhere";
-      throw e;
-    }
-
-    const depth = Number(answer.input!.depth_cm).toFixed(1);
-    const when = new Date().toISOString();
-    await api.v1.resources.byId(p.list).children.post({
-      kind: "item",
-      name: `Reading ${when.slice(0, 10)} · ${depth} cm`,
-      contentTypeId: p.reading_type,
-      values: json({ measured_at: when, depth_cm: depth }),
-    });
-    return "measured";
-  },
-});
-```
-
-### Refill task
-
-When `diesel-levels` finishes a reading, `diesel-refill` reads its output. If the level is below `threshold_l`, it creates a high-priority task for `buyers`, linked to the reading. The task's form is the purchase: litres, total price, optionally when (left empty, the moment of the answer) and the supplier. Answering it files the purchase, and `diesel-levels` then works out its price per litre. It is the measuring reminder's pattern, applied to buying.
-
-- **No separate notification.** Assigning a task already tells its assignees in PaperGo, so the task is the alert and the record at once.
-- **One refill task at a time.** The task stays open until someone buys. Readings that stay low find it open and add nothing.
-- **A purchase filed any other way closes it.** The same workflow starts on every new purchase and cancels the open `diesel_refill` task with a reason naming the purchase, from the app, the list or anywhere else. Its notification goes with it, and a 409 from a task answered meanwhile is ignored.
-- **The next one comes after a refill.** Once the task is answered or cancelled, the next reading below the threshold asks again.
-- **Buyers** follow the reminder's rule: `["role:owners"]` in the package, a person or group set after installing.
-
-```ts
-// When a reading falls below threshold_l, asks the buyers to fill the
-// barrel. The task's form is the purchase: answering it files the purchase,
-// and a purchase filed any other way closes the task.
-import { OperationError, json, workflow } from "@papergo/workflow";
-import type { PaperGoClient } from "@papergo/workflow";
-
-interface Params {
-  list: string;
-  reading_type: string;
-  purchase_type: string;
-  threshold_l: number;
-  // People, group:<id>, role:owners or role:members.
-  buyers: string[];
-}
-
-// What diesel-levels returns for a reading.
-interface Levels {
-  level_liters: string;
-  fill_percent: string;
-  previous_level_liters: string | null;
-}
-
-const KEY = "diesel_refill";
-
-// close cancels an open task for reason. A task answered or cancelled
-// meanwhile is no longer open (409), which is what close wants anyway.
-async function close(api: PaperGoClient, id: string, reason: string): Promise<void> {
-  try {
-    await api.v1.tasks.byId(id).cancel.post({ reason });
-  } catch (e) {
-    if ((e as { responseStatusCode?: number }).responseStatusCode !== 409) throw e;
-  }
-}
-
-export default workflow<unknown, unknown, Params>({
-  triggers: (p) => [
-    { type: "wf.diesel-levels.completed", collection_id: p.list, content_type_id: p.reading_type },
-    { type: "item.created", collection_id: p.list, content_type_id: p.purchase_type },
-  ],
-  async run(ctx) {
-    const p = ctx.params;
-    const api = ctx.api;
-    const open = await api.v1.workspaces.byId(ctx.run.workspace_id).tasks.get({ queryParameters: { key: KEY, status: "open" } });
-
-    if (ctx.trigger?.kind === "item") {
-      // Someone bought diesel: close the open refill task, whose run then ends.
-      for (const task of open?.value ?? []) await close(api, task.id!, `Bought: ${ctx.trigger.item.name}.`);
-      return;
-    }
-    const levels = ctx.run.event.data.outputs as Levels | undefined;
-    // Not low, or already asked: the open task stays until someone buys.
-    if (!levels || Number(levels.level_liters) >= p.threshold_l || open?.value?.length) return;
-
-    let answer;
-    try {
-      answer = await ctx.ask<{ bought_liters: number; total_price: number; purchased_at: string; supplier?: string }>({
-        key: KEY,
-        title: `Fill the diesel barrel: ${levels.level_liters} L left`,
-        description: `The barrel is at ${levels.fill_percent} %, below ${p.threshold_l} L.`,
-        itemId: ctx.itemId,
-        assignees: p.buyers,
-        priority: "high",
-        inputSchema: {
-          type: "object",
-          required: ["bought_liters", "total_price"],
-          properties: {
-            bought_liters: { type: "number", title: "Litres bought", minimum: 0 },
-            total_price: { type: "number", title: "Total price", minimum: 0 },
-            purchased_at: { type: "string", format: "date-time", title: "Bought at", "x-papergo-default": "now" },
-            supplier: { type: "string", title: "Supplier", maxLength: 200 },
-          },
-        },
-        outcomes: [{ key: "bought", label: "Save purchase", style: "primary" }],
-      });
-    } catch (e) {
-      if (e instanceof OperationError) return "bought elsewhere";
-      throw e;
-    }
-
-    const input = answer.input!;
-    const liters = Number(input.bought_liters).toFixed(1);
-    const price = Number(input.total_price).toFixed(2);
-    await api.v1.resources.byId(p.list).children.post({
-      kind: "item",
-      name: `Purchase ${input.purchased_at.slice(0, 10)} · ${liters} L`,
-      contentTypeId: p.purchase_type,
-      values: json({ purchased_at: input.purchased_at, bought_liters: liters, total_price: price, ...(input.supplier ? { supplier: input.supplier } : {}) }),
-    });
-    return "bought";
-  },
-});
-```
-
-### How people hear about it
-
-Both workflows reach people through tasks, inside PaperGo: assigning a task notifies its assignees, through the bell and its unread count, the Notifications page, the Tasks screen, and live updates while PaperGo is open. PaperGo sends no email or push, by design: people act on the tasks where the data lives.
-
-### What the owner sets after installing
-
-| Workflow | Parameter | Ships as | Set to |
-| --- | --- | --- | --- |
-| `diesel-levels` | `capacity_l`, `height_cm`, `orientation` | 200, 88, `upright` | the barrel's size and position |
-| `diesel-measure-reminder` | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC` | how often, who measures, where |
-| `diesel-refill` | `threshold_l`, `buyers` | 50, `["role:owners"]` | when to ask, and whom |
-
-The list and type IDs in all three are set by the app package when it is installed.
-
-## Dashboard: figures and formulas
-
-The list is tiny: about two readings a week and one purchase a month is under 150 items a year. The app reads the whole list with one paged query and computes everything in the browser, for decades of use.
-
-Sort readings `R` and purchases `P` by time. For each pair of consecutive readings `Rᵢ₋₁ → Rᵢ`:
-
-```
-bought_i   = Σ bought_liters of purchases in (tᵢ₋₁, tᵢ]
-consumed_i = level(Rᵢ₋₁) + bought_i − level(Rᵢ)        (an interval with consumed_i < −5 L is flagged, not plotted)
-rate_i     = consumed_i / days(tᵢ₋₁, tᵢ)
-```
-
-| Tile / chart | Definition |
+| Figure | Definition |
 | --- | --- |
-| **Now** (stat tile) | last reading's litres and fill %, its age ("3 days ago") |
-| **Days left** (stat tile) | `level_now / average rate over the last 60 days`, and the projected empty date |
-| **Average consumption** (stat tile) | litres per day and per month over the last 90 days |
-| **Average price** (stat tile) | `Σ total_price / Σ bought_liters` over the last 12 months (weighted, not a mean of prices) |
-| **Level over time** (line) | litres per reading, with purchases marked on the time axis |
-| **Consumption per month** (bars) | each interval's `consumed_i` split over the months it spans, in proportion to days |
-| **Spend per month** (bars) | `Σ total_price` of the purchases in each month |
-| **Price per litre** (line/dots) | `price_per_liter` per purchase |
-| **Cost of diesel used** (per month) | consumption per month × the weighted average price of the preceding purchases |
-| **Needs a look** (list) | readings with `flag = check`, linking to the item |
+| **Tank** (gauge, litres, value) | The last converted reading, less each day's rate since, plus what was bought after it; its value at the last price per litre |
+| **Autonomy and forecast** | The date 200 L are left, counted forward at each day's rate, and the date 25 % is left: two thresholds that are close for this tank |
+| **Pace of consumption** | Today's rate × the last price per litre, and the costs of deep winter and summer |
+| **Level and heating** (chart) | Fill % per reading over time, with the heating seasons shaded red (on) and blue (off) and named in a legend, fills marked, a tick every three months, the reserve as a dashed line, and the forecast from the last reading to the next order |
+| **Price per litre** (chart) | `total / litres` per purchase, on an axis that fits the prices |
+| **Cost of the diesel used** (bars) | Each interval's consumption (`level before + bought − level after`), spread over its days, valued at the price of the last fill before each day, per month |
+| **Temperature and heating** (chart) | The last indoor and outdoor temperatures, and each day's average indoor and outdoor over the heating seasons |
+| **Consumption** (table) | What each season burnt, from the intervals, beside the rates the forecast uses and the season's average outdoor temperature, the average of its days |
 
-The screen also has two forms, **Add reading** and **Add purchase**. They are large inputs that default to now and work on a phone. Saving creates the item. The dashboard updates when the workflow has written the litres, through the app's live query, usually within a second.
+The sample history ends with the tank filled on 3 September 2026. On 4 November 2026 the dashboard shows:
+- about 85 % (639 L), worth about 1,018 €;
+- the next order on 13 January 2027 and the 25 % reserve a day later;
+- 4.2 L a day measured with the heating on, against the 4.5 L used, and 6.5 L in the coldest months, against 7.5 L.
 
-## How it maps onto workspace apps
+Three buttons at the top open dialogs: a reading, a fill, and the heating going on or off. The temperature card has its own, so the bar under a phone user's thumb keeps three; its outdoor field has a ± button, since phones' decimal keyboards have no minus.
+- The reading's dialog previews the litres and fill before saving, with the Diesel levels workflow's settings, so the tank's geometry is set in one place.
+- Dates are dates; today keeps the current time, so readings around a fill stay in order.
+- Decimals are typed in the viewer's number format.
+- Live queries show a reading's litres as soon as the workflow writes them.
 
-| Piece | What it is |
-| --- | --- |
-| Diesel list, two content types, three views | the app package's `setup`, created in the workspace when it is installed |
-| `diesel-levels`, `diesel-measure-reminder`, `diesel-refill` | the app's workflows, owned by it and authored by the installer |
-| Diesel tracker screen | `app.tsx`: the dashboard and the two forms, with item CRUD through `ctx.api` |
-| Distribution | one [app package](workspace-apps.md#the-app-package), `diesel.zip`, installed into an existing workspace |
-| After install | the owner sets the [parameters](#what-the-owner-sets-after-installing) of the three workflows; the app shows a setup message until the barrel's size is set |
-| Uninstall | removes the app and its three workflows, cancels their open tasks and keeps the answered ones; the Diesel list and its history stay unless the owner deletes them too |
+The tables show the last five readings and fills, with the supplier, and open the list for the whole history.
 
-The screen finds its own open tasks with `ctx.tasks({ status: "open" })` and shows "A reading is due" or "Diesel is low, buy some" with a link to answer them.
-
-```tsx
-import { app, json, useQuery } from "@papergo/app";
-
-export default app<{ list: string; reading: string; purchase: string }>({
-  render: (ctx) => {
-    const rows = useQuery(ctx.params.list, { sort: [{ field: "$id", direction: "asc" }] }, { all: true, live: true });
-    const add = (depth: string) =>
-      ctx.api.v1.resources.byId(ctx.params.list).children.post({
-        kind: "item", name: "Reading", contentTypeId: ctx.params.reading,
-        values: json({ measured_at: new Date().toISOString(), depth_cm: depth }),
-      });
-    // compute the figures above from rows.data, then render the tiles, charts and forms
-    return <Dashboard rows={rows.data} onAddReading={add} />;
-  },
-});
-```
+It also shows the viewer's open measuring and refill tasks, and the readings that need a look, each linked to answer or open it.
 
 ## Product notes
 
-- **Measure before refilling.** Ask for an optional reading right after the **Add purchase** form ("Dip it now?"). Two readings around a refill make that interval exact and catch mistakes at once.
-- **One barrel.** Version one keeps the barrel in the workflow's parameters. Several tanks (a tractor tank, a heating tank) would become a third content type, **Tank**, and a lookup field on readings and purchases. The data model allows it without breaking anything, so it can wait until someone asks for it.
-- **Currency** comes from the workspace default, which already exists.
-- **Without the app**, the list, the workflows and the views are already useful today, set up by hand or copied with a workspace package.
-
-## Decisions needed
-
-1. Barrel geometry for version one: upright only, or upright and horizontal (recommended).
+- **Measure around a refill.** Two readings around a fill make that interval exact and catch mistakes at once.
+- **One tank.** Several tanks would add a **Tank** content type and a lookup field on readings and purchases; the data model allows it without breaking anything.
+- **Without the app,** the package alone is useful: the list, the workflows and the views work on their own.

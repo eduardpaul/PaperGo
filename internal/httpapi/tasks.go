@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 	"strconv"
@@ -19,6 +22,7 @@ func (a *API) registerTasks(api *router) {
 	api.HandleFunc("POST /v1/workspaces/{id}/tasks", a.createTask)
 	api.HandleFunc("GET /v1/items/{id}/tasks", a.itemTasks)
 	api.HandleFunc("GET /v1/tasks/{id}", a.getTask)
+	api.HandleFunc("PATCH /v1/tasks/{id}", a.updateTask)
 	api.HandleFunc("POST /v1/tasks/{id}/responses", a.respondTask)
 	api.HandleFunc("POST /v1/tasks/{id}/reassign", a.reassignTask)
 	api.HandleFunc("POST /v1/tasks/{id}/cancel", a.cancelTask)
@@ -65,6 +69,7 @@ type taskCreate struct {
 	ItemID      string               `json:"item_id"`
 	Kind        taskstore.Kind       `json:"kind"`
 	Key         string               `json:"key"`
+	Unique      bool                 `json:"unique"`
 	Title       string               `json:"title"`
 	Description string               `json:"description"`
 	Assignees   []string             `json:"assignees"`
@@ -82,7 +87,7 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks(r).Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
+	out, err := a.tasks(r).Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Unique: in.Unique, Title: in.Title,
 		Description: in.Description, Assignees: in.Assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values,
 		Priority: in.Priority, DueAt: in.DueAt, Review: in.Review, Actor: subject(r)})
 	if err != nil {
@@ -99,6 +104,62 @@ func (a *API) getTask(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
+	etag(w, out.Version)
+	respond(w, r, 200, out)
+}
+
+// updateTask changes an open task's title, description, priority, due date
+// or form prefill at the version If-Match names. null clears due_at and
+// values.
+func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
+	version, ok := a.version(w, r)
+	if !ok {
+		return
+	}
+	var in map[string]json.RawMessage
+	if !a.decode(w, r, &in) {
+		return
+	}
+	var p tasks.Patch
+	for key, raw := range in {
+		null := string(raw) == "null"
+		var err error
+		switch key {
+		case "title":
+			err = json.Unmarshal(raw, &p.Title)
+		case "description":
+			p.Description = new(string)
+			if !null {
+				err = json.Unmarshal(raw, p.Description)
+			}
+		case "priority":
+			err = json.Unmarshal(raw, &p.Priority)
+		case "due_at":
+			p.SetDueAt = true
+			err = json.Unmarshal(raw, &p.DueAt)
+		case "values":
+			p.SetValues = true
+			// Numbers keep their literals, as in every other request.
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			err = decoder.Decode(&p.Values)
+		default:
+			err = errors.New("a task update has no field " + key)
+		}
+		if err == nil && null && (key == "title" || key == "priority") {
+			err = errors.New(key + " cannot be null")
+		}
+		if err != nil {
+			a.failure(w, r, dms.Invalid(err.Error()))
+			return
+		}
+	}
+	out, err := a.tasks(r).Update(r.Context(), subject(r), r.PathValue("id"), int64(version), p)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	etag(w, out.Version)
 	respond(w, r, 200, out)
 }
 

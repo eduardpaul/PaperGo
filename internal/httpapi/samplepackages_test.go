@@ -13,6 +13,7 @@ import (
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +168,17 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 				t.Fatal("missing default sample view", name, views)
 			}
 		}
+	case "Diesel levels", "Diesel measuring reminder", "Diesel refill", "Load diesel sample data":
+		types := map[string]string{}
+		listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Diesel"])
+		if err != nil || len(listTypes) != 4 {
+			t.Fatal(listTypes, err)
+		}
+		for _, lt := range listTypes {
+			types[lt.Key] = *lt.ParentID
+		}
+		file := map[string]string{"Diesel levels": "diesel/diesel-levels.json", "Diesel measuring reminder": "diesel/diesel-measure-reminder.json", "Diesel refill": "diesel/diesel-refill.json", "Load diesel sample data": "diesel/diesel-sample-data.json"}[w.Name]
+		source = sampleWorkflowSource(t, file, dieselBindings(ids["Diesel"], types)...)
 	case "Index receipts":
 		source = sampleWorkflowSource(t, "workflows/index-receipts.json", "$LIBRARY", ids["Receipt summaries"])
 	case "Index contracts":
@@ -190,9 +202,120 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	}
 }
 
+// dieselWorkflows are the diesel sample's workflows, by their settings files.
+var dieselWorkflows = []string{"diesel/diesel-levels.json", "diesel/diesel-measure-reminder.json", "diesel/diesel-refill.json", "diesel/diesel-sample-data.json"}
+
+// dieselBindings bind the placeholders of the diesel workflows' parameters
+// to its list and catalog types.
+func dieselBindings(list string, types map[string]string) []string {
+	return []string{"$LIST", list, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"], "$TEMPERATURE_TYPE", types["diesel_temperature"]}
+}
+
+// buildSampleSpec creates a sample's catalog fields and types, workspace,
+// collections and views from its resources.json, and returns the workspace
+// and the IDs of its collections by name and of its types by key. A view's
+// query names a type as $key.
+func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[string]string, map[string]string) {
+	t.Helper()
+	var spec struct {
+		Workspace dms.CreateResource `json:"workspace"`
+		Fields    []dms.CreateField  `json:"fields"`
+		Types     []struct {
+			Key, Name string
+			Fields    []string
+		} `json:"content_types"`
+		Collections []struct {
+			Name, Kind string
+			WebDAV     bool     `json:"webdav_enabled"`
+			Type       string   `json:"content_type"`
+			Types      []string `json:"content_types"`
+			Views      []struct {
+				dms.ViewInput
+				Default bool `json:"is_default"`
+			} `json:"views"`
+		} `json:"collections"`
+		Relationship *dms.RelationshipTypeInput `json:"relationship"`
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		t.Fatal(err)
+	}
+	fields, types, collections := map[string]string{}, map[string]string{}, map[string]string{}
+	for _, in := range spec.Fields {
+		f, err := s.CreateCatalogField(t.Context(), "organization-admin", in)
+		if err != nil {
+			t.Fatal(in.Key, err)
+		}
+		fields[in.Key] = f.ID
+	}
+	// Longer keys first, so $receipt_line is not read as $receipt.
+	var replace []string
+	for _, in := range spec.Types {
+		ids := []string{}
+		for _, key := range in.Fields {
+			ids = append(ids, fields[key])
+		}
+		ct, err := s.CreateContentType(t.Context(), "organization-admin", dms.ContentTypeInput{Key: in.Key, Name: in.Name, FieldIds: ids})
+		if err != nil {
+			t.Fatal(err)
+		}
+		types[in.Key] = ct.ID
+	}
+	keys := make([]string, 0, len(types))
+	for key := range types {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(a, b string) int { return len(b) - len(a) })
+	for _, key := range keys {
+		replace = append(replace, "$"+key, types[key])
+	}
+	if spec.Relationship != nil {
+		if _, err := s.CreateRelationshipType(t.Context(), "organization-admin", *spec.Relationship); err != nil {
+			t.Fatal(err)
+		}
+	}
+	spec.Workspace.Kind = "workspace"
+	ws, err := s.Create(t.Context(), "organization-admin", "", spec.Workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range spec.Collections {
+		accepted := []string{}
+		for _, key := range append([]string{in.Type}, in.Types...) {
+			if key != "" {
+				accepted = append(accepted, types[key])
+			}
+		}
+		c, err := s.Create(t.Context(), "organization-admin", ws.ID, dms.CreateResource{Kind: in.Kind, Name: in.Name, ContentTypeIDs: accepted, WebDAVEnabled: in.WebDAV})
+		if err != nil {
+			t.Fatal(err)
+		}
+		collections[in.Name] = c.ID
+		for _, view := range in.Views {
+			input := view.ViewInput
+			input.IsDefault = view.Default
+			raw, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw = []byte(strings.NewReplacer(replace...).Replace(string(raw)))
+			if err := json.Unmarshal(raw, &input); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.CreateView(t.Context(), "organization-admin", c.ID, input); err != nil {
+				t.Fatal(view.Name, err)
+			}
+		}
+	}
+	return ws.ID, collections, types
+}
+
 // The sources remain ordinary action definitions. Only maintainers rebuilding
 // artifacts use this helper; installing either sample needs just the ZIP.
-func buildSamplePackage(t *testing.T, receipt bool, path string) {
+func buildSamplePackage(t *testing.T, kind, path string) {
 	t.Helper()
 	// Sample workflows fill this extension role; generating a package needs no search store.
 	workflow.RegisterRole(&workflow.Role{Key: "search.content", Name: "File content in search"})
@@ -222,77 +345,20 @@ func buildSamplePackage(t *testing.T, receipt bool, path string) {
 		return r.ID
 	}
 	var workspace string
-	if receipt {
-		var spec struct {
-			Workspace dms.CreateResource `json:"workspace"`
-			Fields    []dms.CreateField  `json:"fields"`
-			Types     []struct {
-				Key, Name string
-				Fields    []string
-			} `json:"content_types"`
-			Collections []struct {
-				Name, Kind string
-				WebDAV     bool   `json:"webdav_enabled"`
-				Type       string `json:"content_type"`
-				Views      []struct {
-					dms.ViewInput
-					Default bool `json:"is_default"`
-				} `json:"views"`
-			} `json:"collections"`
-			Relationship dms.RelationshipTypeInput `json:"relationship"`
-		}
-		raw, err := os.ReadFile("../../samples/receipts-package/resources.json")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal(raw, &spec); err != nil {
-			t.Fatal(err)
-		}
-		fields, types, collections := map[string]string{}, map[string]string{}, map[string]string{}
-		for _, in := range spec.Fields {
-			f, err := s.CreateCatalogField(t.Context(), "organization-admin", in)
-			if err != nil {
-				t.Fatal(err)
-			}
-			fields[in.Key] = f.ID
-		}
-		for _, in := range spec.Types {
-			ids := []string{}
-			for _, key := range in.Fields {
-				ids = append(ids, fields[key])
-			}
-			ct, err := s.CreateContentType(t.Context(), "organization-admin", dms.ContentTypeInput{Key: in.Key, Name: in.Name, FieldIds: ids})
-			if err != nil {
-				t.Fatal(err)
-			}
-			types[in.Key] = ct.ID
-		}
-		if _, err := s.CreateRelationshipType(t.Context(), "organization-admin", spec.Relationship); err != nil {
-			t.Fatal(err)
-		}
-		spec.Workspace.Kind = "workspace"
-		workspace = create("", spec.Workspace)
-		for _, in := range spec.Collections {
-			id := create(workspace, dms.CreateResource{Kind: in.Kind, Name: in.Name, ContentTypeIDs: []string{types[in.Type]}, WebDAVEnabled: in.WebDAV})
-			collections[in.Name] = id
-			for _, view := range in.Views {
-				input := view.ViewInput
-				input.IsDefault = view.Default
-				raw, err := json.Marshal(input)
-				if err != nil {
-					t.Fatal(err)
-				}
-				raw = []byte(strings.NewReplacer("$receipt_line", types["receipt_line"], "$receipt", types["receipt"]).Replace(string(raw)))
-				if err := json.Unmarshal(raw, &input); err != nil {
-					t.Fatal(err)
-				}
-				if _, err := s.CreateView(t.Context(), "organization-admin", id, input); err != nil {
-					t.Fatal(err)
-				}
-			}
-		}
+	switch kind {
+	case "receipts":
+		var collections map[string]string
+		var types map[string]string
+		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
 		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$LINES", collections["Receipt lines"], "$LINE_TYPE", types["receipt_line"])
-	} else {
+	case "diesel":
+		var collections map[string]string
+		var types map[string]string
+		workspace, collections, types = buildSampleSpec(t, s, "../../samples/diesel/resources.json")
+		for _, file := range dieselWorkflows {
+			sampleWorkflow(t, wf, workspace, file, dieselBindings(collections["Diesel"], types)...)
+		}
+	default:
 		workspace = create("", dms.CreateResource{Kind: "workspace", Name: "Workflow samples", Description: "Receipt summaries, contract indexing, local routing and taxonomy review."})
 		receipts := create(workspace, dms.CreateResource{Kind: "library", Name: "Receipt summaries", WebDAVEnabled: true})
 		contracts := create(workspace, dms.CreateResource{Kind: "library", Name: "Contracts", WebDAVEnabled: true})
@@ -387,14 +453,13 @@ func buildSamplePackage(t *testing.T, receipt bool, path string) {
 
 func TestSampleWorkspacePackages(t *testing.T) {
 	for _, sample := range []struct {
-		Path, Name string
-		Receipt    bool
-		Workflows  int
-	}{{"receipts-package/receipts.zip", "Receipts desk", true, 1}, {"workflows/workflows.zip", "Workflow samples", false, 4}} {
+		Path, Name, Kind string
+		Workflows        int
+	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4}} {
 		t.Run(sample.Name, func(t *testing.T) {
 			path := filepath.Join("../../samples", sample.Path)
 			if *updateSamplePackages {
-				buildSamplePackage(t, sample.Receipt, path)
+				buildSamplePackage(t, sample.Kind, path)
 			}
 			s := dms.NewService(daltest.Database(t).SQL)
 			store, err := storage.NewLocal(t.TempDir())
@@ -433,7 +498,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
 					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
-					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", sampleSubject} {
+					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)
 						}

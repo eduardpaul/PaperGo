@@ -14,4 +14,5 @@ dist/
 __pycache__/
 /deploy/secrets/
 sdk/node_modules/
+sdk/.kiotabin/
 /internal/onnx/windows-runtime/

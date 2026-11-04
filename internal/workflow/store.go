@@ -685,8 +685,9 @@ func (s *Service) StartTest(ctx context.Context, subject, id string, in TestRun)
 }
 
 // StartRuns starts a workflow by hand and returns the run IDs. Starting on
-// items needs write access to each item; starting without an item needs
-// manage access to the workspace. Everything is checked before any run
+// items needs the manual trigger's access (write by default) to each item;
+// starting without an item needs it on the workspace (manage by default).
+// Everything is checked before any run
 // starts. The start is logged as events with the request's transaction; the
 // dispatcher starts the runs moments later.
 //
@@ -778,12 +779,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 		if err != nil {
 			return err
 		}
-		var manual *Trigger
-		for i := range def.Triggers {
-			if def.Triggers[i].Type == TriggerManual {
-				manual = &def.Triggers[i]
-			}
-		}
+		manual := def.Manual()
 		if manual == nil {
 			return dms.Invalid("the workflow has no manual trigger")
 		}
@@ -827,7 +823,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 			if itemBound {
 				return issue("selection_required", "Choose items before running this workflow.")
 			}
-			if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
+			if err = workspace(ctx, t, subject, w.WorkspaceID, manual.StartAccess()); err != nil {
 				return err
 			}
 			if err = s.manualReadiness(ctx, t, w, v.CreatedBy, def, nil); err != nil {
@@ -840,7 +836,7 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 		collection := ""
 		collections := map[string]string{}
 		for _, itemID := range items {
-			r, err := t.Authorize(ctx, subject, itemID, "write")
+			r, err := t.Authorize(ctx, subject, itemID, manual.StartAccess())
 			if err != nil {
 				return err
 			}
@@ -1018,8 +1014,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []s
 			}
 			members := eventMembers(e)
 			if e.Type == TriggerManual || e.Type == TestStart {
+				// A manual start is checked again with its trigger's access.
+				access := AccessWrite
+				if manual := m.def.Manual(); e.Type == TriggerManual && manual != nil {
+					access = manual.StartAccess()
+				}
 				for _, id := range members {
-					if _, err := t.Authorize(ctx, e.Actor, id, "write"); err != nil {
+					if _, err := t.Authorize(ctx, e.Actor, id, access); err != nil {
 						startError = "Manual run is no longer authorized for the selected items."
 						break
 					}

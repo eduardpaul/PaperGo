@@ -18,6 +18,8 @@ var (
 
 func Where[Q sqlite.Filterable]() struct {
 	AccessTokens            accessTokenWhere[Q]
+	AppVersions             appVersionWhere[Q]
+	Apps                    appWhere[Q]
 	Artifacts               artifactWhere[Q]
 	AuditEvents             auditEventWhere[Q]
 	BlobDeletions           blobDeletionWhere[Q]
@@ -84,6 +86,8 @@ func Where[Q sqlite.Filterable]() struct {
 } {
 	return struct {
 		AccessTokens            accessTokenWhere[Q]
+		AppVersions             appVersionWhere[Q]
+		Apps                    appWhere[Q]
 		Artifacts               artifactWhere[Q]
 		AuditEvents             auditEventWhere[Q]
 		BlobDeletions           blobDeletionWhere[Q]
@@ -149,6 +153,8 @@ func Where[Q sqlite.Filterable]() struct {
 		Workflows               workflowWhere[Q]
 	}{
 		AccessTokens:            buildAccessTokenWhere[Q](AccessTokens.Columns),
+		AppVersions:             buildAppVersionWhere[Q](AppVersions.Columns),
+		Apps:                    buildAppWhere[Q](Apps.Columns),
 		Artifacts:               buildArtifactWhere[Q](Artifacts.Columns),
 		AuditEvents:             buildAuditEventWhere[Q](AuditEvents.Columns),
 		BlobDeletions:           buildBlobDeletionWhere[Q](BlobDeletions.Columns),

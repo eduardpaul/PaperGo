@@ -204,15 +204,27 @@ func (a *API) routes() (api *router, err error) {
 	return api, nil
 }
 
-// Problem is an error a module route answers with its own problem status
-// and code, such as 503 when a store it needs is unavailable.
+// Problem is an error a route answers with its own problem status and code,
+// such as 503 when a store it needs is unavailable. Extensions are further
+// members of the response, such as the resource a conflict names.
 type Problem struct {
-	Status int
-	Code   string
-	Detail string
+	Status     int
+	Code       string
+	Detail     string
+	Extensions map[string]any
 }
 
 func (p *Problem) Error() string { return p.Detail }
+
+// IfMatch reads the version a write names in If-Match, like core routes
+// do. When it reports false it has answered the request with the problem:
+// 428 without the header, 400 when it is not a quoted version.
+func (in Request) IfMatch(w http.ResponseWriter, r *http.Request) (int, bool) {
+	return in.api.version(w, r)
+}
+
+// ETag sets the response's ETag to a quoted version, as core routes do.
+func ETag(w http.ResponseWriter, version int) { etag(w, version) }
 
 // Respond writes body as the JSON response with status.
 func Respond(w http.ResponseWriter, r *http.Request, status int, body any) {

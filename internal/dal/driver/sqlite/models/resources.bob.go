@@ -79,6 +79,7 @@ type ResourcesQuery = *sqlite.ViewQuery[*Resource, ResourceSlice]
 
 // resourceR is where relationships are stored.
 type resourceR struct {
+	WorkspaceApps                 AppSlice             // fk_apps_0
 	ItemArtifacts                 ArtifactSlice        // fk_artifacts_1
 	WorkspaceArtifacts            ArtifactSlice        // fk_artifacts_2
 	ItemBlobs                     BlobSlice            // fk_blobs_0
@@ -144,6 +145,7 @@ type resourceR struct {
 
 // resourceRLoaded tracks which relationships on Resource have been loaded.
 type resourceRLoaded struct {
+	WorkspaceApps                 bool // fk_apps_0
 	ItemArtifacts                 bool // fk_artifacts_1
 	WorkspaceArtifacts            bool // fk_artifacts_2
 	ItemBlobs                     bool // fk_blobs_0
@@ -1463,6 +1465,25 @@ func (o ResourceSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
+// WorkspaceApps starts a query for related objects on apps
+func (o *Resource) WorkspaceApps(mods ...bob.Mod[*dialect.SelectQuery]) AppsQuery {
+	return Apps.Query(append(mods,
+		sm.Where(Apps.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceApps(mods ...bob.Mod[*dialect.SelectQuery]) AppsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Apps.Query(append(mods,
+		sm.Where(sqlite.Group(Apps.Columns.WorkspaceID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // ItemArtifacts starts a query for related objects on artifacts
 func (o *Resource) ItemArtifacts(mods ...bob.Mod[*dialect.SelectQuery]) ArtifactsQuery {
 	return Artifacts.Query(append(mods,
@@ -2549,6 +2570,67 @@ func (os ResourceSlice) WorkspaceWorkflows(mods ...bob.Mod[*dialect.SelectQuery]
 	return Workflows.Query(append(mods,
 		sm.Where(sqlite.Group(Workflows.Columns.WorkspaceID).OP("IN", PKArgExpr)),
 	)...)
+}
+
+func insertResourceWorkspaceApps0(ctx context.Context, exec bob.Executor, apps1 []*AppSetter, resource0 *Resource) (AppSlice, error) {
+	for i := range apps1 {
+		apps1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Apps.Insert(bob.ToMods(apps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceApps0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceApps0(ctx context.Context, exec bob.Executor, count int, apps1 AppSlice, resource0 *Resource) (AppSlice, error) {
+	setter := &AppSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := apps1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceApps0: %w", err)
+	}
+
+	return apps1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceApps(ctx context.Context, exec bob.Executor, related ...*AppSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	apps1, err := insertResourceWorkspaceApps0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceApps = append(resource0.R.WorkspaceApps, apps1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceApps(ctx context.Context, exec bob.Executor, related ...*App) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	apps1 := AppSlice(related)
+
+	_, err = attachResourceWorkspaceApps0(ctx, exec, len(related), apps1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceApps = append(resource0.R.WorkspaceApps, apps1...)
+
+	return nil
 }
 
 func insertResourceItemArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
@@ -5974,6 +6056,20 @@ func buildResourceWhere[Q sqlite.Filterable](cols resourceColumns) resourceWhere
 // R struct — so they cannot collide with column-based filter fields.
 type resourceWhereR[Q sqlite.Filterable] struct {
 	cols resourceColumns
+}
+
+// HasWorkspaceApps filters parents that have a matching WorkspaceApps using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Apps).
+func (w resourceWhereR[Q]) HasWorkspaceApps(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Apps.NameExpr()),
+		sm.Where(Apps.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
 }
 
 // HasItemArtifacts filters parents that have a matching ItemArtifacts using a

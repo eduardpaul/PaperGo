@@ -310,6 +310,53 @@ export default workflow({
 	}
 }
 
+// A unique task is asked once: a second run asking while it is open is
+// refused with task_open, updates the open task instead and ends, and the
+// first run gets the answer.
+func TestUniqueTasksAreAskedOnce(t *testing.T) {
+	r := run(t)
+	w := r.workflow(t, "Measure", `import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  triggers: [{ type: "manual", collection_id: "`+r.list+`" }],
+  async run(ctx) {
+    try {
+      const answer = await ctx.ask({ key: "diesel_measure", unique: true, title: "Measure the diesel barrel", dueAt: new Date("2030-01-01T08:00:00Z") });
+      return answer.outcome;
+    } catch (e) {
+      const problem = e as { code?: string; openTaskId?: string };
+      if (problem.code !== "task_open") throw e;
+      const open = await ctx.api.v1.tasks.byId(problem.openTaskId!).get();
+      await ctx.api.v1.tasks.byId(problem.openTaskId!).patch({ title: "Measure the diesel barrel today", dueAt: null }, { headers: { "If-Match": '"' + open!.version + '"' } });
+      return "updated";
+    }
+  },
+});
+`)
+	itemID := r.item(t, "Barrel")
+	first := r.start(t, w, nil, itemID)
+	r.await(t, first, runstore.StatusWaiting)
+	second := r.await(t, r.start(t, w, nil, itemID), runstore.StatusCompleted)
+	if string(second.Result) != `"updated"` {
+		t.Fatalf("the second run asked again: %s", second.Result)
+	}
+	var tasks struct {
+		Value []struct {
+			ID    string     `json:"id"`
+			Title string     `json:"title"`
+			DueAt *time.Time `json:"due_at"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/workspaces/"+r.ws+"/tasks?key=diesel_measure", "", 200, &tasks)
+	if len(tasks.Value) != 1 || tasks.Value[0].Title != "Measure the diesel barrel today" || tasks.Value[0].DueAt != nil {
+		t.Fatalf("the second run updates the open task: %+v", tasks)
+	}
+	r.call(t, "POST", "/v1/tasks/"+tasks.Value[0].ID+"/responses", `{"outcome":"done"}`, 200, nil)
+	if done := r.await(t, first, runstore.StatusCompleted); string(done.Result) != `"done"` {
+		t.Fatalf("the first run's answer: %s", done.Result)
+	}
+}
+
 func TestRunsWaitForTasksAndSleeps(t *testing.T) {
 	r := run(t)
 	w := r.workflow(t, "Approve", `import { plain, workflow } from "@papergo/workflow";
@@ -548,7 +595,8 @@ export default workflow({
 	}
 }
 
-// A workflow works out figures of a list through the generated client.
+// A workflow works out figures of a list and reads its compact items through
+// the generated client.
 func TestScriptsQueryAggregates(t *testing.T) {
 	r := run(t)
 	r.item(t, "First")
@@ -559,13 +607,12 @@ export default workflow({
   triggers: [{ type: "manual" }],
   async run(ctx) {
     const out = await ctx.api.v1.resources.byId("`+r.list+`").query.aggregates.post({
-      query: { groupBy: "$created_at" },
-      interval: "day" as never,
-      timeZone: "Europe/Madrid",
+      groups: [{ field: "$created_at", interval: "day" as never, timeZone: "Europe/Madrid" }],
       aggregates: [{ op: "max" as never, field: "$created_at", as: "latest" }],
     });
     const groups = out?.value ?? [];
-    return { groups: groups.length, count: groups[0]?.count, latest: plain(groups[0]?.values?.additionalData?.latest as never) !== null };
+    const compact = await ctx.api.v1.resources.byId("`+r.list+`").query.compact.all({ query: { sort: [{ field: "$name" }] } });
+    return { groups: groups.length, count: groups[0]?.count, latest: plain(groups[0]?.values?.additionalData?.latest as never) !== null, compact: compact.map((item) => item.name) };
   },
 });
 `)
@@ -573,8 +620,9 @@ export default workflow({
 	var got struct {
 		Groups, Count int
 		Latest        bool
+		Compact       []string
 	}
-	if json.Unmarshal(done.Result, &got) != nil || got.Groups != 1 || got.Count != 2 || !got.Latest {
-		t.Fatalf("aggregates from a script: %s", done.Result)
+	if json.Unmarshal(done.Result, &got) != nil || got.Groups != 1 || got.Count != 2 || !got.Latest || len(got.Compact) != 2 || got.Compact[0] != "First" {
+		t.Fatalf("aggregates and compact items from a script: %s", done.Result)
 	}
 }

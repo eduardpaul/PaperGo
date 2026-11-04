@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,11 @@ func TestTextMatcherDecidesMatches(t *testing.T) {
 	if err != nil || len(q.Data) != 1 || q.Data[0].ID != globex.ID || !q.SearchCapped {
 		t.Fatal("matcher", q, err)
 	}
+	// A total of part of the matches would read as the total of all of them.
+	capped := AggregateRequest{Query: QuerySpec{Search: "acme"}, AggregateSpec: AggregateSpec{Aggregates: []Aggregate{{Op: AggregateCount, Field: "$name"}}}}
+	if _, err = s.QueryAggregates(testContext, "alice", c.ID, capped); err == nil || !strings.Contains(err.Error(), "narrow it") {
+		t.Fatal("aggregates of a capped search", err)
+	}
 	page, err := s.Browse(testContext, "alice", Browse{ParentID: c.ID, Search: "acme"})
 	if err != nil || len(page.Data) != 1 || page.Data[0].ID != globex.ID {
 		t.Fatal("browse matcher", page, err)
@@ -82,5 +88,9 @@ func TestTextMatcherDecidesMatches(t *testing.T) {
 	q, err = s.Query(testContext, "alice", c.ID, QueryRequest{Query: QuerySpec{Search: "acme"}})
 	if err != nil || len(q.Data) != 1 || q.Data[0].ID != acme.ID || q.SearchCapped {
 		t.Fatal("declined", q, err)
+	}
+	counted, err := s.QueryAggregates(testContext, "alice", c.ID, capped)
+	if err != nil || counted.Data[0].Count != 1 {
+		t.Fatal("aggregates of a whole search", counted, err)
 	}
 }

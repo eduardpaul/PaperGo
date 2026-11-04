@@ -1,8 +1,8 @@
-// Monaco with TypeScript checking against the workflow SDK. The script
-// editor imports this module lazily, so the editor and its workers load
-// only when a script is open.
+// Monaco with TypeScript checking against the workflow SDK and, for apps,
+// @papergo/app with React's types. The script editor imports this module
+// lazily, so the editor and its workers load only when a script is open.
 import * as monaco from 'monaco-editor/editor/editor.api';
-import { ModuleKind, ModuleResolutionKind, ScriptTarget, typescriptDefaults } from 'monaco-editor/languages/features/typescript/register';
+import { JsxEmit, ModuleKind, ModuleResolutionKind, ScriptTarget, typescriptDefaults } from 'monaco-editor/languages/features/typescript/register';
 import 'monaco-editor/languages/definitions/typescript/register';
 // The editor's features that suit scripts; editor.main would add every
 // language and feature Monaco has.
@@ -46,11 +46,13 @@ self.MonacoEnvironment = {
   getWorker: (_id, label) => (label === 'typescript' || label === 'javascript' ? new TypeScriptWorker() : new EditorWorker()),
 };
 
-// Scripts run on ECMAScript and the runtime's globals only, with the SDK
-// as @papergo/workflow.
+// Workflow scripts run on ECMAScript and the runtime's globals only, with
+// the SDK as @papergo/workflow. Apps, .tsx files, also have the DOM and
+// React's automatic JSX.
 typescriptDefaults.setCompilerOptions({
   target: ScriptTarget.ES2020,
   lib: ['es2022'],
+  jsx: JsxEmit.ReactJSX,
   module: ModuleKind.ESNext,
   moduleResolution: ModuleResolutionKind.NodeJs,
   strict: true,
@@ -59,5 +61,36 @@ typescriptDefaults.setCompilerOptions({
 });
 typescriptDefaults.setEagerModelSync(true);
 typescriptDefaults.addExtraLib(declarations, 'file:///node_modules/@papergo/workflow/index.d.ts');
+
+let appTypes: Promise<void> | undefined;
+
+/** Adds @papergo/app, React's types and the DOM's, once, for the app editor. */
+export function addAppTypes(): Promise<void> {
+  appTypes ??= Promise.all([
+    import('@sdk/app.d.ts?raw'),
+    import('@react-types/index.d.ts?raw'),
+    import('@react-types/global.d.ts?raw'),
+    import('@react-types/jsx-runtime.d.ts?raw'),
+    import('@csstype/index.d.ts?raw'),
+  ]).then(([app, react, reactGlobal, jsxRuntime, csstype]) => {
+    typescriptDefaults.addExtraLib(app.default, 'file:///node_modules/@papergo/app/index.d.ts');
+    typescriptDefaults.addExtraLib(react.default, 'file:///node_modules/@types/react/index.d.ts');
+    typescriptDefaults.addExtraLib(reactGlobal.default, 'file:///node_modules/@types/react/global.d.ts');
+    typescriptDefaults.addExtraLib(jsxRuntime.default, 'file:///node_modules/@types/react/jsx-runtime.d.ts');
+    typescriptDefaults.addExtraLib(csstype.default, 'file:///node_modules/csstype/index.d.ts');
+  });
+  return appTypes;
+}
+
+/**
+ * Checks what is edited next as a workflow script, without the DOM, or as
+ * an app, with it. Compiler options are Monaco's, not an editor's, so the
+ * editor that opens sets them.
+ */
+export function checkAs(kind: 'workflow' | 'app'): void {
+  const lib = kind === 'app' ? ['es2022', 'dom', 'dom.iterable'] : ['es2022'];
+  const options = typescriptDefaults.getCompilerOptions();
+  if (options.lib?.join() !== lib.join()) typescriptDefaults.setCompilerOptions({ ...options, lib });
+}
 
 export { monaco };

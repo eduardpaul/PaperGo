@@ -6,7 +6,7 @@ import { createUntypedNodeFromDiscriminatorValue, type AdditionalDataHolder, typ
 
 export interface Aggregate extends Parsable {
     /**
-     * The figure's name in values; op_field by default, without the $ of a built-in field.
+     * The figure's name in values; op_field by default, without the $ of a built-in field, which this limit does not apply to.
      */
     as?: string | null;
     /**
@@ -25,9 +25,9 @@ export interface AggregateGroup extends Parsable {
      */
     count?: number | null;
     /**
-     * The group's value of query.group_by: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one, and for the single group of a query without group_by.
+     * The group's key: one entry for each of the request's groups, in their order; empty without groups.
      */
-    key?: UntypedNode | null;
+    keys?: AggregateKey[] | null;
     /**
      * Each figure by its name.
      */
@@ -38,35 +38,66 @@ export interface AggregateGroup extends Parsable {
  */
 export interface AggregateGroup_values extends AdditionalDataHolder, Parsable {
 }
+export interface AggregateGroupBy extends Parsable {
+    /**
+     * An indexed scalar field, or a built-in one such as $created_at.
+     */
+    field?: string | null;
+    /**
+     * Groups a date or date-time field by the period holding its value: day, week from Monday, month or year.
+     */
+    interval?: AggregateGroupBy_interval | null;
+    /**
+     * With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone.
+     */
+    timeZone?: string | null;
+}
+export type AggregateGroupBy_interval = (typeof AggregateGroupBy_intervalObject)[keyof typeof AggregateGroupBy_intervalObject];
+export interface AggregateKey extends Parsable {
+    /**
+     * The name of the term of a term or keywords field, when the caller can read the workspace's taxonomy.
+     */
+    label?: string | null;
+    /**
+     * The value of the group's field. With an interval, the first day of the period as YYYY-MM-DD. Otherwise integers, decimals, numbers and currency as exact strings, dates and date-times as items show them, booleans as booleans, and text, choice, person and term values as they are stored. Null for the items without one.
+     */
+    value?: UntypedNode | null;
+}
+/**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
 export interface AggregateRequest extends Parsable {
     /**
      * The aggregates property
      */
     aggregates?: Aggregate[] | null;
     /**
-     * Groups a date or date-time query.group_by by the period holding its value.
+     * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
      */
-    interval?: AggregateRequest_interval | null;
+    groups?: AggregateGroupBy[] | null;
     /**
      * Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision. Archive filters apply before paging, counts, and grouping. $archived_at and $archived_by are system fields usable in columns, filters, and sorting.
      */
     query?: QuerySpec | null;
     /**
+     * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+     */
+    sort?: SortSpec[] | null;
+    /**
      * The surface property
      */
     surface?: AggregateRequest_surface | null;
-    /**
-     * With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone.
-     */
-    timeZone?: string | null;
 }
-export type AggregateRequest_interval = (typeof AggregateRequest_intervalObject)[keyof typeof AggregateRequest_intervalObject];
 export type AggregateRequest_surface = (typeof AggregateRequest_surfaceObject)[keyof typeof AggregateRequest_surfaceObject];
 export interface AggregateResult extends Parsable {
     /**
-     * The search text matched more than 10,000 entries; the figures cover only the first 10,000 matches. Narrow the search.
+     * Absolute continuation URL, or null on the final page. Repeat the request method and body.
      */
-    searchCapped?: boolean | null;
+    odataNextLink?: string | null;
+    /**
+     * The groups of every page.
+     */
+    total?: number | null;
     /**
      * The value property
      */
@@ -893,6 +924,151 @@ export interface CommentThreadList extends AdditionalDataHolder, Parsable {
 }
 export type CommentThreadList_mode = (typeof CommentThreadList_modeObject)[keyof typeof CommentThreadList_modeObject];
 export type CommentThreadList_mode_from = (typeof CommentThreadList_mode_fromObject)[keyof typeof CommentThreadList_mode_fromObject];
+export interface CompactQueryResult extends Parsable {
+    /**
+     * Absolute continuation URL, or null on the final page. Repeat the request method and body.
+     */
+    odataNextLink?: string | null;
+    /**
+     * The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search.
+     */
+    searchCapped?: boolean | null;
+    /**
+     * The total property
+     */
+    total?: number | null;
+    /**
+     * More entries match than total_limit; total is the limit.
+     */
+    totalCapped?: boolean | null;
+    /**
+     * The value property
+     */
+    value?: CompactResource[] | null;
+}
+/**
+ * An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields.
+ */
+export interface CompactResource extends Parsable {
+    /**
+     * Present and true when the item is archived, with archived_at and archived_by.
+     */
+    archived?: boolean | null;
+    /**
+     * The archived_at property
+     */
+    archivedAt?: Date | null;
+    /**
+     * The archived_by property
+     */
+    archivedBy?: string | null;
+    /**
+     * Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply.
+     */
+    contentTypeId?: Guid | null;
+    /**
+     * Present when select names $created_at.
+     */
+    createdAt?: Date | null;
+    /**
+     * Present when select names $created_by.
+     */
+    createdBy?: string | null;
+    /**
+     * Present when select names $file_type.
+     */
+    file?: FileSummary | null;
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.
+     */
+    keywords?: string[] | null;
+    /**
+     * The kind property
+     */
+    kind?: CompactResource_kind | null;
+    /**
+     * Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case.
+     */
+    name?: string | null;
+    /**
+     * The parent_id property
+     */
+    parentId?: Guid | null;
+    /**
+     * Present when select names $modified_at.
+     */
+    updatedAt?: Date | null;
+    /**
+     * Present when select names $modified_by.
+     */
+    updatedBy?: string | null;
+    /**
+     * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+     */
+    values?: CompactResource_values | null;
+    /**
+     * Optimistic resource lock version, independent of content revision_number and blob version.
+     */
+    version?: number | null;
+    /**
+     * The workspace_id property
+     */
+    workspaceId?: Guid | null;
+}
+export type CompactResource_kind = (typeof CompactResource_kindObject)[keyof typeof CompactResource_kindObject];
+/**
+ * Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings.
+ */
+export interface CompactResource_values extends AdditionalDataHolder, Parsable {
+}
+export interface CompactSmartFolderEntry extends AdditionalDataHolder, Parsable {
+    /**
+     * The collection_id property
+     */
+    collectionId?: Guid | null;
+    /**
+     * The collection_kind property
+     */
+    collectionKind?: CompactSmartFolderEntry_collection_kind | null;
+    /**
+     * The collection_name property
+     */
+    collectionName?: string | null;
+    /**
+     * An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields.
+     */
+    item?: CompactResource | null;
+    /**
+     * The workspace_id property
+     */
+    workspaceId?: Guid | null;
+}
+export type CompactSmartFolderEntry_collection_kind = (typeof CompactSmartFolderEntry_collection_kindObject)[keyof typeof CompactSmartFolderEntry_collection_kindObject];
+/**
+ * Authorized items sorted by name, created or modified time, with ID ties in the same direction. Default is modified descending. Cursors bind folder version, caller, surface, path, ordering, schemas and resolved references.
+ */
+export interface CompactSmartFolderResult extends AdditionalDataHolder, Parsable {
+    /**
+     * Absolute continuation URL, or null on the final page. Repeat the request method and body.
+     */
+    odataNextLink?: string | null;
+    /**
+     * The total property
+     */
+    total?: number | null;
+    /**
+     * Preview counts stop at 10,000. True means total is a lower bound.
+     */
+    totalCapped?: boolean | null;
+    /**
+     * The value property
+     */
+    value?: CompactSmartFolderEntry[] | null;
+}
 /**
  * A completion. Give item_id with text_id or image_blob_id, else workspace_id.
  */
@@ -1126,11 +1302,29 @@ export function createAggregateGroup_valuesFromDiscriminatorValue(parseNode: Par
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AggregateGroupBy}
+ */
+// @ts-ignore
+export function createAggregateGroupByFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAggregateGroupBy;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {AggregateGroup}
  */
 // @ts-ignore
 export function createAggregateGroupFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoAggregateGroup;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AggregateKey}
+ */
+// @ts-ignore
+export function createAggregateKeyFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAggregateKey;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -1566,6 +1760,51 @@ export function createCommentThreadFromDiscriminatorValue(parseNode: ParseNode |
 // @ts-ignore
 export function createCommentThreadListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoCommentThreadList;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompactQueryResult}
+ */
+// @ts-ignore
+export function createCompactQueryResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompactQueryResult;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompactResource_values}
+ */
+// @ts-ignore
+export function createCompactResource_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompactResource_values;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompactResource}
+ */
+// @ts-ignore
+export function createCompactResourceFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompactResource;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompactSmartFolderEntry}
+ */
+// @ts-ignore
+export function createCompactSmartFolderEntryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompactSmartFolderEntry;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CompactSmartFolderResult}
+ */
+// @ts-ignore
+export function createCompactSmartFolderResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCompactSmartFolderResult;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2856,6 +3095,15 @@ export function createSetWorkspaceMemberFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SmartFolderAggregateRequest}
+ */
+// @ts-ignore
+export function createSmartFolderAggregateRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSmartFolderAggregateRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SmartFolderDefinition}
  */
 // @ts-ignore
@@ -3189,6 +3437,24 @@ export function createTaskResponseInputFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskUpdate_values}
+ */
+// @ts-ignore
+export function createTaskUpdate_valuesFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskUpdate_values;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskUpdate}
+ */
+// @ts-ignore
+export function createTaskUpdateFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskUpdate;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {TaxonomyDecisionRequest_context}
  */
 // @ts-ignore
@@ -3477,6 +3743,15 @@ export function createValidationRuleMember2FromDiscriminatorValue(parseNode: Par
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ViewAggregateRequest}
+ */
+// @ts-ignore
+export function createViewAggregateRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoViewAggregateRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {ViewInput}
  */
 // @ts-ignore
@@ -3749,7 +4024,7 @@ export function deserializeIntoAggregate(aggregate: Partial<Aggregate> | undefin
 export function deserializeIntoAggregateGroup(aggregateGroup: Partial<AggregateGroup> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "count": n => { aggregateGroup.count = n.getNumberValue(); },
-        "key": n => { aggregateGroup.key = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "keys": n => { aggregateGroup.keys = n.getCollectionOfObjectValues<AggregateKey>(createAggregateKeyFromDiscriminatorValue); },
         "values": n => { aggregateGroup.values = n.getObjectValue<AggregateGroup_values>(createAggregateGroup_valuesFromDiscriminatorValue); },
     }
 }
@@ -3765,6 +4040,31 @@ export function deserializeIntoAggregateGroup_values(aggregateGroup_values: Part
 }
 /**
  * The deserialization information for the current model
+ * @param AggregateGroupBy The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAggregateGroupBy(aggregateGroupBy: Partial<AggregateGroupBy> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "field": n => { aggregateGroupBy.field = n.getStringValue(); },
+        "interval": n => { aggregateGroupBy.interval = n.getEnumValue<AggregateGroupBy_interval>(AggregateGroupBy_intervalObject); },
+        "time_zone": n => { aggregateGroupBy.timeZone = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param AggregateKey The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAggregateKey(aggregateKey: Partial<AggregateKey> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "label": n => { aggregateKey.label = n.getStringValue(); },
+        "value": n => { aggregateKey.value = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param AggregateRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -3772,10 +4072,10 @@ export function deserializeIntoAggregateGroup_values(aggregateGroup_values: Part
 export function deserializeIntoAggregateRequest(aggregateRequest: Partial<AggregateRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "aggregates": n => { aggregateRequest.aggregates = n.getCollectionOfObjectValues<Aggregate>(createAggregateFromDiscriminatorValue); },
-        "interval": n => { aggregateRequest.interval = n.getEnumValue<AggregateRequest_interval>(AggregateRequest_intervalObject); },
+        "groups": n => { aggregateRequest.groups = n.getCollectionOfObjectValues<AggregateGroupBy>(createAggregateGroupByFromDiscriminatorValue); },
         "query": n => { aggregateRequest.query = n.getObjectValue<QuerySpec>(createQuerySpecFromDiscriminatorValue); },
+        "sort": n => { aggregateRequest.sort = n.getCollectionOfObjectValues<SortSpec>(createSortSpecFromDiscriminatorValue); },
         "surface": n => { aggregateRequest.surface = n.getEnumValue<AggregateRequest_surface>(AggregateRequest_surfaceObject) ?? AggregateRequest_surfaceObject.Auto; },
-        "time_zone": n => { aggregateRequest.timeZone = n.getStringValue(); },
     }
 }
 /**
@@ -3786,7 +4086,8 @@ export function deserializeIntoAggregateRequest(aggregateRequest: Partial<Aggreg
 // @ts-ignore
 export function deserializeIntoAggregateResult(aggregateResult: Partial<AggregateResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "search_capped": n => { aggregateResult.searchCapped = n.getBooleanValue(); },
+        "@odata.nextLink": n => { aggregateResult.odataNextLink = n.getStringValue(); },
+        "total": n => { aggregateResult.total = n.getNumberValue(); },
         "value": n => { aggregateResult.value = n.getCollectionOfObjectValues<AggregateGroup>(createAggregateGroupFromDiscriminatorValue); },
     }
 }
@@ -4367,6 +4668,87 @@ export function deserializeIntoCommentThreadList(commentThreadList: Partial<Comm
         "mode_from": n => { commentThreadList.modeFrom = n.getEnumValue<CommentThreadList_mode_from>(CommentThreadList_mode_fromObject); },
         "@odata.nextLink": n => { commentThreadList.odataNextLink = n.getStringValue(); },
         "value": n => { commentThreadList.value = n.getCollectionOfObjectValues<CommentThread>(createCommentThreadFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompactQueryResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompactQueryResult(compactQueryResult: Partial<CompactQueryResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "@odata.nextLink": n => { compactQueryResult.odataNextLink = n.getStringValue(); },
+        "search_capped": n => { compactQueryResult.searchCapped = n.getBooleanValue(); },
+        "total": n => { compactQueryResult.total = n.getNumberValue(); },
+        "total_capped": n => { compactQueryResult.totalCapped = n.getBooleanValue(); },
+        "value": n => { compactQueryResult.value = n.getCollectionOfObjectValues<CompactResource>(createCompactResourceFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompactResource The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompactResource(compactResource: Partial<CompactResource> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "archived": n => { compactResource.archived = n.getBooleanValue(); },
+        "archived_at": n => { compactResource.archivedAt = n.getDateValue(); },
+        "archived_by": n => { compactResource.archivedBy = n.getStringValue(); },
+        "content_type_id": n => { compactResource.contentTypeId = n.getGuidValue(); },
+        "created_at": n => { compactResource.createdAt = n.getDateValue(); },
+        "created_by": n => { compactResource.createdBy = n.getStringValue(); },
+        "file": n => { compactResource.file = n.getObjectValue<FileSummary>(createFileSummaryFromDiscriminatorValue); },
+        "id": n => { compactResource.id = n.getGuidValue(); },
+        "keywords": n => { compactResource.keywords = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "kind": n => { compactResource.kind = n.getEnumValue<CompactResource_kind>(CompactResource_kindObject); },
+        "name": n => { compactResource.name = n.getStringValue(); },
+        "parent_id": n => { compactResource.parentId = n.getGuidValue(); },
+        "updated_at": n => { compactResource.updatedAt = n.getDateValue(); },
+        "updated_by": n => { compactResource.updatedBy = n.getStringValue(); },
+        "values": n => { compactResource.values = n.getObjectValue<CompactResource_values>(createCompactResource_valuesFromDiscriminatorValue); },
+        "version": n => { compactResource.version = n.getNumberValue(); },
+        "workspace_id": n => { compactResource.workspaceId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompactResource_values The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompactResource_values(compactResource_values: Partial<CompactResource_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompactSmartFolderEntry The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompactSmartFolderEntry(compactSmartFolderEntry: Partial<CompactSmartFolderEntry> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "collection_id": n => { compactSmartFolderEntry.collectionId = n.getGuidValue(); },
+        "collection_kind": n => { compactSmartFolderEntry.collectionKind = n.getEnumValue<CompactSmartFolderEntry_collection_kind>(CompactSmartFolderEntry_collection_kindObject); },
+        "collection_name": n => { compactSmartFolderEntry.collectionName = n.getStringValue(); },
+        "item": n => { compactSmartFolderEntry.item = n.getObjectValue<CompactResource>(createCompactResourceFromDiscriminatorValue); },
+        "workspace_id": n => { compactSmartFolderEntry.workspaceId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CompactSmartFolderResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCompactSmartFolderResult(compactSmartFolderResult: Partial<CompactSmartFolderResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "@odata.nextLink": n => { compactSmartFolderResult.odataNextLink = n.getStringValue(); },
+        "total": n => { compactSmartFolderResult.total = n.getNumberValue(); },
+        "total_capped": n => { compactSmartFolderResult.totalCapped = n.getBooleanValue(); },
+        "value": n => { compactSmartFolderResult.value = n.getCollectionOfObjectValues<CompactSmartFolderEntry>(createCompactSmartFolderEntryFromDiscriminatorValue); },
     }
 }
 /**
@@ -5578,6 +5960,7 @@ export function deserializeIntoProblem(problem: Partial<Problem> | undefined = {
         "code": n => { problem.code = n.getStringValue(); },
         "detail": n => { problem.detail = n.getStringValue(); },
         "existing_item": n => { problem.existingItem = n.getObjectValue<Problem_existing_item>(createProblem_existing_itemFromDiscriminatorValue); },
+        "open_task_id": n => { problem.openTaskId = n.getStringValue(); },
         "operation_index": n => { problem.operationIndex = n.getNumberValue(); },
         "request_id": n => { problem.requestId = n.getStringValue(); },
         "source_item_id": n => { problem.sourceItemId = n.getGuidValue(); },
@@ -5696,7 +6079,6 @@ export function deserializeIntoQueryGroupPage(queryGroupPage: Partial<QueryGroup
 // @ts-ignore
 export function deserializeIntoQueryRequest(queryRequest: Partial<QueryRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "envelope": n => { queryRequest.envelope = n.getEnumValue<QueryRequest_envelope>(QueryRequest_envelopeObject) ?? QueryRequest_envelopeObject.Full; },
         "include_total": n => { queryRequest.includeTotal = n.getBooleanValue() ?? false; },
         "query": n => { queryRequest.query = n.getObjectValue<QuerySpec>(createQuerySpecFromDiscriminatorValue); },
         "select": n => { queryRequest.select = n.getCollectionOfPrimitiveValues<string>("string"); },
@@ -6274,6 +6656,21 @@ export function deserializeIntoSmartFolder(smartFolder: Partial<SmartFolder> | u
 }
 /**
  * The deserialization information for the current model
+ * @param SmartFolderAggregateRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSmartFolderAggregateRequest(smartFolderAggregateRequest: Partial<SmartFolderAggregateRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "aggregates": n => { smartFolderAggregateRequest.aggregates = n.getCollectionOfObjectValues<Aggregate>(createAggregateFromDiscriminatorValue); },
+        "groups": n => { smartFolderAggregateRequest.groups = n.getCollectionOfObjectValues<AggregateGroupBy>(createAggregateGroupByFromDiscriminatorValue); },
+        "path": n => { smartFolderAggregateRequest.path = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "sort": n => { smartFolderAggregateRequest.sort = n.getCollectionOfObjectValues<SortSpec>(createSortSpecFromDiscriminatorValue); },
+        "surface": n => { smartFolderAggregateRequest.surface = n.getEnumValue<SmartFolderAggregateRequest_surface>(SmartFolderAggregateRequest_surfaceObject) ?? SmartFolderAggregateRequest_surfaceObject.Auto; },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param SmartFolderDefinition The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -6694,6 +7091,7 @@ export function deserializeIntoTaskCreate(taskCreate: Partial<TaskCreate> | unde
         "priority": n => { taskCreate.priority = n.getEnumValue<TaskCreate_priority>(TaskCreate_priorityObject); },
         "review": n => { taskCreate.review = n.getObjectValue<TaskCreate_review>(createTaskCreate_reviewFromDiscriminatorValue); },
         "title": n => { taskCreate.title = n.getStringValue(); },
+        "unique": n => { taskCreate.unique = n.getBooleanValue(); },
         "values": n => { taskCreate.values = n.getObjectValue<TaskCreate_values>(createTaskCreate_valuesFromDiscriminatorValue); },
     }
 }
@@ -6779,6 +7177,31 @@ export function deserializeIntoTaskResponseInput(taskResponseInput: Partial<Task
  */
 // @ts-ignore
 export function deserializeIntoTaskResponseInput_input(taskResponseInput_input: Partial<TaskResponseInput_input> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskUpdate The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskUpdate(taskUpdate: Partial<TaskUpdate> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "description": n => { taskUpdate.description = n.getStringValue(); },
+        "due_at": n => { taskUpdate.dueAt = n.getDateValue(); },
+        "priority": n => { taskUpdate.priority = n.getEnumValue<TaskUpdate_priority>(TaskUpdate_priorityObject); },
+        "title": n => { taskUpdate.title = n.getStringValue(); },
+        "values": n => { taskUpdate.values = n.getObjectValue<TaskUpdate_values>(createTaskUpdate_valuesFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskUpdate_values The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskUpdate_values(taskUpdate_values: Partial<TaskUpdate_values> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
     }
 }
@@ -7231,6 +7654,21 @@ export function deserializeIntoValidationRuleMember2(validationRuleMember2: Part
 }
 /**
  * The deserialization information for the current model
+ * @param ViewAggregateRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoViewAggregateRequest(viewAggregateRequest: Partial<ViewAggregateRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "aggregates": n => { viewAggregateRequest.aggregates = n.getCollectionOfObjectValues<Aggregate>(createAggregateFromDiscriminatorValue); },
+        "groups": n => { viewAggregateRequest.groups = n.getCollectionOfObjectValues<AggregateGroupBy>(createAggregateGroupByFromDiscriminatorValue); },
+        "selected": n => { viewAggregateRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
+        "sort": n => { viewAggregateRequest.sort = n.getCollectionOfObjectValues<SortSpec>(createSortSpecFromDiscriminatorValue); },
+        "surface": n => { viewAggregateRequest.surface = n.getEnumValue<ViewAggregateRequest_surface>(ViewAggregateRequest_surfaceObject) ?? ViewAggregateRequest_surfaceObject.Auto; },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param ViewInput The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -7253,7 +7691,6 @@ export function deserializeIntoViewInput(viewInput: Partial<ViewInput> | undefin
 // @ts-ignore
 export function deserializeIntoViewQueryRequest(viewQueryRequest: Partial<ViewQueryRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "envelope": n => { viewQueryRequest.envelope = n.getEnumValue<ViewQueryRequest_envelope>(ViewQueryRequest_envelopeObject) ?? ViewQueryRequest_envelopeObject.Full; },
         "include_total": n => { viewQueryRequest.includeTotal = n.getBooleanValue() ?? false; },
         "select": n => { viewQueryRequest.select = n.getCollectionOfPrimitiveValues<string>("string"); },
         "selected": n => { viewQueryRequest.selected = n.getCollectionOfObjectValues<NavigationSelection>(createNavigationSelectionFromDiscriminatorValue); },
@@ -8719,6 +9156,10 @@ export interface Problem extends ApiError, Parsable {
      */
     existingItem?: Problem_existing_item | null;
     /**
+     * On a task_open conflict, the open task with the key a unique task asked for.
+     */
+    openTaskId?: string | null;
+    /**
      * Zero-based failing operation index for bulk item errors. Omitted for batch-wide errors.
      */
     operationIndex?: number | null;
@@ -8859,10 +9300,6 @@ export interface QueryGroupPage extends Parsable {
  */
 export interface QueryRequest extends Parsable {
     /**
-     * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
-     */
-    envelope?: QueryRequest_envelope | null;
-    /**
      * Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested.
      */
     includeTotal?: boolean | null;
@@ -8871,7 +9308,7 @@ export interface QueryRequest extends Parsable {
      */
     query?: QuerySpec | null;
     /**
-     * Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
+     * Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
      */
     select?: string[] | null;
     /**
@@ -8879,7 +9316,6 @@ export interface QueryRequest extends Parsable {
      */
     surface?: QueryRequest_surface | null;
 }
-export type QueryRequest_envelope = (typeof QueryRequest_envelopeObject)[keyof typeof QueryRequest_envelopeObject];
 export type QueryRequest_surface = (typeof QueryRequest_surfaceObject)[keyof typeof QueryRequest_surfaceObject];
 export interface QueryResult extends Parsable {
     /**
@@ -9787,7 +10223,7 @@ export function serializeAggregate(writer: SerializationWriter, aggregate: Parti
 export function serializeAggregateGroup(writer: SerializationWriter, aggregateGroup: Partial<AggregateGroup> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!aggregateGroup || isSerializingDerivedType) { return; }
     writer.writeNumberValue("count", aggregateGroup.count);
-    writer.writeObjectValue("key", aggregateGroup.key);
+    writer.writeCollectionOfObjectValues<AggregateKey>("keys", aggregateGroup.keys, serializeAggregateKey);
     writer.writeObjectValue<AggregateGroup_values>("values", aggregateGroup.values, serializeAggregateGroup_values);
 }
 /**
@@ -9803,6 +10239,31 @@ export function serializeAggregateGroup_values(writer: SerializationWriter, aggr
 }
 /**
  * Serializes information the current object
+ * @param AggregateGroupBy The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAggregateGroupBy(writer: SerializationWriter, aggregateGroupBy: Partial<AggregateGroupBy> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!aggregateGroupBy || isSerializingDerivedType) { return; }
+    writer.writeStringValue("field", aggregateGroupBy.field);
+    writer.writeEnumValue<AggregateGroupBy_interval>("interval", aggregateGroupBy.interval);
+    writer.writeStringValue("time_zone", aggregateGroupBy.timeZone);
+}
+/**
+ * Serializes information the current object
+ * @param AggregateKey The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAggregateKey(writer: SerializationWriter, aggregateKey: Partial<AggregateKey> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!aggregateKey || isSerializingDerivedType) { return; }
+    writer.writeStringValue("label", aggregateKey.label);
+    writer.writeObjectValue("value", aggregateKey.value);
+}
+/**
+ * Serializes information the current object
  * @param AggregateRequest The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -9811,10 +10272,10 @@ export function serializeAggregateGroup_values(writer: SerializationWriter, aggr
 export function serializeAggregateRequest(writer: SerializationWriter, aggregateRequest: Partial<AggregateRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!aggregateRequest || isSerializingDerivedType) { return; }
     writer.writeCollectionOfObjectValues<Aggregate>("aggregates", aggregateRequest.aggregates, serializeAggregate);
-    writer.writeEnumValue<AggregateRequest_interval>("interval", aggregateRequest.interval);
+    writer.writeCollectionOfObjectValues<AggregateGroupBy>("groups", aggregateRequest.groups, serializeAggregateGroupBy);
     writer.writeObjectValue<QuerySpec>("query", aggregateRequest.query, serializeQuerySpec);
+    writer.writeCollectionOfObjectValues<SortSpec>("sort", aggregateRequest.sort, serializeSortSpec);
     writer.writeEnumValue<AggregateRequest_surface>("surface", aggregateRequest.surface);
-    writer.writeStringValue("time_zone", aggregateRequest.timeZone);
 }
 /**
  * Serializes information the current object
@@ -9825,7 +10286,8 @@ export function serializeAggregateRequest(writer: SerializationWriter, aggregate
 // @ts-ignore
 export function serializeAggregateResult(writer: SerializationWriter, aggregateResult: Partial<AggregateResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!aggregateResult || isSerializingDerivedType) { return; }
-    writer.writeBooleanValue("search_capped", aggregateResult.searchCapped);
+    writer.writeStringValue("@odata.nextLink", aggregateResult.odataNextLink);
+    writer.writeNumberValue("total", aggregateResult.total);
     writer.writeCollectionOfObjectValues<AggregateGroup>("value", aggregateResult.value, serializeAggregateGroup);
 }
 /**
@@ -10435,6 +10897,84 @@ export function serializeCommentThreadList(writer: SerializationWriter, commentT
     writer.writeStringValue("@odata.nextLink", commentThreadList.odataNextLink);
     writer.writeCollectionOfObjectValues<CommentThread>("value", commentThreadList.value, serializeCommentThread);
     writer.writeAdditionalData(commentThreadList.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CompactQueryResult The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompactQueryResult(writer: SerializationWriter, compactQueryResult: Partial<CompactQueryResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!compactQueryResult || isSerializingDerivedType) { return; }
+    writer.writeStringValue("@odata.nextLink", compactQueryResult.odataNextLink);
+    writer.writeBooleanValue("search_capped", compactQueryResult.searchCapped);
+    writer.writeNumberValue("total", compactQueryResult.total);
+    writer.writeBooleanValue("total_capped", compactQueryResult.totalCapped);
+    writer.writeCollectionOfObjectValues<CompactResource>("value", compactQueryResult.value, serializeCompactResource);
+}
+/**
+ * Serializes information the current object
+ * @param CompactResource The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompactResource(writer: SerializationWriter, compactResource: Partial<CompactResource> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!compactResource || isSerializingDerivedType) { return; }
+    writer.writeDateValue("created_at", compactResource.createdAt);
+    writer.writeObjectValue<FileSummary>("file", compactResource.file, serializeFileSummary);
+    writer.writeGuidValue("id", compactResource.id);
+    writer.writeCollectionOfPrimitiveValues<string>("keywords", compactResource.keywords);
+    writer.writeEnumValue<CompactResource_kind>("kind", compactResource.kind);
+    writer.writeStringValue("name", compactResource.name);
+    writer.writeGuidValue("parent_id", compactResource.parentId);
+    writer.writeDateValue("updated_at", compactResource.updatedAt);
+    writer.writeObjectValue<CompactResource_values>("values", compactResource.values, serializeCompactResource_values);
+    writer.writeNumberValue("version", compactResource.version);
+    writer.writeGuidValue("workspace_id", compactResource.workspaceId);
+}
+/**
+ * Serializes information the current object
+ * @param CompactResource_values The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompactResource_values(writer: SerializationWriter, compactResource_values: Partial<CompactResource_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!compactResource_values || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(compactResource_values.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CompactSmartFolderEntry The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompactSmartFolderEntry(writer: SerializationWriter, compactSmartFolderEntry: Partial<CompactSmartFolderEntry> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!compactSmartFolderEntry || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("collection_id", compactSmartFolderEntry.collectionId);
+    writer.writeEnumValue<CompactSmartFolderEntry_collection_kind>("collection_kind", compactSmartFolderEntry.collectionKind);
+    writer.writeStringValue("collection_name", compactSmartFolderEntry.collectionName);
+    writer.writeObjectValue<CompactResource>("item", compactSmartFolderEntry.item, serializeCompactResource);
+    writer.writeGuidValue("workspace_id", compactSmartFolderEntry.workspaceId);
+    writer.writeAdditionalData(compactSmartFolderEntry.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CompactSmartFolderResult The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCompactSmartFolderResult(writer: SerializationWriter, compactSmartFolderResult: Partial<CompactSmartFolderResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!compactSmartFolderResult || isSerializingDerivedType) { return; }
+    writer.writeStringValue("@odata.nextLink", compactSmartFolderResult.odataNextLink);
+    writer.writeNumberValue("total", compactSmartFolderResult.total);
+    writer.writeBooleanValue("total_capped", compactSmartFolderResult.totalCapped);
+    writer.writeCollectionOfObjectValues<CompactSmartFolderEntry>("value", compactSmartFolderResult.value, serializeCompactSmartFolderEntry);
+    writer.writeAdditionalData(compactSmartFolderResult.additionalData);
 }
 /**
  * Serializes information the current object
@@ -11662,6 +12202,7 @@ export function serializeProblem(writer: SerializationWriter, problem: Partial<P
     writer.writeStringValue("code", problem.code);
     writer.writeStringValue("detail", problem.detail);
     writer.writeObjectValue<Problem_existing_item>("existing_item", problem.existingItem, serializeProblem_existing_item);
+    writer.writeStringValue("open_task_id", problem.openTaskId);
     writer.writeNumberValue("operation_index", problem.operationIndex);
     writer.writeStringValue("request_id", problem.requestId);
     writer.writeGuidValue("source_item_id", problem.sourceItemId);
@@ -11782,7 +12323,6 @@ export function serializeQueryGroupPage(writer: SerializationWriter, queryGroupP
 // @ts-ignore
 export function serializeQueryRequest(writer: SerializationWriter, queryRequest: Partial<QueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!queryRequest || isSerializingDerivedType) { return; }
-    writer.writeEnumValue<QueryRequest_envelope>("envelope", queryRequest.envelope);
     writer.writeBooleanValue("include_total", queryRequest.includeTotal);
     writer.writeObjectValue<QuerySpec>("query", queryRequest.query, serializeQuerySpec);
     writer.writeCollectionOfPrimitiveValues<string>("select", queryRequest.select);
@@ -12364,6 +12904,21 @@ export function serializeSmartFolder(writer: SerializationWriter, smartFolder: P
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SmartFolderAggregateRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSmartFolderAggregateRequest(writer: SerializationWriter, smartFolderAggregateRequest: Partial<SmartFolderAggregateRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!smartFolderAggregateRequest || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<Aggregate>("aggregates", smartFolderAggregateRequest.aggregates, serializeAggregate);
+    writer.writeCollectionOfObjectValues<AggregateGroupBy>("groups", smartFolderAggregateRequest.groups, serializeAggregateGroupBy);
+    writer.writeCollectionOfPrimitiveValues<string>("path", smartFolderAggregateRequest.path);
+    writer.writeCollectionOfObjectValues<SortSpec>("sort", smartFolderAggregateRequest.sort, serializeSortSpec);
+    writer.writeEnumValue<SmartFolderAggregateRequest_surface>("surface", smartFolderAggregateRequest.surface);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param SmartFolderDefinition The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -12799,6 +13354,7 @@ export function serializeTaskCreate(writer: SerializationWriter, taskCreate: Par
     writer.writeEnumValue<TaskCreate_priority>("priority", taskCreate.priority);
     writer.writeObjectValue<TaskCreate_review>("review", taskCreate.review, serializeTaskCreate_review);
     writer.writeStringValue("title", taskCreate.title);
+    writer.writeBooleanValue("unique", taskCreate.unique);
     writer.writeObjectValue<TaskCreate_values>("values", taskCreate.values, serializeTaskCreate_values);
 }
 /**
@@ -12888,6 +13444,32 @@ export function serializeTaskResponseInput(writer: SerializationWriter, taskResp
 export function serializeTaskResponseInput_input(writer: SerializationWriter, taskResponseInput_input: Partial<TaskResponseInput_input> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!taskResponseInput_input || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(taskResponseInput_input.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskUpdate The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskUpdate(writer: SerializationWriter, taskUpdate: Partial<TaskUpdate> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskUpdate || isSerializingDerivedType) { return; }
+    writer.writeStringValue("description", taskUpdate.description);
+    writer.writeDateValue("due_at", taskUpdate.dueAt);
+    writer.writeEnumValue<TaskUpdate_priority>("priority", taskUpdate.priority);
+    writer.writeStringValue("title", taskUpdate.title);
+    writer.writeObjectValue<TaskUpdate_values>("values", taskUpdate.values, serializeTaskUpdate_values);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskUpdate_values The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskUpdate_values(writer: SerializationWriter, taskUpdate_values: Partial<TaskUpdate_values> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskUpdate_values || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(taskUpdate_values.additionalData);
 }
 /**
  * Serializes information the current object
@@ -13346,6 +13928,21 @@ export function serializeValidationRuleMember2(writer: SerializationWriter, vali
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ViewAggregateRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeViewAggregateRequest(writer: SerializationWriter, viewAggregateRequest: Partial<ViewAggregateRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!viewAggregateRequest || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<Aggregate>("aggregates", viewAggregateRequest.aggregates, serializeAggregate);
+    writer.writeCollectionOfObjectValues<AggregateGroupBy>("groups", viewAggregateRequest.groups, serializeAggregateGroupBy);
+    writer.writeCollectionOfObjectValues<NavigationSelection>("selected", viewAggregateRequest.selected, serializeNavigationSelection);
+    writer.writeCollectionOfObjectValues<SortSpec>("sort", viewAggregateRequest.sort, serializeSortSpec);
+    writer.writeEnumValue<ViewAggregateRequest_surface>("surface", viewAggregateRequest.surface);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param ViewInput The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -13368,7 +13965,6 @@ export function serializeViewInput(writer: SerializationWriter, viewInput: Parti
 // @ts-ignore
 export function serializeViewQueryRequest(writer: SerializationWriter, viewQueryRequest: Partial<ViewQueryRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!viewQueryRequest || isSerializingDerivedType) { return; }
-    writer.writeEnumValue<ViewQueryRequest_envelope>("envelope", viewQueryRequest.envelope);
     writer.writeBooleanValue("include_total", viewQueryRequest.includeTotal);
     writer.writeCollectionOfPrimitiveValues<string>("select", viewQueryRequest.select);
     writer.writeCollectionOfObjectValues<NavigationSelection>("selected", viewQueryRequest.selected, serializeNavigationSelection);
@@ -13601,6 +14197,32 @@ export interface SmartFolder extends AdditionalDataHolder, Parsable {
      */
     workspaceId?: Guid | null;
 }
+/**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
+export interface SmartFolderAggregateRequest extends Parsable {
+    /**
+     * The aggregates property
+     */
+    aggregates?: Aggregate[] | null;
+    /**
+     * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
+     */
+    groups?: AggregateGroupBy[] | null;
+    /**
+     * One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.
+     */
+    path?: string[] | null;
+    /**
+     * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+     */
+    sort?: SortSpec[] | null;
+    /**
+     * The surface property
+     */
+    surface?: SmartFolderAggregateRequest_surface | null;
+}
+export type SmartFolderAggregateRequest_surface = (typeof SmartFolderAggregateRequest_surfaceObject)[keyof typeof SmartFolderAggregateRequest_surfaceObject];
 /**
  * Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters. Mode is explicit. Results can be read directly without supplying a group path. $file_type filters the MIME type on the authorized visible revision.
  */
@@ -14247,6 +14869,10 @@ export interface TaskCreate extends Parsable {
      */
     title?: string | null;
     /**
+     * Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, and the problem's open_task_id names the open task.
+     */
+    unique?: boolean | null;
+    /**
      * The values property
      */
     values?: TaskCreate_values | null;
@@ -14336,6 +14962,37 @@ export interface TaskResponseInput extends Parsable {
  * Values of the task's form.
  */
 export interface TaskResponseInput_input extends AdditionalDataHolder, Parsable {
+}
+/**
+ * What PATCH /v1/tasks/{id} changes. Each field given replaces its value; the form, outcomes, key, kind, completion and assignees stay.
+ */
+export interface TaskUpdate extends Parsable {
+    /**
+     * Empty or null clears it.
+     */
+    description?: string | null;
+    /**
+     * null clears it.
+     */
+    dueAt?: Date | null;
+    /**
+     * The priority property
+     */
+    priority?: TaskUpdate_priority | null;
+    /**
+     * The title property
+     */
+    title?: string | null;
+    /**
+     * Replaces the prefill of the task's form, checked as on creation; null clears it.
+     */
+    values?: TaskUpdate_values | null;
+}
+export type TaskUpdate_priority = (typeof TaskUpdate_priorityObject)[keyof typeof TaskUpdate_priorityObject];
+/**
+ * Replaces the prefill of the task's form, checked as on creation; null clears it.
+ */
+export interface TaskUpdate_values extends AdditionalDataHolder, Parsable {
 }
 /**
  * Picks active terms of an organization term set for text, data or a document.
@@ -14927,6 +15584,32 @@ export interface ValidationRuleMember2 extends AdditionalDataHolder, Parsable {
 }
 export type ValidationRuleMember2_op = (typeof ValidationRuleMember2_opObject)[keyof typeof ValidationRuleMember2_opObject];
 /**
+ * Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink.
+ */
+export interface ViewAggregateRequest extends Parsable {
+    /**
+     * The aggregates property
+     */
+    aggregates?: Aggregate[] | null;
+    /**
+     * The fields a group's key holds, one group per combination of their values; without any, all items are one group.
+     */
+    groups?: AggregateGroupBy[] | null;
+    /**
+     * Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says.
+     */
+    selected?: NavigationSelection[] | null;
+    /**
+     * Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie.
+     */
+    sort?: SortSpec[] | null;
+    /**
+     * The surface property
+     */
+    surface?: ViewAggregateRequest_surface | null;
+}
+export type ViewAggregateRequest_surface = (typeof ViewAggregateRequest_surfaceObject)[keyof typeof ViewAggregateRequest_surfaceObject];
+/**
  * Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint; a navigation view browses the terms of each of settings.fields as folders (POST /v1/views/{id}/navigation) and lists the items at the opened terms through POST /v1/views/{id}/query with selected.
  */
 export interface ViewInput extends Parsable {
@@ -14961,15 +15644,11 @@ export type ViewInput_layout = (typeof ViewInput_layoutObject)[keyof typeof View
  */
 export interface ViewQueryRequest extends Parsable {
     /**
-     * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
-     */
-    envelope?: ViewQueryRequest_envelope | null;
-    /**
      * Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested.
      */
     includeTotal?: boolean | null;
     /**
-     * Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
+     * Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection.
      */
     select?: string[] | null;
     /**
@@ -14985,7 +15664,6 @@ export interface ViewQueryRequest extends Parsable {
      */
     totalLimit?: number | null;
 }
-export type ViewQueryRequest_envelope = (typeof ViewQueryRequest_envelopeObject)[keyof typeof ViewQueryRequest_envelopeObject];
 export type ViewQueryRequest_surface = (typeof ViewQueryRequest_surfaceObject)[keyof typeof ViewQueryRequest_surfaceObject];
 /**
  * Layout settings. Only navigation views take settings; other layouts take an empty object.
@@ -15170,9 +15848,9 @@ export const Aggregate_opObject = {
     Max: "max",
 } as const;
 /**
- * Groups a date or date-time query.group_by by the period holding its value.
+ * Groups a date or date-time field by the period holding its value: day, week from Monday, month or year.
  */
-export const AggregateRequest_intervalObject = {
+export const AggregateGroupBy_intervalObject = {
     Day: "day",
     Week: "week",
     Month: "month",
@@ -15326,6 +16004,14 @@ export const CommentThreadList_modeObject = {
     Off: "off",
     Collaborators: "collaborators",
     Readers: "readers",
+} as const;
+export const CompactResource_kindObject = {
+    Folder: "folder",
+    Item: "item",
+} as const;
+export const CompactSmartFolderEntry_collection_kindObject = {
+    List: "list",
+    Library: "library",
 } as const;
 /**
  * immediate calls the model now; batch sends the request in a provider batch, which its worker admits in groups per queue. The deployment's default when omitted.
@@ -15573,13 +16259,6 @@ export const Publication_actionObject = {
     Publish: "publish",
     Unpublish: "unpublish",
 } as const;
-/**
- * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
- */
-export const QueryRequest_envelopeObject = {
-    Full: "full",
-    Compact: "compact",
-} as const;
 export const QueryRequest_surfaceObject = {
     Auto: "auto",
     Head: "head",
@@ -15697,6 +16376,11 @@ export const SetWorkspaceMember_roleObject = {
     Member: "member",
     Visitor: "visitor",
 } as const;
+export const SmartFolderAggregateRequest_surfaceObject = {
+    Auto: "auto",
+    Head: "head",
+    Published: "published",
+} as const;
 /**
  * Omit to search both lists and libraries.
  */
@@ -15799,6 +16483,11 @@ export const TaskOutcome_styleObject = {
     Danger: "danger",
     DefaultEscaped: "default",
 } as const;
+export const TaskUpdate_priorityObject = {
+    Low: "low",
+    Normal: "normal",
+    High: "high",
+} as const;
 /**
  * multiple (the default) compares each term independently; single makes one joint choice.
  */
@@ -15847,19 +16536,17 @@ export const ValidationRuleMember2_opObject = {
     Lt: "lt",
     Lte: "lte",
 } as const;
+export const ViewAggregateRequest_surfaceObject = {
+    Auto: "auto",
+    Head: "head",
+    Published: "published",
+} as const;
 export const ViewInput_layoutObject = {
     Table: "table",
     Board: "board",
     Calendar: "calendar",
     Gallery: "gallery",
     Navigation: "navigation",
-} as const;
-/**
- * compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource.
- */
-export const ViewQueryRequest_envelopeObject = {
-    Full: "full",
-    Compact: "compact",
 } as const;
 export const ViewQueryRequest_surfaceObject = {
     Auto: "auto",

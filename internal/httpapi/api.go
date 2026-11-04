@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
+	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
@@ -329,7 +330,7 @@ func readRequest(r *http.Request) bool {
 		return false
 	}
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) == 6 && (parts[5] == "groups" || parts[5] == "aggregates" && parts[2] == "resources") {
+	if len(parts) == 6 && (parts[5] == "groups" || parts[5] == "aggregates" || parts[5] == "compact") {
 		parts = parts[:5]
 	}
 	if len(parts) != 5 || parts[1] != "v1" || parts[4] != "query" {
@@ -398,10 +399,24 @@ func respond(w http.ResponseWriter, r *http.Request, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string, operationIndex ...int) {
+	a.extendedProblem(w, r, status, code, message, nil, operationIndex...)
+}
+
+// extendedProblem answers with a problem that has further members. They
+// add to the members every problem has, never replace them, so the body
+// agrees with the status and the Problem schema.
+func (a *API) extendedProblem(w http.ResponseWriter, r *http.Request, status int, code, message string, extensions map[string]any, operationIndex ...int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	id, _ := r.Context().Value(requestKey{}).(string)
-	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
+	body := map[string]any{}
+	for k, v := range extensions {
+		body[k] = v
+	}
+	for k, v := range map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id} {
+		body[k] = v
+	}
+	delete(body, "operation_index")
 	if len(operationIndex) > 0 {
 		body["operation_index"] = operationIndex[0]
 	}
@@ -423,21 +438,16 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	var moduleProblem *Problem
+	var openTask *taskstore.OpenError
 	switch {
 	case errors.As(err, &moveConflict):
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusConflict)
-		requestID, _ := r.Context().Value(requestKey{}).(string)
-		body := map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": moveConflict.Error(), "request_id": requestID, "source_item_id": moveConflict.SourceID}
+		extensions := map[string]any{"source_item_id": moveConflict.SourceID}
 		if moveConflict.Existing != nil {
-			body["existing_item"] = moveConflict.Existing
+			extensions["existing_item"] = moveConflict.Existing
 		}
-		_ = json.NewEncoder(w).Encode(body)
+		a.extendedProblem(w, r, 409, "name_conflict", moveConflict.Error(), extensions, operationIndex...)
 	case errors.As(err, &nameConflict):
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusConflict)
-		requestID, _ := r.Context().Value(requestKey{}).(string)
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": nameConflict.Error(), "request_id": requestID, "existing_item": nameConflict})
+		a.extendedProblem(w, r, 409, "name_conflict", nameConflict.Error(), map[string]any{"existing_item": nameConflict}, operationIndex...)
 	case errors.As(err, &duplicate):
 		problem(409, "duplicate_file", duplicate.Error()+"; matching item "+duplicate.Documents[0].ItemID)
 	case errors.As(err, &identityValidation):
@@ -455,9 +465,11 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, dms.ErrNoText):
 		problem(404, "text_not_read", "The file's text has not been read; a workflow with document.read_text reads it.")
 	case errors.As(err, &moduleProblem):
-		problem(moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail)
+		a.extendedProblem(w, r, moduleProblem.Status, moduleProblem.Code, moduleProblem.Detail, moduleProblem.Extensions, operationIndex...)
 	case errors.Is(err, dms.ErrLiveExpired):
 		problem(410, "live_cursor_expired", err.Error())
+	case errors.Is(err, dms.ErrFiguresChanged):
+		problem(409, "figures_changed", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):
 		problem(410, "delta_expired", err.Error())
 	case errors.Is(err, dms.ErrContentUnavailable):
@@ -468,6 +480,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(403, "forbidden", "access denied")
 	case errors.Is(err, dms.ErrProtectedHome):
 		problem(409, "protected_home", err.Error())
+	case errors.As(err, &openTask):
+		a.extendedProblem(w, r, 409, "task_open", openTask.Error(), map[string]any{"open_task_id": openTask.ID}, operationIndex...)
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

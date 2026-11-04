@@ -22,10 +22,17 @@ class DevelopmentChecksTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.web = self.root / 'web'
         self.web.mkdir()
-        # The frontend bundles the workflow SDK's declarations.
+        # The frontend bundles the SDK's declarations and app runtime, and
+        # reads numbers and dates through its format module.
         self.declarations = self.root / 'sdk/dist/workflow.d.ts'
         self.declarations.parent.mkdir(parents=True)
         self.declarations.write_text('export {};')
+        self.runtime = self.root / 'sdk/dist/app-runtime.js'
+        self.runtime.write_text('// runtime')
+        (self.root / 'sdk/dist/app.d.ts').write_text('export {};')
+        self.format = self.root / 'sdk/src/format.ts'
+        self.format.parent.mkdir(parents=True)
+        self.format.write_text('export {};')
         # The build writes the npm notices with this generator.
         self.notices = self.root / 'scripts/npm-notices.mjs'
         self.notices.parent.mkdir(parents=True)
@@ -85,14 +92,20 @@ class DevelopmentChecksTests(unittest.TestCase):
             self.notices.write_text('// changed notices')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 4)
-            (self.web / 'dist/index.html').write_text('tampered')
+            self.runtime.write_text('// changed runtime')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 5)
-            (self.web / 'dist/index.html').unlink()
+            self.format.write_text('export const changed = true;')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 6)
-            checks.prepare_frontend(force=True)
+            (self.web / 'dist/index.html').write_text('tampered')
+            checks.prepare_frontend()
             self.assertEqual(run.call_count, 7)
+            (self.web / 'dist/index.html').unlink()
+            checks.prepare_frontend()
+            self.assertEqual(run.call_count, 8)
+            checks.prepare_frontend(force=True)
+            self.assertEqual(run.call_count, 9)
 
     def test_stale_dependencies_install_only_with_setup(self):
         (self.web / 'node_modules/example').rmdir()

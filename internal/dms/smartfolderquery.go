@@ -33,10 +33,12 @@ type SmartFolderEntry struct {
 	Item           *resources.Resource `json:"item"`
 }
 type SmartFolderResult struct {
-	TotalCapped bool               `json:"total_capped,omitempty"`
-	Data        []SmartFolderEntry `json:"value"`
-	NextCursor  string             `json:"-"`
-	Total       *int               `json:"total,omitempty"`
+	TotalCapped bool `json:"total_capped,omitempty"`
+	// Compact writes the entries' items as CompactItem.
+	Compact    bool               `json:"-"`
+	Data       []SmartFolderEntry `json:"value"`
+	NextCursor string             `json:"-"`
+	Total      *int               `json:"total,omitempty"`
 }
 type SmartFolderGroup struct {
 	Value any    `json:"value"`
@@ -297,12 +299,11 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 		}
 	}
 	rankIdentity := ""
-	var ranked *content.Query
 	usable := []smartCandidate{}
-	queries := []*content.Query{}
-	shapes := []string{}
-	collections := []string{}
-	schemas := []string{}
+	plans := []content.Plan{}
+	// Whether a plan's order ranks the union: the first whose group the
+	// collection holds.
+	rankable := []bool{}
 	for _, c := range candidates {
 		spec := QuerySpec{Archive: d.Archive, Filter: d.Filter, Sort: []SortSpec{order}}
 		plan, _, err := s.collectionPlan(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface, rowACL: true}, false)
@@ -343,7 +344,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 			if !missing {
 				identity := "text"
 				if fd != nil {
-					identity = string(fd.Type) + ":" + strconv.Itoa(fd.Scale) + ":" + fd.Options.TermSetID + ":" + fd.Options.LookupContainerID
+					identity = smartFieldIdentity(fd)
 				}
 				if rankIdentity != "" && rankIdentity != identity {
 					return compiledQuery{}, nil, invalid("grouping fields must have compatible types and scopes across collections")
@@ -352,18 +353,36 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 			}
 			plan.Group = &group
 		}
-		q := s.DAL.Content().Compile(plan)
-		if ranked == nil && (!grouped || rankIdentity != "") {
-			ranked = q
-		}
-		queries = append(queries, q)
-		shapes = append(shapes, q.Shape())
-		collections = append(collections, c.collection.ID)
-		schemas = append(schemas, *c.collection.SchemaHeadID)
+		plans = append(plans, plan)
+		rankable = append(rankable, !grouped || rankIdentity != "")
 		usable = append(usable, c)
 	}
-	if len(queries) == 0 && firstError != nil {
+	if len(plans) == 0 && firstError != nil {
 		return compiledQuery{}, nil, firstError
+	}
+	// Aggregates read their fields in the collections the folder reads, and
+	// only there: a collection it skips holds none of the figures.
+	if in.aggregation != nil && len(usable) > 0 {
+		aggregated, err := in.aggregation.resolve(smartColumn(usable))
+		if err != nil {
+			return compiledQuery{}, nil, err
+		}
+		for i := range plans {
+			plans[i].ItemsOnly, plans[i].Aggregation = true, aggregated
+		}
+	}
+	var ranked *content.Query
+	queries := make([]*content.Query, len(plans))
+	shapes := make([]string, len(plans))
+	collections := make([]string, len(plans))
+	schemas := make([]string, len(plans))
+	for i, plan := range plans {
+		q := s.DAL.Content().Compile(plan)
+		if ranked == nil && rankable[i] {
+			ranked = q
+		}
+		queries[i], shapes[i] = q, q.Shape()
+		collections[i], schemas[i] = usable[i].collection.ID, *usable[i].collection.SchemaHeadID
 	}
 	rootIDs := make([]string, len(roots))
 	for i, root := range roots {
@@ -393,7 +412,50 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *vie
 		Shapes, Roots            []string
 	}{f.ID, subject, in.Surface, f.Version, in.Path, grouped, order, collections, schemas, shapes, rootIDs})
 	sum := sha256.Sum256(fingerprint)
+	if in.aggregation != nil && len(queries) == 0 {
+		// Nothing to read, and no measure columns to read it with.
+		union = nil
+	}
 	return compiledQuery{q: union, fingerprint: hex.EncodeToString(sum[:])}, usable, nil
+}
+
+// smartFieldIdentity says which fields of several collections hold values
+// that can be grouped or added together: of one type and scale, the same
+// term set or looked-up collection, and amounts in the same currency.
+func smartFieldIdentity(fd *catalog.FieldDefinition) string {
+	return string(fd.Type) + ":" + strconv.Itoa(fd.Scale) + ":" + fd.Options.TermSetID + ":" + fd.Options.LookupContainerID + ":" + fd.Options.CurrencyCode
+}
+
+// smartColumn finds a field aggregates read across a folder's collections.
+// Those that lack it hold no values of it, but one that holds it unindexed or
+// differently fails the request: its values would silently go missing from
+// the figures.
+func smartColumn(candidates []smartCandidate) func(string) (content.Field, error) {
+	return func(key string) (content.Field, error) {
+		if systemField(key) != nil {
+			return content.Field{Key: key}, nil
+		}
+		var found content.Field
+		for _, c := range candidates {
+			defs := definitionMap(c.defs)
+			if defs[key] == nil {
+				continue
+			}
+			compiler := queryCompiler{defs: defs}
+			field, err := compiler.column(key)
+			if err != nil {
+				return content.Field{}, err
+			}
+			if found.Def != nil && smartFieldIdentity(found.Def) != smartFieldIdentity(field.Def) {
+				return content.Field{}, invalid("aggregated fields must have compatible types and scopes across collections: " + key)
+			}
+			found = field
+		}
+		if found.Def == nil {
+			return content.Field{}, unqueryable(key, nil)
+		}
+		return found, nil
+	}
 }
 
 func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (SmartFolderResult, error) {
@@ -418,7 +480,7 @@ func (s *Service) querySmartFolder(ctx context.Context, subject string, f *views
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
-	out, err := s.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit}, q, nil)
+	out, err := s.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, compact: in.compact}, q, nil)
 	if err != nil {
 		return SmartFolderResult{}, err
 	}
@@ -432,6 +494,13 @@ func (s *Service) querySmartFolder(ctx context.Context, subject string, f *views
 		result.Data = append(result.Data, SmartFolderEntry{string(c.Kind), item.WorkspaceID, c.ID, c.Name, item})
 	}
 	return result, nil
+}
+
+// QuerySmartFolderCompact is QuerySmartFolder returning compact items.
+func (s *Service) QuerySmartFolderCompact(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (CompactSmartFolderResult, error) {
+	in.compact = true
+	out, err := s.QuerySmartFolder(ctx, subject, id, in)
+	return compactSmartFolderResult(out), err
 }
 
 type SmartFolderPreview struct {

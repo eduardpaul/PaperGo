@@ -63,12 +63,9 @@ type host struct {
 // the SDK's host functions, TextEncoder and TextDecoder. The SDK adds
 // console. There is no require, process, timer or network access.
 func (h *host) runtime() *goja.Runtime {
-	rt := goja.New()
-	h.rt = rt
+	rt := h.bare()
 	rt.SetTimeSource(h.now)
 	rt.SetRandSource(h.random)
-	rt.SetMaxCallStackSize(maxCallStack)
-	h.textCodecs()
 
 	papergo := rt.NewObject()
 	_ = papergo.Set("request", h.request)
@@ -78,6 +75,16 @@ func (h *host) runtime() *goja.Runtime {
 	_ = papergo.Set("uuid", h.uuid)
 	_ = papergo.Set("log", func(level, message string) { h.log(level, message) })
 	_ = rt.Set("__papergo", papergo)
+	return rt
+}
+
+// bare is a runtime with the language, the call stack limit of a run and the
+// text codecs, without the workflow host.
+func (h *host) bare() *goja.Runtime {
+	rt := goja.New()
+	h.rt = rt
+	rt.SetMaxCallStackSize(maxCallStack)
+	h.textCodecs()
 	return rt
 }
 

@@ -80,6 +80,7 @@ type ResourcesQuery = *psql.ViewQuery[*Resource, ResourceSlice]
 
 // resourceR is where relationships are stored.
 type resourceR struct {
+	WorkspaceApps                 AppSlice             // apps.apps_workspace_id_fkey
 	ItemArtifacts                 ArtifactSlice        // artifacts.artifacts_item_id_fkey
 	WorkspaceArtifacts            ArtifactSlice        // artifacts.artifacts_workspace_id_fkey
 	ItemBlobs                     BlobSlice            // blobs.blobs_item_id_fkey
@@ -145,6 +146,7 @@ type resourceR struct {
 
 // resourceRLoaded tracks which relationships on Resource have been loaded.
 type resourceRLoaded struct {
+	WorkspaceApps                 bool // apps.apps_workspace_id_fkey
 	ItemArtifacts                 bool // artifacts.artifacts_item_id_fkey
 	WorkspaceArtifacts            bool // artifacts.artifacts_workspace_id_fkey
 	ItemBlobs                     bool // blobs.blobs_item_id_fkey
@@ -1407,6 +1409,29 @@ func (o ResourceSlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	o.copyMatchingRows(o2...)
 
 	return nil
+}
+
+// WorkspaceApps starts a query for related objects on apps
+func (o *Resource) WorkspaceApps(mods ...bob.Mod[*dialect.SelectQuery]) AppsQuery {
+	return Apps.Query(append(mods,
+		sm.Where(Apps.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceApps(mods ...bob.Mod[*dialect.SelectQuery]) AppsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Apps.Query(append(mods,
+		sm.Where(Apps.Columns.WorkspaceID.EQ(PKArgExpr)),
+	)...)
 }
 
 // ItemArtifacts starts a query for related objects on artifacts
@@ -2786,6 +2811,67 @@ func (os ResourceSlice) WorkspaceWorkflows(mods ...bob.Mod[*dialect.SelectQuery]
 	return Workflows.Query(append(mods,
 		sm.Where(Workflows.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
+}
+
+func insertResourceWorkspaceApps0(ctx context.Context, exec bob.Executor, apps1 []*AppSetter, resource0 *Resource) (AppSlice, error) {
+	for i := range apps1 {
+		apps1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Apps.Insert(bob.ToMods(apps1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceApps0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceApps0(ctx context.Context, exec bob.Executor, count int, apps1 AppSlice, resource0 *Resource) (AppSlice, error) {
+	setter := &AppSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := apps1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceApps0: %w", err)
+	}
+
+	return apps1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceApps(ctx context.Context, exec bob.Executor, related ...*AppSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	apps1, err := insertResourceWorkspaceApps0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceApps = append(resource0.R.WorkspaceApps, apps1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceApps(ctx context.Context, exec bob.Executor, related ...*App) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	apps1 := AppSlice(related)
+
+	_, err = attachResourceWorkspaceApps0(ctx, exec, len(related), apps1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceApps = append(resource0.R.WorkspaceApps, apps1...)
+
+	return nil
 }
 
 func insertResourceItemArtifacts0(ctx context.Context, exec bob.Executor, artifacts1 []*ArtifactSetter, resource0 *Resource) (ArtifactSlice, error) {
@@ -6211,6 +6297,20 @@ func buildResourceWhere[Q psql.Filterable](cols resourceColumns) resourceWhere[Q
 // R struct — so they cannot collide with column-based filter fields.
 type resourceWhereR[Q psql.Filterable] struct {
 	cols resourceColumns
+}
+
+// HasWorkspaceApps filters parents that have a matching WorkspaceApps using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Apps).
+func (w resourceWhereR[Q]) HasWorkspaceApps(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Apps.NameExpr()),
+		sm.Where(Apps.Columns.WorkspaceID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasItemArtifacts filters parents that have a matching ItemArtifacts using a

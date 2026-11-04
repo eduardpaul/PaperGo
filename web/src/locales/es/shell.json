@@ -1,5 +1,6 @@
 {
   "nav": {
+    "apps": "Aplicaciones",
     "archive": "Archivados",
     "home": "Inicio",
     "inbox": "Bandeja de entrada",
@@ -21,7 +22,8 @@
     "noMatchesSearch": "Sin resultados. Pulsa Intro en Buscar para buscar entre los elementos.",
     "openFile": "Abrir el archivo",
     "placeholder": "Busca o salta a…",
-    "title": "Buscar o saltar a"
+    "title": "Buscar o saltar a",
+    "apps": "Aplicaciones"
   },
   "account": {
     "administration": "Administración",

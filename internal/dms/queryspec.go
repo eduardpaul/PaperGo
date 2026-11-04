@@ -6,12 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -42,35 +42,12 @@ type QuerySpec struct {
 	Keyword    string `json:"keyword,omitempty"`
 }
 
-// QueryEnvelope is how much of each item a query returns: the full
-// resource, or a compact one of its identity, version and values.
-type QueryEnvelope string
-
-const (
-	EnvelopeFull    QueryEnvelope = "full"
-	EnvelopeCompact QueryEnvelope = "compact"
-)
-
-// compact reports whether e asks for compact items.
-func (e QueryEnvelope) compact() (bool, error) {
-	switch e {
-	case "", EnvelopeFull:
-		return false, nil
-	case EnvelopeCompact:
-		return true, nil
-	}
-	return false, invalid("envelope is full or compact")
-}
-
 type QueryRequest struct {
-	Select []string `json:"select,omitempty"`
-	// Envelope compact returns each item's id, workspace_id, kind, name,
-	// parent_id, content_type_id, version, values and keywords only.
-	Envelope QueryEnvelope `json:"envelope,omitempty"`
-	Query    QuerySpec     `json:"query"`
-	Surface  string        `json:"surface,omitempty"`
-	After    string        `json:"-"`
-	Limit    int           `json:"-"`
+	Select  []string  `json:"select,omitempty"`
+	Query   QuerySpec `json:"query"`
+	Surface string    `json:"surface,omitempty"`
+	After   string    `json:"-"`
+	Limit   int       `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
 	// TotalLimit stops counting there and reports total_capped when more
@@ -81,15 +58,17 @@ type QueryRequest struct {
 	rowACL bool
 	// itemsOnly leaves folders out (navigation views).
 	itemsOnly bool
-	// measures are the fields aggregates read of each row.
-	measures []string
+	// aggregation makes the query's rows those of these aggregates.
+	aggregation *aggregationSpec
+	// compact reads what compact items hold (QueryCompact).
+	compact bool
 }
 type QueryResult struct {
-	Data []*resources.Resource `json:"value"`
-	// Compact writes the items as CompactItem (QueryRequest.Envelope).
-	Compact    bool   `json:"-"`
-	NextCursor string `json:"-"`
-	Total      *int   `json:"total,omitempty"`
+	Data       []*resources.Resource `json:"value"`
+	NextCursor string                `json:"-"`
+	// selection is what the query selected of each item.
+	selection []string
+	Total     *int `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
 	// SearchCapped means the search text matched more entries than a query
@@ -114,8 +93,6 @@ type compiledQuery struct {
 	// searchCapped means the search text matched more entries than queries
 	// consider (searchMatchLimit).
 	searchCapped bool
-	// measures are the fields of QueryRequest.measures, in their order.
-	measures []content.Field
 }
 type queryCursor struct {
 	Fingerprint string            `json:"fingerprint"`
@@ -471,15 +448,11 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 	if err != nil {
 		return content.Plan{}, compiledQuery{}, err
 	}
-	var measures []content.Field
-	for _, key := range in.measures {
-		field, err := compiler.column(key)
-		if err != nil {
+	if in.aggregation != nil {
+		if plan.Aggregation, err = in.aggregation.resolve(compiler.column); err != nil {
 			return content.Plan{}, compiledQuery{}, err
 		}
-		measures = append(measures, field)
 	}
-	plan.Measures = measures
 	if in.Query.ParentID != "" {
 		parent, e := s.authorize(ctx, subject, in.Query.ParentID, "read")
 		if e != nil {
@@ -526,7 +499,7 @@ func (s *Service) collectionPlan(ctx context.Context, subject string, c *resourc
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.itemsOnly, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped, measures: measures}, nil
+	return plan, compiledQuery{fingerprint: hex.EncodeToString(sum[:]), projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}, nil
 }
 func cursorEncode(q compiledQuery, id string, value any) string {
 	values := []any{value}
@@ -646,15 +619,18 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	})
 }
 
+// QueryCompact is Query returning compact items.
+func (s *Service) QueryCompact(ctx context.Context, subject, containerID string, in QueryRequest) (CompactResult, error) {
+	in.compact = true
+	out, err := s.Query(ctx, subject, containerID, in)
+	return compactResult(out), err
+}
+
 // queryCompiled returns one page of q. A non-nil fields projects item values
 // to those keys (see overlayPage); nil returns complete values.
 func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
 	if in.TotalLimit < 0 || in.TotalLimit > 1_000_000 {
 		return QueryResult{}, invalid("total_limit must be between 1 and 1000000")
-	}
-	compact, e := in.Envelope.compact()
-	if e != nil {
-		return QueryResult{}, e
 	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
@@ -671,7 +647,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 		for i, r := range page {
 			ids[i], ranks[i] = r.ID, r.Rank
 		}
-		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, Compact: compact}
+		out := QueryResult{Data: []*resources.Resource{}, SearchCapped: q.searchCapped, selection: in.Select}
 		if len(ids) > limit {
 			out.NextCursor = cursorEncode(q, ids[limit-1], ranks[limit-1])
 			ids = ids[:limit]
@@ -691,7 +667,13 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 			for _, id := range ids {
 				out.Data = append(out.Data, lookup[id])
 			}
-			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data, fields); e != nil {
+			// A compact item holds no file unless the query selects it, so its
+			// blob is not looked up.
+			hydrate := t.overlayPage
+			if in.compact && !slices.Contains(in.Select, "$file_type") {
+				hydrate = t.overlaySurfaces
+			}
+			if _, e = hydrate(ctx, subject, in.Surface, out.Data, fields); e != nil {
 				return out, e
 			}
 		}
@@ -797,22 +779,11 @@ func groupValue(kind content.Kind, def *catalog.FieldDefinition, v any) (any, er
 		if !ok {
 			return v, nil
 		}
-		value := strconv.FormatInt(n, 10)
+		scale := 0
 		if def != nil && def.Type == catalog.FieldDecimal {
-			negative := n < 0
-			digits := strings.TrimPrefix(value, "-")
-			for len(digits) <= def.Scale {
-				digits = "0" + digits
-			}
-			if def.Scale > 0 {
-				digits = digits[:len(digits)-def.Scale] + "." + digits[len(digits)-def.Scale:]
-			}
-			if negative {
-				digits = "-" + digits
-			}
-			value = digits
+			scale = def.Scale
 		}
-		return value, nil
+		return decimalText(big.NewInt(n), scale, false), nil
 	case content.KindExact:
 		key, ok := v.(string)
 		if !ok {

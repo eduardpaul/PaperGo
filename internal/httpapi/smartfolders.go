@@ -44,8 +44,14 @@ func (a *API) registerSmartFolders(m *router) {
 	m.HandleFunc("POST /v1/smart-folders/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
 		return a.dms(r).QuerySmartFolder(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
+	m.HandleFunc("POST /v1/smart-folders/{id}/query/compact", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
+		return a.dms(r).QuerySmartFolderCompact(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("POST /v1/smart-folders/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
 		return a.dms(r).SmartFolderGroups(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
+	m.HandleFunc("POST /v1/smart-folders/{id}/query/aggregates", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderAggregateRequest, _ int) (any, error) {
+		return a.dms(r).QuerySmartFolderAggregates(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/smart-folders", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.dms(r).SmartFolders(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))

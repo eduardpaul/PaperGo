@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { collectionChildren, resourceQuery, smartFoldersQuery, workspacesQuery } from '@/api/queries';
+import { launcherQuery } from '@/features/apps/api';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { downloadContent } from '@/features/documents/transfer';
@@ -23,6 +24,7 @@ const jumps = [
   { label: 'nav.home', to: '/' },
   { label: 'nav.inbox', to: '/inbox' },
   { label: 'nav.search', to: '/search' },
+  { label: 'nav.apps', to: '/launcher' },
   { label: 'nav.workspaces', to: '/w' },
   { label: 'nav.settings', to: '/settings' },
 ] as const;
@@ -62,6 +64,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const searchAvailable = useSearchAvailable();
   const workspaces = useQuery(workspacesQuery);
   const folders = useQuery(smartFoldersQuery);
+  const apps = useQuery(launcherQuery);
   const [workspaceId, setWorkspaceId] = useState<string>();
   const lists = useQuery({
     queryKey: ['resources', workspaceId, 'collections'],
@@ -114,6 +117,16 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             </CommandItem>
           ))}
         </CommandGroup>
+        {!!apps.data?.length && (
+          <CommandGroup heading={t('palette.apps')}>
+            {apps.data.map((app) => (
+              <CommandItem key={app.id} onSelect={() => go(`/w/${app.workspace_id}/a/${app.id}`)}>
+                <span className="flex-1 truncate">{app.name}</span>
+                <span className="text-xs text-muted">{app.workspace_name}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
         <CommandGroup heading={t('nav.workspaces')}>
           {workspaces.data
             ?.filter((workspace) => !workspace.personal_owner_id)

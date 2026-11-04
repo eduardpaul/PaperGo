@@ -3404,6 +3404,153 @@
         "description": " Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both."
       }
     },
+    "/v1/resources/{id}/query/compact": {
+      "post": {
+        "summary": "Query Compact",
+        "operationId": "queryCompact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          }
+        },
+        "description": "The items a collection query matches as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both."
+      }
+    },
     "/v1/resources/{id}/query/groups": {
       "post": {
         "summary": "Query Groups",
@@ -3554,7 +3701,7 @@
       "post": {
         "summary": "Query Aggregates",
         "operationId": "queryAggregates",
-        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group with a null key, or in groups of query.group_by. A date or date-time group_by groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); a group's key is then the first day of its period, YYYY-MM-DD. Groups come in key order, items without a key last; query.sort is ignored. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. Each matching item is read once; at most 10000 groups.",
+        "description": "Figures of the items a collection query matches, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction; query.group_by and query.sort are refused. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, and one whose groups changed since the first page is refused with 409 figures_changed, so a reader starts again rather than repeat or skip groups. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or query.search matches more than 10000 entries, so that figures never cover part of the items.",
         "parameters": [
           {
             "name": "id",
@@ -3563,6 +3710,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -4697,6 +4862,156 @@
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
+    "/v1/views/{id}/query/compact": {
+      "post": {
+        "summary": "Query View Compact",
+        "operationId": "queryViewCompact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewQueryRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "The items a saved view lists as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
     "/v1/views/{id}/query/groups": {
       "post": {
         "summary": "Query View Groups",
@@ -4845,6 +5160,153 @@
           "item.read"
         ],
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
+    "/v1/views/{id}/query/aggregates": {
+      "post": {
+        "summary": "Query View Aggregates",
+        "operationId": "queryViewAggregates",
+        "description": "Figures of the items a saved view lists, by its filters whatever its grouping and sort, so they follow the view when it changes, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, and one whose groups changed since the first page is refused with 409 figures_changed, so a reader starts again rather than repeat or skip groups. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match, there are more than 100000 groups, the group of items without a key included, or the view's search matches more than 10000 entries, so that figures never cover part of the items.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewAggregateRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/v1/views/{id}/navigation": {
@@ -5716,6 +6178,72 @@
         ]
       }
     },
+    "/v1/smart-folders/{id}/query/compact": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "operationId": "querySmartFolderCompact",
+        "summary": "Query Smart Folder Compact",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactSmartFolderResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "The items of a smart folder as compact items. Each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords, its archived, archived_at and archived_by when archived, and the built-in columns select names, as the resource's created_at, created_by, updated_at, updated_by and file: under half the size of a full item, for clients that read many items. Items, order and cursors are those of the query. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
+      }
+    },
     "/v1/smart-folders/{id}/query/groups": {
       "parameters": [
         {
@@ -5760,6 +6288,72 @@
           "item.read"
         ],
         "description": " Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/query/aggregates": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "operationId": "querySmartFolderAggregates",
+        "summary": "Query Smart Folder Aggregates",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregateResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderAggregateRequest"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "item.read"
+        ],
+        "description": "Figures of the items at a path of a smart folder, folders aside, across its collections, as the caller may read them: count, sum, avg, min and max of indexed scalar fields, for all of them as one group, which exists even when nothing matches, or in groups by up to four fields. A date or date-time field in groups groups by interval (day, week from Monday, month or year), date-times in time_zone (UTC by default); that key is then the first day of its period, YYYY-MM-DD. Groups come in the order of sort, then of their keys, missing values last in either direction. A page holds $top groups and @odata.nextLink continues it; each page works the figures out again, and one whose groups changed since the first page is refused with 409 figures_changed, so a reader starts again rather than repeat or skip groups. Counts are numbers. Sums, minimums and maximums of numeric fields are exact strings in the field's form; averages are exact strings rounded half to even to four digits beyond an integer or decimal field's scale, ten for number and currency fields. Minimums and maximums of dates and date-times are as items show them. A figure of a group whose items hold no value is null. The database reads each matching item once. A request is refused when more than 1000000 items match or there are more than 100000 groups, the group of items without a key included, so that figures never cover part of the items. Fields are those every collection of the folder that has them holds indexed with one type and scale; other collections hold no values of them. Required module scopes: item.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "in": "query",
@@ -6917,7 +7511,7 @@
       "post": {
         "summary": "Start Workflow",
         "operationId": "startWorkflow",
-        "description": "Accept a manual run for a published workflow with manual_enabled and a manual entry point. Automatic processing may be off. Item starts require write access to every item; standalone starts require workspace manage. Accepted invocations pin their definition version and are queued after commit. Automatic provider selection never suppresses a targeted manual invocation. With Idempotency-Key, a retry by the same caller with the same body returns the runs the first start made, while its events are kept (RUN_RETENTION); the same key with another body is 409 idempotency_conflict. Whoever starts a run can read it with GET /v1/workflow-runs/{id}, and wait for it there.",
+        "description": "Accept a manual run for a published workflow with manual_enabled and a manual entry point. Automatic processing may be off. The manual trigger's access is the permission a starter needs: on every item for item starts (default write), on the workspace for standalone starts (default manage). Accepted invocations pin their definition version and are queued after commit. Automatic provider selection never suppresses a targeted manual invocation. With Idempotency-Key, a retry by the same caller with the same body returns the runs the first start made, while its events are kept (RUN_RETENTION); the same key with another body is 409 idempotency_conflict. Whoever starts a run can read it with GET /v1/workflow-runs/{id}, and wait for it there.",
         "parameters": [
           {
             "name": "id",
@@ -15886,7 +16480,7 @@
       "post": {
         "summary": "Create Task",
         "operationId": "createTask",
-        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. Needs the item.write scope.",
+        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run. A unique task is refused with 409 task_open while a task of the workspace with its key is open; the problem's open_task_id names it. Needs the item.write scope.",
         "parameters": [
           {
             "name": "id",
@@ -16182,7 +16776,7 @@
       "get": {
         "summary": "Get Task",
         "operationId": "getTask",
-        "description": "A task with its responses, for its assignees, its creator and the workspace's owners.",
+        "description": "A task with its responses, for its assignees, its creator and the workspace's owners. Its ETag is the version that PATCH takes in If-Match.",
         "parameters": [
           {
             "name": "id",
@@ -16275,6 +16869,167 @@
             }
           },
           "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Task",
+        "operationId": "updateTask",
+        "description": "Changes an open task's title, description, priority, due date or form prefill, for the workspace's owners and the creator of a person's task, who may also reassign it. The form, outcomes, key, kind and completion stay, since the run waiting on the task and the answers so far depend on them. Assignees are not told again. A change raises task.updated with the fields that changed; a request that changes nothing keeps the version. A task that is no longer open is 409; a stale If-Match is 412. Needs the item.write scope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Required current quoted numeric ETag (the task's version); weak W/\"n\" is accepted. Stale versions return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "Request failed",
             "content": {
               "application/problem+json": {
@@ -23687,6 +24442,363 @@
           "list.manage"
         ]
       }
+    },
+    "/v1/workspaces/{id}/apps": {
+      "get": {
+        "summary": "List Apps",
+        "operationId": "listApps",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The workspace's apps the caller may see, by name: published apps for the workspace's readers, drafts too for those who may write apps (manage access to the workspace and app.manage). Lists leave out the source.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create App",
+        "operationId": "createApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Adds an app to the workspace, as a draft unless state says published. The source is compiled and its parameters form read; a source that does not compile, imports another module or declares an invalid form is 422 with the reason. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps": {
+      "get": {
+        "summary": "List Launcher Apps",
+        "operationId": "listLauncherApps",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The apps the caller may see in every workspace, by name, each with workspace_name, for the launcher: published apps of the workspaces the caller reads, and drafts too where the caller may write apps. Lists leave out the source.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/apps/{id}": {
+      "get": {
+        "summary": "Get App",
+        "operationId": "getApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "One app the caller may see, with its source for those who may write it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update App",
+        "operationId": "updateApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Replaces an app's name, description, state, parameters and source at the version If-Match names. A source that changes becomes the next version; the key never changes. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      },
+      "delete": {
+        "summary": "Delete App",
+        "operationId": "deleteApp",
+        "tags": [
+          "Apps"
+        ],
+        "description": "Deletes an app and its versions at the version If-Match names. Needs manage access to the workspace and app.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps/{id}/versions": {
+      "get": {
+        "summary": "List App Versions",
+        "operationId": "listAppVersions",
+        "tags": [
+          "Apps"
+        ],
+        "description": "An app's versions with their sources, newest first, for those who may write it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppVersionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "app.manage"
+        ]
+      }
+    },
+    "/v1/apps/{id}/bundle": {
+      "get": {
+        "summary": "Get App Bundle",
+        "operationId": "getAppBundle",
+        "tags": [
+          "Apps"
+        ],
+        "description": "The compiled code of the app's current version, for the app page, which runs it in a sandboxed frame; the code never runs in PaperGo's own page. Its ETag is the code's hash; If-None-Match answers 304. PaperGo-App-Version names the version.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The code",
+            "headers": {
+              "ETag": {
+                "description": "Hash of the code",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "PaperGo-App-Version": {
+                "description": "The version's number",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -24092,6 +25204,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The supplied source id of a move-selection name conflict."
+          },
+          "open_task_id": {
+            "type": "string",
+            "description": "On a task_open conflict, the open task with the key a unique task asked for."
           }
         },
         "required": [
@@ -24308,6 +25424,208 @@
           "kind",
           "name",
           "version"
+        ]
+      },
+      "CompactResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "folder",
+              "item"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "description": "Items and folders: a list type of the collection. Writes may name the catalog type it copies instead. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optimistic resource lock version, independent of content revision_number and blob version."
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
+          },
+          "archived": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "Present and true when the item is archived, with archived_at and archived_by."
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "archived_by": {
+            "type": "string",
+            "readOnly": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present when select names $created_at."
+          },
+          "created_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present when select names $created_by."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present when select names $modified_at."
+          },
+          "updated_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present when select names $modified_by."
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileSummary",
+            "description": "Present when select names $file_type."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "kind",
+          "name",
+          "version",
+          "values"
+        ],
+        "additionalProperties": false,
+        "description": "An item as a compact query returns it: what tells it apart and what it holds, with the names a Resource gives those fields."
+      },
+      "CompactQueryResult": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompactResource"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "More entries match than total_limit; total is the limit."
+          },
+          "search_capped": {
+            "type": "boolean",
+            "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ],
+        "additionalProperties": false
+      },
+      "CompactSmartFolderEntry": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/CompactResource"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "collection_id",
+          "collection_name",
+          "item",
+          "collection_kind"
+        ]
+      },
+      "CompactSmartFolderResult": {
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompactSmartFolderEntry"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "Preview counts stop at 10,000. True means total is a lower bound."
+          }
+        },
+        "description": "Authorized items sorted by name, created or modified time, with ID ties in the same direction. Default is modified descending. Cursors bind folder version, caller, surface, path, ordering, schemas and resolved references.",
+        "type": "object",
+        "required": [
+          "value",
+          "@odata.nextLink"
         ]
       },
       "CreateResource": {
@@ -25541,16 +26859,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
-          },
-          "envelope": {
-            "type": "string",
-            "enum": [
-              "full",
-              "compact"
-            ],
-            "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           }
         },
         "required": [],
@@ -25587,16 +26896,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
-          },
-          "envelope": {
-            "type": "string",
-            "enum": [
-              "full",
-              "compact"
-            ],
-            "default": "full",
-            "description": "compact returns each item's id, workspace_id, kind, name, parent_id, content_type_id, version, values (as select chooses them) and keywords only: under half the size of a full item, for reading many items. full returns the whole resource."
+            "description": "Selected custom fields and optional $keywords. System columns are accepted: a full item always holds them, a compact one holds those selected. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           },
           "selected": {
             "type": "array",
@@ -27421,7 +28721,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
@@ -27454,6 +28754,15 @@
               "selection"
             ],
             "description": "Manual item association: per_item requires exactly one item; selection requires 1–100 ordered items. collection_id optionally scopes either mode. A collection without selection defaults to per_item; a manual trigger with neither is standalone and rejects item_ids."
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "manage"
+            ],
+            "description": "On manual triggers: the permission a person needs to start a run by hand, on the workspace for a standalone run or on each chosen item. Default manage for a standalone run and write on items. The run still acts as its author."
           },
           "terms": {
             "type": "array",
@@ -30421,6 +31730,10 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
           },
+          "unique": {
+            "type": "boolean",
+            "description": "Creates the task only when no open task of the workspace has its key, which it then needs. Otherwise the request fails with 409 task_open, and the problem's open_task_id names the open task."
+          },
           "title": {
             "type": "string",
             "minLength": 1,
@@ -30496,6 +31809,50 @@
           "title"
         ],
         "additionalProperties": false
+      },
+      "TaskUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000,
+            "description": "Empty or null clears it."
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "null clears it."
+          },
+          "values": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true,
+            "description": "Replaces the prefill of the task's form, checked as on creation; null clears it."
+          }
+        },
+        "description": "What PATCH /v1/tasks/{id} changes. Each field given replaces its value; the form, outcomes, key, kind, completion and assignees stay."
       },
       "TaskResponseInput": {
         "type": "object",
@@ -34307,7 +35664,7 @@
           "as": {
             "type": "string",
             "pattern": "^[a-z0-9_]{1,64}$",
-            "description": "The figure's name in values; op_field by default, without the $ of a built-in field."
+            "description": "The figure's name in values; op_field by default, without the $ of a built-in field, which this limit does not apply to."
           }
         },
         "required": [
@@ -34331,19 +35688,13 @@
             ],
             "default": "auto"
           },
-          "interval": {
-            "type": "string",
-            "enum": [
-              "day",
-              "week",
-              "month",
-              "year"
-            ],
-            "description": "Groups a date or date-time query.group_by by the period holding its value."
-          },
-          "time_zone": {
-            "type": "string",
-            "description": "With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone."
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
           },
           "aggregates": {
             "type": "array",
@@ -34352,18 +35703,180 @@
             "items": {
               "$ref": "#/components/schemas/Aggregate"
             }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
           }
         },
         "required": [
           "aggregates"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "ViewAggregateRequest": {
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NavigationSelection"
+            },
+            "description": "Navigation views only, required there: lists the items at the terms opened in the view's fields, combined as the view's settings.match says."
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
+          },
+          "aggregates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Aggregate"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
+          }
+        },
+        "required": [
+          "aggregates"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "SmartFolderAggregateRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "maxItems": 3,
+            "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 65536
+            }
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroupBy"
+            },
+            "description": "The fields a group's key holds, one group per combination of their values; without any, all items are one group."
+          },
+          "aggregates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Aggregate"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Orders the groups by a figure's name, $count or a field of groups, as for the highest totals first. Their keys order groups that tie."
+          }
+        },
+        "required": [
+          "aggregates"
+        ],
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+      },
+      "AggregateGroupBy": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "An indexed scalar field, or a built-in one such as $created_at."
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "description": "Groups a date or date-time field by the period holding its value: day, week from Monday, month or year."
+          },
+          "time_zone": {
+            "type": "string",
+            "description": "With interval: the IANA time zone date-times are grouped in, such as Europe/Madrid. UTC by default; dates have no time zone."
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false
+      },
+      "AggregateKey": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "description": "The value of the group's field. With an interval, the first day of the period as YYYY-MM-DD. Otherwise integers, decimals, numbers and currency as exact strings, dates and date-times as items show them, booleans as booleans, and text, choice, person and term values as they are stored. Null for the items without one."
+          },
+          "label": {
+            "type": "string",
+            "description": "The name of the term of a term or keywords field, when the caller can read the workspace's taxonomy."
+          }
+        },
+        "required": [
+          "value"
         ],
         "additionalProperties": false
       },
       "AggregateGroup": {
         "type": "object",
         "properties": {
-          "key": {
-            "description": "The group's value of query.group_by: with an interval, the first day of the period as YYYY-MM-DD; otherwise as group queries show it. Null for the items without one, and for the single group of a query without group_by."
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregateKey"
+            },
+            "description": "The group's key: one entry for each of the request's groups, in their order; empty without groups."
           },
           "count": {
             "type": "integer",
@@ -34382,7 +35895,7 @@
           }
         },
         "required": [
-          "key",
+          "keys",
           "count",
           "values"
         ],
@@ -34397,15 +35910,212 @@
               "$ref": "#/components/schemas/AggregateGroup"
             }
           },
-          "search_capped": {
-            "type": "boolean",
-            "description": "The search text matched more than 10,000 entries; the figures cover only the first 10,000 matches. Narrow the search."
+          "total": {
+            "type": "integer",
+            "description": "The groups of every page."
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "value"
+          "value",
+          "total",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
+      },
+      "AppState": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "published"
+        ],
+        "description": "A draft is seen by those who write apps; a published app by the workspace's readers."
+      },
+      "App": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "key",
+          "name",
+          "description",
+          "state",
+          "parameters",
+          "current_version",
+          "can_write",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable name in the workspace, from the name unless given on creation; it never changes."
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AppState"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The values of the app's parameters form, which the app reads as ctx.params."
+          },
+          "parameters_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The parameters form the current version's source declares (docs/workflows.md#forms). Lists of apps leave it out."
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "workspace_name": {
+            "type": "string",
+            "description": "The app's workspace's name; set in the launcher's list."
+          },
+          "source": {
+            "type": "string",
+            "description": "The current version's TSX source, shown to those who may write apps."
+          },
+          "can_write": {
+            "type": "boolean",
+            "description": "Whether the caller may change and delete the app."
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "description": "ETag version."
+          }
+        }
+      },
+      "AppList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/App"
+            }
+          }
+        }
+      },
+      "AppSave": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "maxLength": 100,
+            "description": "On creation only; from the name when left out."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576,
+            "description": "One TSX file whose default export is app({ render, parameters }); it imports only react, react/jsx-runtime and @papergo/app."
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Values of the parameters form, checked against it as the caller: types and picks always, required fields once the app is published."
+          },
+          "state": {
+            "$ref": "#/components/schemas/AppState"
+          }
+        },
+        "description": "An app as it is created or replaced."
+      },
+      "AppVersion": {
+        "type": "object",
+        "required": [
+          "number",
+          "source",
+          "parameters_schema",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "parameters_schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AppVersionList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppVersion"
+            }
+          }
+        }
       }
     },
     "parameters": {

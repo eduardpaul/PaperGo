@@ -122,6 +122,28 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 	if event.kind != "item" || !strings.Contains(event.data, item.ID) {
 		t.Fatal(event)
 	}
+	// A removal of an item the stream showed says where the item was, as it
+	// can no longer send the item.
+	edited, err := s.Get(ctx, "alice", item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Delete(ctx, "alice", item.ID, edited.Version, dms.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		event = readFrame(t, replayReader)
+		if event.kind == "item" {
+			break
+		}
+	}
+	var removal map[string]any
+	if err = json.Unmarshal([]byte(event.data), &removal); err != nil {
+		t.Fatal(err)
+	}
+	if removal["id"] != item.ID || removal["workspace_id"] != w.ID || removal["container_id"] != l.ID || removal["@removed"] == nil {
+		t.Fatal("a removal frame", event.data)
+	}
 	if err = s.Directory().RevokeAccessToken(ctx, "alice", token.Token.ID); err != nil {
 		t.Fatal(err)
 	}

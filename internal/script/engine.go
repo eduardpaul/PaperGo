@@ -251,10 +251,36 @@ func (h *host) settle(value goja.Value) error {
 // manifestSlice bounds the JavaScript a manifest evaluation runs.
 const manifestSlice = time.Second
 
+// evaluate runs programs in order in a runtime of their own, then read, and
+// returns read's value as text. The code runs under the call stack limit of a
+// run; running longer than budget stops it with tooLong. A workflow's code
+// gets the workflow host, which refuses requests, waits and sleeps here;
+// other code gets only the language and text codecs.
+func evaluate(ctx context.Context, budget time.Duration, tooLong error, workflow bool, programs []*goja.Program, read func(*goja.Runtime) (goja.Value, error)) (string, error) {
+	h := &host{ctx: ctx, manifest: true}
+	rt := h.bare()
+	if workflow {
+		rt = h.runtime()
+	}
+	h.watch = newWatchdog(budget, func() { rt.Interrupt(tooLong) })
+	defer h.watch.stop()
+	stopCancel := context.AfterFunc(ctx, func() { rt.Interrupt(ctx.Err()) })
+	defer stopCancel()
+	for _, program := range programs {
+		if _, err := rt.RunProgram(program); err != nil {
+			return "", errors.New(failure(err))
+		}
+	}
+	value, err := read(rt)
+	if err != nil {
+		return "", errors.New(failure(err))
+	}
+	return value.String(), nil
+}
+
 // Manifest evaluates a script's export with params and returns what its
 // workflow() declares: triggers, condition, input_schema, output_schema and
-// concurrency, as JSON. The run function is not called, and the script may
-// make no requests, waits or sleeps.
+// concurrency, as JSON. The run function is not called.
 func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[string]any) (json.RawMessage, error) {
 	sdkCode, err := sdkProgram()
 	if err != nil {
@@ -268,25 +294,46 @@ func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[str
 	if err != nil {
 		return nil, err
 	}
-	h := &host{ctx: ctx, manifest: true}
-	rt := h.runtime()
-	h.watch = newWatchdog(manifestSlice, func() { rt.Interrupt(errSlice) })
-	defer h.watch.stop()
-	if _, err = rt.RunProgram(sdkCode); err != nil {
+	out, err := evaluate(ctx, manifestSlice, errSlice, true, []*goja.Program{sdkCode, program}, func(rt *goja.Runtime) (goja.Value, error) {
+		manifest, ok := goja.AssertFunction(rt.Get("__papergoManifest"))
+		if !ok {
+			return nil, errors.New("the script has no workflow entry point")
+		}
+		return manifest(goja.Undefined(), rt.ToValue(string(raw)))
+	})
+	if err != nil {
 		return nil, err
 	}
-	if _, err = rt.RunProgram(program); err != nil {
-		return nil, errors.New(failure(err))
+	return json.RawMessage(out), nil
+}
+
+// Declarations is code to run once for what it declares as it loads: Prelude
+// stands for what Code imports, and Read is an expression for the text wanted.
+type Declarations struct {
+	Prelude, Code, Read string
+	// Budget bounds the JavaScript, and TooLong is the error past it.
+	Budget  time.Duration
+	TooLong string
+}
+
+// Declare runs code for what it declares as it loads, as Manifest does for a
+// workflow, but as a browser runs a classic script: in sloppy mode unless the
+// code asks for strict, and without the workflow host. An error that does not
+// come from ctx is the code's own.
+func Declare(ctx context.Context, in Declarations) (string, error) {
+	programs := make([]*goja.Program, 2)
+	for i, code := range []string{in.Prelude, in.Code} {
+		program, err := goja.Compile("declarations.js", code, false)
+		if err != nil {
+			return "", err
+		}
+		programs[i] = program
 	}
-	manifest, ok := goja.AssertFunction(rt.Get("__papergoManifest"))
-	if !ok {
-		return nil, errors.New("the script has no workflow entry point")
+	out, err := evaluate(ctx, in.Budget, errors.New(in.TooLong), false, programs, func(rt *goja.Runtime) (goja.Value, error) { return rt.RunString(in.Read) })
+	if ctx.Err() != nil {
+		return "", ctx.Err()
 	}
-	value, err := manifest(goja.Undefined(), rt.ToValue(string(raw)))
-	if err != nil {
-		return nil, errors.New(failure(err))
-	}
-	return json.RawMessage(value.String()), nil
+	return out, err
 }
 
 func (h *host) outcome(value goja.Value, err error) (Outcome, error) {

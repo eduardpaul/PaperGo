@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, Plus, Search } from 'lucide-react';
+import { AppWindow, Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, LayoutGrid, Plus, Search } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
 import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
 import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
+import { appsQuery } from '@/features/apps/api';
 import { SmartFolderContextMenu } from '@/features/smart-folders/context-menu';
 import { SmartFolderDialog } from '@/features/smart-folders/editor-dialog';
 import { useHasScope } from '@/features/admin/common';
@@ -23,6 +24,7 @@ const navigation = [
   { to: '/', label: 'nav.home', icon: House, exact: true },
   { to: '/inbox', label: 'nav.inbox', icon: Inbox, exact: false },
   { to: '/tasks', label: 'nav.tasks', icon: ClipboardCheck, exact: false },
+  { to: '/launcher', label: 'nav.apps', icon: LayoutGrid, exact: false },
   { to: '/search', label: 'nav.search', icon: Search, exact: false },
   { to: '/archive', label: 'nav.archive', icon: Archive, exact: false },
 ] as const;
@@ -169,6 +171,26 @@ function WorkspaceLists({ workspaceId, onNavigate }: { workspaceId: string; onNa
           </Link></PlaceContextMenu>
         </li>
       ))}
+      <WorkspaceApps workspaceId={workspaceId} onNavigate={onNavigate} />
     </ul>
+  );
+}
+
+/** The workspace's published apps, after its lists. */
+function WorkspaceApps({ workspaceId, onNavigate }: { workspaceId: string; onNavigate?: () => void }) {
+  const { data } = useQuery(appsQuery(workspaceId));
+  return (
+    <>
+      {data
+        ?.filter((app) => app.state === 'published')
+        .map((app) => (
+          <li key={app.id}>
+            <Link to="/w/$workspaceId/a/$appId" params={{ workspaceId, appId: app.id }} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }}>
+              <AppWindow />
+              <span className="truncate">{app.name}</span>
+            </Link>
+          </li>
+        ))}
+    </>
   );
 }

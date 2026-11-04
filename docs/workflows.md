@@ -147,7 +147,7 @@ const checked = await Promise.all(invoices.map((invoice) => ctx.call<{ total: nu
 
 - **Calls made together are batched.** Calls a script starts before it next waits go out as one request per workflow and 500 calls, and their runs are waited for together, 64 operations per wait step. Calling a workflow on 1,000 items costs the caller two requests and 16 short steps. The server checks a request as a whole, so a call it refuses, such as one on an item the author cannot write, fails every call sent with it.
 - **The trigger** takes `collection_id`, which then requires every call to name an item of that collection; without it a call names any item of the workspace, or none. `input_schema` is the form of a call's input, with defaults applied and values checked as for a manual start. `disabled: true` stops calls. Calls need the workflow published; `manual_enabled` and `automatic_enabled` do not apply.
-- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does. A called run acts as its own version's author.
+- **Who may call.** The calling run's author needs write access to each item, or workspace manage for a call on no item, and the `item.write` scope, as a manual start does by default. A called run acts as its own version's author.
 - **The called run** sees `ctx.trigger` as `{ kind: "call", input, parent_run_id }` and its input as `run(ctx, input)`'s second argument. It carries no item snapshot: it reads its item through the API. Its run shows the caller as `parent_run_id`, and run lists filter called runs with `origin=call`.
 - **It belongs to the caller.** Cancelling the calling run cancels the runs it called that are still active; a caller can wait for them even when another author wrote the called workflow. A called run that fails or is cancelled throws an `OperationError` in the caller; use `Promise.allSettled` to go on with the others.
 - **Retrying a caller.** [Retrying](#runs) a caller that failed also retries the runs it called that failed, all the way down, and its replay receives their retries in their place: fix what made them fail, such as an item's values, and retry the caller. Runs it called that succeeded replay what they returned, so nothing they did happens twice, and a retry can wait for runs an earlier attempt called. Cancelled runs are not retried.
@@ -243,7 +243,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `term.moved` | a term moves under another parent, or a keyword is promoted into another set | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
-| `task.created`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, completed or cancelled | the task's item, or none |
+| `task.created`, `task.updated`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, updated, completed or cancelled | the task's item, or none |
 | `wf.{key}.completed`, `wf.{key}.failed` | a run of workflow `key` ends | that run's item |
 | `role.{role}.completed`, `role.{role}.failed` | a run of any workflow filling the [role](#roles) ends, with the same data as its `wf.{key}` event | that run's item |
 
@@ -263,11 +263,12 @@ Fields of a trigger:
   - Occurrences missed while PaperGo was down start once.
   - A change to a workflow never starts runs for times already past.
 - Manual triggers expose **Item association** in the editor:
-  - **None (Standalone)** has neither `collection_id` nor `selection`, requires workspace manage access, and rejects selected items.
+  - **None (Standalone)** has neither `collection_id` nor `selection`, requires workspace manage access by default, and rejects selected items.
   - **Single Item** uses `selection: "per_item"` and requires exactly one item.
   - **Multiple Items** uses `selection: "selection"` and starts one run for 1–100 ordered items, which the script reads as `ctx.run.items`.
   - Single and multiple modes can target any collection in the workspace or a specific `collection_id`. A collection without an explicit selection uses single-item mode.
   - A manual workflow can declare `input_schema` for its launch form (see [Forms](#forms)).
+  - `access` says who may start runs by hand: the permission a person needs on the workspace for a standalone run, or on each chosen item. It is `read` (visitors too), `write` (members) or `manage` (owners). By default a standalone run needs `manage` and a run on items `write`. A run acts as its author whoever starts it, so `access: "write"` lets members run a standalone workflow that does what only its author may. Whoever starts a run can read its status and result. People also need the `item.write` scope.
 
 The event that started a run is `ctx.run.event`:
 
@@ -293,7 +294,7 @@ The `data` for each event type:
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
-- `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`; `task.cancelled` adds `completed_by`, who cancelled it, and `reason` when one was given
+- `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.updated` adds `changed`, the fields that changed; `task.completed` adds `outcome` and `completed_by`; `task.cancelled` adds `completed_by`, who cancelled it, and `reason` when one was given
 - `wf.*` and `role.*`: `run_id`, `workflow_id` and `status`; `failed` adds `error`, and `completed` adds the run's [`outputs`](#outputs): what its script returned
 
 Only items raise item events; folders raise folder events.
@@ -478,6 +479,21 @@ const approved = legal.outcome === "approved" && finance.outcome === "approved";
     }
   }
   ```
+- **Asking once.** `unique: true` creates the task only when no open task of the workspace has its `key`, which a unique task needs. While one is open, the request fails with 409 and the problem code `task_open`, whose `open_task_id` names the open task, and nothing is created; once it is answered or cancelled, the next unique task with the key is created. Tasks of a workspace are created one at a time, so two runs asking at once never both get one. A workflow that asks on a schedule, or on every change, asks once this way. A run that finds its task already open ends, or [updates](#tasks) the open task with what it knows now:
+
+  ```ts
+  try {
+    await ctx.ask({ key: "diesel_refill", unique: true, title: `Fill the diesel barrel: ${liters} L left` });
+  } catch (e) {
+    const problem = e as { code?: string; openTaskId?: string };
+    if (problem.code !== "task_open") throw e;
+    const open = ctx.api.v1.tasks.byId(problem.openTaskId!);
+    const task = await open.get();
+    await open.patch({ title: `Fill the diesel barrel: ${liters} L left` }, { headers: { "If-Match": `"${task!.version}"` } });
+    return "updated the open task";
+  }
+  ```
+- **Updating.** `PATCH /v1/tasks/{id}` changes an open task's `title`, `description`, `priority`, `due_at` and `values` (its form's prefill, checked as on creation), at the version its ETag names in `If-Match`; `null` clears `due_at` and `values`. The form, outcomes, key, kind and completion stay as the task was created, since the run waiting on it and the answers so far depend on them, and `reassign` changes the assignees. The people who may reassign a task may update it (`can_reassign`). Assignees are not told again, and their notifications keep the text they were sent with. A change raises `task.updated` with the fields that changed; a request that changes nothing keeps the version.
 - **Reassigning.** When an assignee can no longer answer, for example after leaving, a workspace owner (or the creator of a person's task) replaces the open task's assignees. Answers of entries that stay count; with `all`, the task completes once every entry left has answered, and a waiting run continues.
 - **Form.** `input_schema` is a [form](#forms), frozen on the task when it is created. Its pickers must point at the workspace. `values` prefill it and must be valid answers, picks included. An answer sends the form's values unless its outcome skips the form; the server applies defaults and checks them, and pickers are checked against the person who answers.
 - **Review.** `review` shows a staged file of the run, an [artifact](documents.md#artifacts-and-staged-files) it staged, beside the form: `file.preview` shows a staged document, such as a PDF. An answer whose outcome does not `allow_stale` fails with 409 when the staged file was made from a file that is no longer current.
@@ -647,6 +663,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 | GET | /v1/items/{id}/tasks | The tasks about an item the caller may see |
 | GET | /v1/tasks/{id} | A task with its answers, `can_respond` and `answered` |
 | POST | /v1/tasks/{id}/responses | Answer: `{"outcome", "comment", "input"}` |
+| PATCH | /v1/tasks/{id} | Change an open task's `title`, `description`, `priority`, `due_at` or `values`, with `If-Match` (owners, and the creator of a person's task) |
 | POST | /v1/tasks/{id}/reassign | Replace an open task's `assignees` (owners, and the creator of a person's task) |
 | POST | /v1/tasks/{id}/cancel | Cancel an open task, with an optional `{"reason"}` |
 
@@ -654,7 +671,7 @@ Audit events and publication snapshots are a separate product record. Run retent
 
 Another application runs a manual workflow through the API like a person does, and reads what it returned:
 
-1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage.
+1. Create an [integration access token](identity.md#integration-access-tokens) with the `item.read` and `item.write` scopes: starting a run needs `item.write`, reading it read access to the workspace. The run itself acts as its workflow's author, whatever the token may do. Add its service identity to the workspace: as a member to run workflows on items it may write, as an owner to run standalone workflows, which need workspace manage unless their manual trigger's `access` says otherwise.
 2. Find the workflow's ID with `GET /v1/workspaces/{id}/workflows`. It must be published, allow manual runs and have a `manual` trigger; its `input_schema` is the request's `inputs`.
 3. Start it, with an `Idempotency-Key` so a retry after a timeout starts nothing twice, and wait for the result:
 

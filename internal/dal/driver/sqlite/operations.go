@@ -340,32 +340,35 @@ func (q Queries) ReadyWorkspaces(ctx context.Context, kinds []string, now time.T
 
 func (q Queries) NextAttempt(ctx context.Context, kinds []string, now time.Time) (*time.Time, error) {
 	c := models.Operations.Columns
-	pending := []dialect.Expression{c.Status.EQ(sqlite.Arg(string(operations.StatusPending))), c.Kind.In(sqlite.Arg(anys(kinds)...)), c.ExecutionID.EQ(sqlite.Arg(""))}
+	// Each kind is one seek of a partial index, whose terms the literals
+	// match: workers wake on every accepted operation, and a walk past a
+	// backlog of other kinds would grow with it.
 	var next *time.Time
-	earliest := func(where []dialect.Expression, order any, at func(*models.Operation) time.Time) error {
-		query := models.Operations.Query(sm.OrderBy(order), sm.Limit(1))
+	earliest := func(index, kind string, column any, where ...dialect.Expression) error {
+		query := sqlite.Select(sm.Columns(column), sm.From(models.Operations.Name()).IndexedBy(index), sm.OrderBy(column), sm.Limit(1),
+			sm.Where(sqlite.Raw(`"operations"."status" = 'pending' AND "operations"."execution_id" = ''`)), sm.Where(c.Kind.EQ(sqlite.Arg(kind))))
 		for _, w := range where {
 			query.Apply(sm.Where(w))
 		}
-		row, err := query.One(ctx, q.exec)
+		t, err := bob.One(ctx, q.exec, query, scan.SingleColumnMapper[time.Time])
 		if dberr.IsNotFound(dberr.Translate(err)) {
 			return nil
 		}
 		if err != nil {
 			return dberr.Translate(err)
 		}
-		if t := at(row).UTC(); next == nil || t.Before(*next) {
+		if t = t.UTC(); next == nil || t.Before(*next) {
 			next = &t
 		}
 		return nil
 	}
-	unclaimed := append(append([]dialect.Expression{}, pending...), sqlite.Or(c.ClaimUntil.IsNull(), c.ClaimUntil.LTE(sqlite.Arg(now))))
-	if err := earliest(unclaimed, c.AttemptAt, func(r *models.Operation) time.Time { return r.AttemptAt }); err != nil {
-		return nil, err
-	}
-	claimed := append(append([]dialect.Expression{}, pending...), c.ClaimUntil.GT(sqlite.Arg(now)))
-	if err := earliest(claimed, c.ClaimUntil, func(r *models.Operation) time.Time { return r.ClaimUntil.GetOrZero() }); err != nil {
-		return nil, err
+	for _, kind := range kinds {
+		if err := earliest("operation_next_attempt", kind, c.AttemptAt, sqlite.Or(c.ClaimUntil.IsNull(), c.ClaimUntil.LTE(sqlite.Arg(now)))); err != nil {
+			return nil, err
+		}
+		if err := earliest("operation_next_claim", kind, c.ClaimUntil, c.ClaimUntil.IsNotNull(), c.ClaimUntil.GT(sqlite.Arg(now))); err != nil {
+			return nil, err
+		}
 	}
 	return next, nil
 }

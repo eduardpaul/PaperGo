@@ -58,8 +58,15 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 			values[i] = string(status)
 		}
 		oc := models.Operations.Columns
-		matching := models.Operations.Query(sm.Columns(oc.ID), sm.Where(oc.Status.In(psql.Arg(values...))))
-		query.Apply(sm.Where(psql.Raw(`"workflow_runs"."id" IN ?`, matching)))
+		if len(f.ItemIDs) > 0 {
+			// Named items pick the runs (below): each candidate's operation
+			// is read by its key, not the list of every operation with these
+			// statuses, which a backlog of thousands makes long.
+			query.Apply(sm.Where(psql.Raw(`EXISTS (SELECT 1 FROM "operations" WHERE "operations"."id" = "workflow_runs"."id" AND "operations"."status" IN ?)`, psql.ArgGroup(values...))))
+		} else {
+			matching := models.Operations.Query(sm.Columns(oc.ID), sm.Where(oc.Status.In(psql.Arg(values...))))
+			query.Apply(sm.Where(psql.Raw(`"workflow_runs"."id" IN ?`, matching)))
+		}
 	}
 	if len(f.ExcludeEventTypes) > 0 {
 		query.Apply(w.EventType.NotIn(f.ExcludeEventTypes...))
@@ -81,9 +88,9 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []ope
 		for i, id := range f.ItemIDs {
 			items[i] = id
 		}
-		ic := models.WorkflowRunItems.Columns
-		members := models.WorkflowRunItems.Query(sm.Columns(ic.RunID), sm.Where(ic.ItemID.In(psql.Arg(items...))))
-		query.Apply(sm.Where(psql.Or(c.ItemID.In(psql.Arg(items...)), psql.Raw(`"workflow_runs"."id" IN ?`, members))))
+		// A run holds an item as its own or among its selection; the items'
+		// indexes find those runs, however many the workflow has.
+		query.Apply(sm.Where(psql.Raw(`"workflow_runs"."id" IN (SELECT "id" FROM "workflow_runs" WHERE "item_id" IN ? UNION SELECT "run_id" FROM "workflow_run_items" WHERE "item_id" IN ?)`, psql.ArgGroup(items...), psql.ArgGroup(items...))))
 	}
 	if f.HideSystem || f.SystemOnly {
 		if len(f.SystemKeys) > 0 {
