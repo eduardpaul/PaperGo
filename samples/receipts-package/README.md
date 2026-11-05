@@ -69,4 +69,7 @@ workers:
     admission:
       policy: threshold
       threshold: 1
-``` The `shared` queue is installation-wide, so other workflows can batch with these receipts. A run waits for its answer without holding a worker. A request that is still open after `AI_BATCH_DEADLINE` (default 72h) fails, which marks the receipt **Needs review**. Repeating the workflow on a receipt that was read reuses the cached answer at once.
+      batch: 20
+```
+
+The `shared` queue is installation-wide, so other workflows can batch with these receipts. A run waits for its answer without holding a worker. A request that is still open after `AI_BATCH_DEADLINE` (default 72h) fails, which marks the receipt **Needs review**. Repeating the workflow on a receipt that was read reuses the cached answer at once.
