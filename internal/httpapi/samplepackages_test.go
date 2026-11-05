@@ -253,10 +253,38 @@ func dieselTypes(t *testing.T, s *dms.Service, list string) map[string]string {
 	return types
 }
 
+// dieselAppBindings binds the diesel app's parameters to an imported copy.
+func dieselAppBindings(t *testing.T, s *dms.Service, workspace string) []string {
+	t.Helper()
+	diesel, err := s.DAL.Resources().One(t.Context(), resources.Filter{WorkspaceID: workspace, Name: "Diesel", Kinds: []refs.ResourceKind{refs.KindList}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dieselBindings(diesel.ID, dieselTypes(t, s, diesel.ID))
+}
+
+// receiptsAppBindings binds the receipts desk's parameters to an imported copy.
+func receiptsAppBindings(t *testing.T, s *dms.Service, workspace string) []string {
+	t.Helper()
+	library, err := s.DAL.Resources().One(t.Context(), resources.Filter{WorkspaceID: workspace, Name: "Receipts", Kinds: []refs.ResourceKind{refs.KindLibrary}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", library.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := map[string]string{}
+	for _, lt := range listTypes {
+		types[lt.Key] = *lt.ParentID
+	}
+	return []string{"$LIBRARY", library.ID, "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"]}
+}
+
 // checkImportedSampleApps checks that an imported sample carries its apps
 // as their settings and sources say, with exactly their parameters bound to
 // the copy, and code that saving the same source again keeps.
-func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, files []string) {
+func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, files []string, appBindings func(*testing.T, *dms.Service, string) []string) {
 	t.Helper()
 	apps, err := s.DAL.Apps().List(t.Context(), appstore.Filter{WorkspaceIDs: []string{workspace}})
 	if err != nil || len(apps) != len(files) {
@@ -265,11 +293,7 @@ func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, fil
 	if len(files) == 0 {
 		return
 	}
-	diesel, err := s.DAL.Resources().One(t.Context(), resources.Filter{WorkspaceID: workspace, Name: "Diesel", Kinds: []refs.ResourceKind{refs.KindList}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	bindings := dieselBindings(diesel.ID, dieselTypes(t, s, diesel.ID))
+	bindings := appBindings(t, s, workspace)
 	byKey := map[string]appstore.App{}
 	for _, a := range apps {
 		byKey[a.Key] = a
@@ -302,6 +326,9 @@ func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, fil
 		}
 	}
 }
+
+// receiptsApps are the receipts sample's apps, by their settings files.
+var receiptsApps = []string{"receipts-package/receipts-app.json"}
 
 // dieselApps are the diesel sample's apps, by their settings files.
 var dieselApps = []string{"diesel/diesel-app.json"}
@@ -451,7 +478,11 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		var collections map[string]string
 		var types map[string]string
 		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
-		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"])
+		bindings := []string{"$LIBRARY", collections["Receipts"], "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"]}
+		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", bindings...)
+		for _, file := range receiptsApps {
+			SaveSampleApp(t, s, workspace, "", 0, sampleAppSource(t, file, bindings...))
+		}
 	case "diesel":
 		var collections map[string]string
 		var types map[string]string
@@ -560,7 +591,8 @@ func TestSampleWorkspacePackages(t *testing.T) {
 		Path, Name, Kind string
 		Workflows        int
 		Apps             []string
-	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1, nil}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil}} {
+		AppBindings      func(*testing.T, *dms.Service, string) []string
+	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1, receiptsApps, receiptsAppBindings}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps, dieselAppBindings}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil, nil}} {
 		t.Run(sample.Name, func(t *testing.T) {
 			path := filepath.Join("../../samples", sample.Path)
 			if *updateSamplePackages {
@@ -609,7 +641,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						}
 					}
 				}
-				checkImportedSampleApps(t, s, result.WorkspaceID, sample.Apps)
+				checkImportedSampleApps(t, s, result.WorkspaceID, sample.Apps, sample.AppBindings)
 				if count, err := s.DAL.Resources().Count(t.Context(), resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem, refs.KindFolder}}); err != nil || count != 0 {
 					t.Fatal("sample included content", count, err)
 				}

@@ -14,14 +14,15 @@ A refused answer, a line that cannot be stored, a photo that cannot become a PDF
 
 ## Install
 
-1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**. This creates the **Receipts desk** workspace with the empty **Receipts** library, which accepts both content types (**Receipt** for uploads by default, and **Receipt line**), fields, saved views (Receipts, Needs review and Lines), relationship policy and the **Read receipts** workflow, its parameters pointing at the imported library and its two content types. No script, token, ID editing or pre-existing workspace is needed. To install another independent copy, enter a different workspace name when importing. Import does not call the model.
-2. **The app.** In the workspace, open **Workspace settings → Apps → New app** and paste [`receipts-app.tsx`](receipts-app.tsx).
-   - Save it, then choose its parameters with the pickers: the **Receipts** library and its **Receipt** and **Receipt line** types.
-   - Set the state to **Published** and save again.
-   - The app appears in the sidebar under the library, and in **Apps**. On a phone, its **Take a photo** and **Choose photos** buttons sit at the bottom of the screen.
-3. **OCR and the batch model.** Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
+1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**. This creates the **Receipts desk** workspace with:
+   - the empty **Receipts** library, which accepts both content types (**Receipt** for uploads by default, and **Receipt line**), with their fields, saved views (Receipts, Needs review and Lines) and relationship policy;
+   - the **Read receipts** workflow, its parameters pointing at the imported library and its two content types;
+   - the **Receipts desk** app, published, with its parameters set to the same library and types. It appears in the sidebar under the library, and in **Apps**. On a phone, its **Take a photo** and **Choose photos** buttons sit at the bottom of the screen.
 
-The importer becomes the workflow's author and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` and `read-receipts.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflow end to end, and the [app compile test](../../internal/apps/compile_test.go) compiles the app.
+   No script, token, ID editing or pre-existing workspace is needed. To install another independent copy, enter a different workspace name when importing. Import does not call the model.
+2. **OCR and the batch model.** Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
+
+The importer becomes the author of the workflow and the app, and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` with `read-receipts.json`, and `receipts-app.tsx` with `receipts-app.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflow end to end, and the [app compile test](../../internal/appcode/compile_test.go) compiles the app.
 
 ## The desk
 
