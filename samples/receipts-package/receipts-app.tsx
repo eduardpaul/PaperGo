@@ -50,7 +50,7 @@ const contains = "contains receipt line";
 const words = {
   en: {
     take: "Take a photo", choose: "Choose photos", uploads: "Uploads", latest: "Latest receipts",
-    optimizing: "Optimizing…", uploading: "Uploading…", uploaded: "Uploaded, waiting to be read", failed: "Failed: {reason}", unreadable: "This photo cannot be opened here; take it again or choose a JPEG",
+    queued: "Waiting its turn…", optimizing: "Optimizing…", uploading: "Uploading…", uploaded: "Uploaded, waiting to be read", failed: "Failed: {reason}", unreadable: "This photo cannot be opened here; take it again or choose a JPEG",
     shrunk: "{before} → {after}", waiting: "Waiting to be read", read: "Read", review: "Needs review", reviewHint: "The model could not read these. Open one to correct it, or take a better photo.",
     batchHint: "Receipts are read in batches: their lines can take until the nightly batch.",
     receipt: "Receipt", date: "Date", total: "Total", status: "Status", lines: "Lines", description: "Description", quantity: "Qty", unitPrice: "Price", amount: "Amount",
@@ -60,12 +60,12 @@ const words = {
     byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
     noReceipts: "No receipts yet", fileName: "Receipt", loading: "Loading…", loadFailed: "Could not load this; try again later",
     tooLarge: "the photo is larger than this PaperGo takes", forbidden: "you may not add receipts to this library", duplicate: "this photo is already in the library",
-    gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; try again", otherFailure: "the upload failed ({detail})",
+    gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; it will try again soon", tryNow: "Try now", otherFailure: "the upload failed ({detail})",
     categories: {} as Record<string, string>,
   },
   es: {
     take: "Hacer una foto", choose: "Elegir fotos", uploads: "Subidas", latest: "Últimos tiques",
-    optimizing: "Optimizando…", uploading: "Subiendo…", uploaded: "Subido, pendiente de lectura", failed: "Error: {reason}", unreadable: "No se puede abrir esta foto aquí; hazla de nuevo o elige un JPEG",
+    queued: "Esperando su turno…", optimizing: "Optimizando…", uploading: "Subiendo…", uploaded: "Subido, pendiente de lectura", failed: "Error: {reason}", unreadable: "No se puede abrir esta foto aquí; hazla de nuevo o elige un JPEG",
     shrunk: "{before} → {after}", waiting: "Por leer", read: "Leídos", review: "Por revisar", reviewHint: "El modelo no pudo leerlos. Abre uno para corregirlo, o haz una foto mejor.",
     batchHint: "Los tiques se leen por lotes: sus líneas pueden tardar hasta el lote nocturno.",
     receipt: "Tique", date: "Fecha", total: "Total", status: "Estado", lines: "Líneas", description: "Descripción", quantity: "Cant.", unitPrice: "Precio", amount: "Importe",
@@ -75,7 +75,7 @@ const words = {
     byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
     noReceipts: "Aún no hay tiques", fileName: "Tique", loading: "Cargando…", loadFailed: "No se pudo cargar; inténtalo de nuevo más tarde",
     tooLarge: "la foto supera el tamaño que admite este PaperGo", forbidden: "no puedes añadir tiques a esta biblioteca", duplicate: "esta foto ya está en la biblioteca",
-    gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; inténtalo de nuevo", otherFailure: "la subida falló ({detail})",
+    gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; se volverá a intentar en breve", tryNow: "Reintentar ahora", otherFailure: "la subida falló ({detail})",
     categories: {
       "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
       Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
@@ -155,6 +155,12 @@ function uploadError(w: Words, e: unknown): string {
   return say(w.otherFailure, { detail: e.detail ?? e.code ?? String(e.status) });
 }
 
+// passing says whether an upload failed for a while only, with the network or
+// PaperGo, so that the same photo can go again.
+function passing(e: unknown): boolean {
+  return e instanceof RequestError && (e.status === 429 || e.status >= 500);
+}
+
 // optimize turns a photo upright and shrinks it to the photo the model
 // reads. A small JPEG that would not get smaller is sent as it is.
 async function optimize(file: File): Promise<Blob> {
@@ -214,12 +220,18 @@ function receiptName(prefix: string, zone: string, at: Date, copy: number): stri
 interface Upload {
   key: number;
   name: string;
-  state: "optimizing" | "uploading" | "uploaded" | "failed";
+  state: "queued" | "optimizing" | "uploading" | "uploaded" | "failed";
   before: number;
   after?: number;
   error?: string;
+  // It failed for a while only, and goes again.
+  retry?: boolean;
   itemId?: string;
 }
+
+// How long a photo that could not reach PaperGo waits to go again, unless the
+// phone says it is back online first.
+const RETRY_EVERY = 30_000;
 
 function Desk({ w }: { w: Words }) {
   const ctx = useApp<Params>();
@@ -232,6 +244,9 @@ function Desk({ w }: { w: Words }) {
   const [opened, setOpened] = useState<Item>();
   const next = useRef(0);
   const queue = useRef(Promise.resolve());
+  // The photo of each row not uploaded yet: a phone's camera photo may be
+  // nowhere else.
+  const photos = useRef(new Map<number, File>());
 
   // Receipts only: the folders of their lines have no status.
   const receipts = { contentTypeId: p.receipt, filter: { field: "status", op: "present" } };
@@ -267,18 +282,42 @@ function Desk({ w }: { w: Words }) {
   const change = (key: number, patch: Partial<Upload>) => setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)));
 
   // One photo after another, so a phone's upload is not split between them.
+  const enqueue = (key: number) => {
+    change(key, { state: "queued", error: undefined, retry: false });
+    queue.current = queue.current.then(() => send(key));
+  };
+
   const add = (files: FileList | null) => {
     for (const file of Array.from(files ?? [])) {
       const key = ++next.current;
-      const upload: Upload = { key, name: file.name, state: "optimizing", before: file.size };
+      photos.current.set(key, file);
+      const upload: Upload = { key, name: file.name, state: "queued", before: file.size };
       setUploads((all) => [upload, ...all].slice(0, 10));
-      queue.current = queue.current.then(() => send(key, file));
+      enqueue(key);
     }
   };
 
+  // Photos that could not reach PaperGo go again when the phone is back
+  // online, and every little while, as a poor signal may not tell.
+  const retrying = uploads.some((u) => u.retry);
+  const retryAll = useRef(() => {});
+  retryAll.current = () => uploads.filter((u) => u.retry).forEach((u) => enqueue(u.key));
+  useEffect(() => {
+    if (!retrying) return;
+    const online = () => retryAll.current();
+    const timer = setInterval(() => navigator.onLine !== false && retryAll.current(), RETRY_EVERY);
+    window.addEventListener("online", online);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", online);
+    };
+  }, [retrying]);
+
   // It catches everything, so one photo's failure leaves the queue running.
-  const send = async (key: number, file: File) => {
+  const send = async (key: number) => {
+    const file = photos.current.get(key)!;
     try {
+      change(key, { state: "optimizing" });
       const photo = await optimize(file);
       change(key, { state: "uploading", after: photo.size });
       const at = new Date();
@@ -288,6 +327,7 @@ function Desk({ w }: { w: Words }) {
         const { body, type } = await multipart(name, photo);
         try {
           const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
+          photos.current.delete(key);
           change(key, { state: "uploaded", name, itemId: created.data.item.id });
           return;
         } catch (e) {
@@ -295,7 +335,9 @@ function Desk({ w }: { w: Words }) {
         }
       }
     } catch (e) {
-      change(key, { state: "failed", error: uploadError(w, e) });
+      const retry = passing(e);
+      if (!retry) photos.current.delete(key);
+      change(key, { state: "failed", error: uploadError(w, e), retry });
     }
   };
 
@@ -332,12 +374,13 @@ function Desk({ w }: { w: Words }) {
         <Card title={w.uploads}>
           <Table
             // The size it was shrunk to shows below the state, on a phone too.
-            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <>{row.state}<div className="pg-stat-hint">{row.size}</div></> }]}
+            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</> }]}
             rows={uploads.map((u) => ({
               id: u.key,
               itemId: u.itemId,
               name: u.name,
-              state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
+              retry: u.retry,
+              state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { queued: w.queued, optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
               size: u.after === undefined ? size(f, u.before) : say(w.shrunk, { before: size(f, u.before), after: size(f, u.after) }),
             }))}
             onRowClick={(row) => row.itemId && ctx.open({ itemId: String(row.itemId) })}
