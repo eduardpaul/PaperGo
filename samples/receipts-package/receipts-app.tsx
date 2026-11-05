@@ -25,6 +25,7 @@ import {
   useApp,
   useNarrow,
   useQuery,
+  type AppContext,
   type Format,
   type Item,
   type Loaded,
@@ -37,6 +38,8 @@ interface Params {
 }
 
 type Period = "month" | "year" | "all";
+
+type OpenTarget = Parameters<AppContext<Params>["open"]>[0];
 
 // The photo the model reads: the long side at most this many pixels, as a
 // JPEG of this quality. Vision models scale larger photos down to about
@@ -60,7 +63,7 @@ const words = {
     byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
     noReceipts: "No receipts yet", fileName: "Receipt", loading: "Loading…", loadFailed: "Could not load this; try again later",
     tooLarge: "the photo is larger than this PaperGo takes", forbidden: "you may not add receipts to this library", duplicate: "this photo is already in the library",
-    gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; it will try again soon", tryNow: "Try now", otherFailure: "the upload failed ({detail})",
+    gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; it will try again soon", tryNow: "Try now", keepOpen: "Keep this screen open until they are sent.", leaveTitle: "Photos not sent yet", leaveText: "Leaving this screen cancels the photos that have not been sent. Those you took with the camera may be lost.", stay: "Stay", leave: "Leave anyway", otherFailure: "the upload failed ({detail})",
     categories: {} as Record<string, string>,
   },
   es: {
@@ -75,7 +78,7 @@ const words = {
     byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
     noReceipts: "Aún no hay tiques", fileName: "Tique", loading: "Cargando…", loadFailed: "No se pudo cargar; inténtalo de nuevo más tarde",
     tooLarge: "la foto supera el tamaño que admite este PaperGo", forbidden: "no puedes añadir tiques a esta biblioteca", duplicate: "esta foto ya está en la biblioteca",
-    gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; se volverá a intentar en breve", tryNow: "Reintentar ahora", otherFailure: "la subida falló ({detail})",
+    gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; se volverá a intentar en breve", tryNow: "Reintentar ahora", keepOpen: "Mantén esta pantalla abierta hasta que se envíen.", leaveTitle: "Fotos sin enviar", leaveText: "Si sales de esta pantalla se cancelan las fotos que aún no se han enviado. Las que hiciste con la cámara podrían perderse.", stay: "Quedarme", leave: "Salir de todos modos", otherFailure: "la subida falló ({detail})",
     categories: {
       "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
       Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
@@ -341,6 +344,12 @@ function Desk({ w }: { w: Words }) {
     }
   };
 
+  // Photos not sent yet live only in this screen, which opening something in
+  // PaperGo closes, so it asks first.
+  const unsent = uploads.some((u) => photos.current.has(u.key));
+  const [leaving, setLeaving] = useState<OpenTarget>();
+  const open = (target: OpenTarget) => (unsent ? setLeaving(target) : ctx.open(target));
+
   const statusName = (status: unknown) => ({ New: w.statusNew, Read: w.statusRead, "Needs review": w.statusReview })[String(status)] ?? String(status ?? "");
   const rows = useMemo(
     () =>
@@ -372,6 +381,7 @@ function Desk({ w }: { w: Words }) {
 
       {uploads.length > 0 && (
         <Card title={w.uploads}>
+          {unsent && <p className="pg-stat-hint">{w.keepOpen}</p>}
           <Table
             // The size it was shrunk to shows below the state, on a phone too.
             columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</> }]}
@@ -383,7 +393,7 @@ function Desk({ w }: { w: Words }) {
               state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { queued: w.queued, optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
               size: u.after === undefined ? size(f, u.before) : say(w.shrunk, { before: size(f, u.before), after: size(f, u.after) }),
             }))}
-            onRowClick={(row) => row.itemId && ctx.open({ itemId: String(row.itemId) })}
+            onRowClick={(row) => row.itemId && open({ itemId: String(row.itemId) })}
           />
         </Card>
       )}
@@ -438,7 +448,7 @@ function Desk({ w }: { w: Words }) {
         />
       </Card>
 
-      <Card title={w.latest} actions={<Button onClick={() => ctx.open({ listId: p.library })}>{w.all}</Button>}>
+      <Card title={w.latest} actions={<Button onClick={() => open({ listId: p.library })}>{w.all}</Button>}>
         <Table
           columns={[{ key: "receipt", label: w.receipt }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
           rows={rows}
@@ -447,7 +457,16 @@ function Desk({ w }: { w: Words }) {
         />
       </Card>
 
-      <LinesDialog w={w} receipt={opened} onClose={() => setOpened(undefined)} />
+      <LinesDialog w={w} receipt={opened} open={open} onClose={() => setOpened(undefined)} />
+
+      <Modal
+        open={leaving !== undefined}
+        title={w.leaveTitle}
+        onClose={() => setLeaving(undefined)}
+        actions={<><Button variant="primary" onClick={() => setLeaving(undefined)}>{w.stay}</Button><Button variant="danger" onClick={() => { ctx.open(leaving!); setLeaving(undefined); }}>{w.leave}</Button></>}
+      >
+        {w.leaveText}
+      </Modal>
     </>
   );
 }
@@ -465,7 +484,7 @@ interface Line {
 
 // LinesDialog shows a receipt's lines, through the links the workflow made,
 // in the order of the receipt: the workflow numbers them "1. Bread".
-function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClose: () => void }) {
+function LinesDialog({ w, receipt, open, onClose }: { w: Words; receipt?: Item; open: (target: OpenTarget) => void; onClose: () => void }) {
   const ctx = useApp<Params>();
   const f = ctx.format;
   const [lines, setLines] = useState<Line[]>();
@@ -501,7 +520,7 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
       open
       title={String(receipt.values.store ?? receipt.name)}
       onClose={onClose}
-      actions={<><Button onClick={onClose}>{w.close}</Button><Button variant="primary" onClick={() => ctx.open({ itemId: receipt.id })}>{w.open}</Button></>}
+      actions={<><Button onClick={onClose}>{w.close}</Button><Button variant="primary" onClick={() => { onClose(); open({ itemId: receipt.id }); }}>{w.open}</Button></>}
     >
       <p className="pg-stat-hint">
         {[receipt.values.purchase_date ? f.date(String(receipt.values.purchase_date)) : undefined, receipt.values.total !== undefined ? money(receipt.values.total) : undefined].filter(Boolean).join(" · ")}
