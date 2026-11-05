@@ -27,6 +27,7 @@ import {
   useQuery,
   type Format,
   type Item,
+  type Loaded,
 } from "@papergo/app";
 
 interface Params {
@@ -57,7 +58,7 @@ const words = {
     statusNew: "Reading", statusRead: "Read", statusReview: "Needs review",
     month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
     byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
-    noReceipts: "No receipts yet", fileName: "Receipt",
+    noReceipts: "No receipts yet", fileName: "Receipt", loading: "Loading…", loadFailed: "Could not load this; try again later",
     categories: {} as Record<string, string>,
   },
   es: {
@@ -70,7 +71,7 @@ const words = {
     statusNew: "Leyendo", statusRead: "Leído", statusReview: "Por revisar",
     month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
     byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
-    noReceipts: "Aún no hay tiques", fileName: "Tique",
+    noReceipts: "Aún no hay tiques", fileName: "Tique", loading: "Cargando…", loadFailed: "No se pudo cargar; inténtalo de nuevo más tarde",
     categories: {
       "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
       Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
@@ -193,6 +194,9 @@ function Desk({ w }: { w: Words }) {
     { live: true },
   );
   const categoryTotal = byCategory.data.reduce((sum, g) => sum + Number(g.values.spent ?? 0), 0);
+  // An empty table says whether it is still loading, its query failed or
+  // there is nothing to show.
+  const emptyText = (loads: Loaded<unknown>[], none: string) => (loads.some((l) => l.error) ? w.loadFailed : loads.some((l) => l.loading) ? w.loading : none);
   const categoryName = (c: unknown) => (c === null || c === undefined ? w.categories.Other ?? "Other" : w.categories[String(c)] ?? String(c));
 
   const change = (key: number, patch: Partial<Upload>) => setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)));
@@ -304,7 +308,7 @@ function Desk({ w }: { w: Words }) {
 
       <Card title={w.byCategory}>
         <Table
-          empty={w.nothingSpent}
+          empty={emptyText([spent, byCategory], w.nothingSpent)}
           columns={[
             { key: "category", label: w.category },
             {
@@ -333,7 +337,7 @@ function Desk({ w }: { w: Words }) {
         <Table
           columns={[{ key: "receipt", label: w.receipt }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
           rows={rows}
-          empty={w.noReceipts}
+          empty={emptyText([latest], w.noReceipts)}
           onRowClick={(row) => setOpened(latest.data.find((r) => r.id === row.id))}
         />
       </Card>
@@ -360,16 +364,23 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
   const ctx = useApp<Params>();
   const f = ctx.format;
   const [lines, setLines] = useState<Line[]>();
+  const [failed, setFailed] = useState(false);
   const id = receipt?.id;
   useEffect(() => {
     setLines(undefined);
+    setFailed(false);
     if (!id) return;
     let stale = false;
     const q = new URLSearchParams({ direction: "outgoing", type: contains, $top: "100" });
     ctx
       .request<{ value: Link[] }>("GET", `/v1/items/${id}/relationships?${q}`)
       .then((r) => !stale && setLines(r.data.value.map((l) => ({ id: l.id, n: parseInt(l.related_item?.name ?? "", 10) || 0, values: l.related_item?.values ?? {} })).sort((a, b) => a.n - b.n)))
-      .catch(() => !stale && setLines([]));
+      .catch(() => {
+        if (!stale) {
+          setLines([]);
+          setFailed(true);
+        }
+      });
     return () => {
       stale = true;
     };
@@ -389,7 +400,7 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
         {[receipt.values.purchase_date ? f.date(String(receipt.values.purchase_date)) : undefined, receipt.values.total !== undefined ? money(receipt.values.total) : undefined].filter(Boolean).join(" · ")}
       </p>
       <Table
-        empty={lines === undefined ? "…" : w.noLines}
+        empty={failed ? w.loadFailed : lines === undefined ? w.loading : w.noLines}
         columns={[
           // The category under the description, so a phone has room for both.
           { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div></> },
