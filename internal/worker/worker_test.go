@@ -406,4 +406,30 @@ func TestPauseAndResume(t *testing.T) {
 	}
 }
 
+// A worker paused before it starts claims nothing it finds waiting: it knows
+// its state before it looks for work.
+func TestPausedBeforeStartClaimsNothing(t *testing.T) {
+	f := setup(t)
+	f.register(t, "test.fast", dms.OperationHandler{Execute: func(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+		return finish(ctx, s, op)
+	}})
+	f.own()
+	f.rt.Add(Definition{Name: "fast", Kinds: []string{"test.fast"}, Concurrency: 4})
+	f.rt.ControlPoll = 10 * time.Millisecond
+	ctx := context.Background()
+	if err := SetControl(ctx, f.s.DAL.SQLDB(), "fast", Paused); err != nil {
+		t.Fatal(err)
+	}
+	id := f.enqueue(t, "test.fast", `{}`)
+	f.start(t)
+	time.Sleep(200 * time.Millisecond)
+	if op := f.status(t, id); op.Status != operations.StatusPending {
+		t.Fatal("a worker paused before it started ran work", op.Status)
+	}
+	if err := SetControl(ctx, f.s.DAL.SQLDB(), "fast", Running); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the resumed worker did not run", func() bool { return f.status(t, id).Status == operations.StatusSucceeded })
+}
+
 func recordsOf(s *dms.Service) *activitystore.Store { return activitystore.New(s.DAL.SQLDB()) }

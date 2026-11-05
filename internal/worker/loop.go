@@ -26,11 +26,12 @@ type worker struct {
 	active atomic.Int64
 }
 
+// current is the worker's state, empty until its control has first been
+// read. It claims nothing until then, so a worker paused before a restart
+// does not run what is waiting.
 func (w *worker) current() State {
-	if s, ok := w.state.Load().(State); ok {
-		return s
-	}
-	return Running
+	s, _ := w.state.Load().(State)
+	return s
 }
 
 // claiming reports whether the worker may start executions at now, and
