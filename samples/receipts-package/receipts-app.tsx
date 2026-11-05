@@ -65,7 +65,7 @@ const words = {
     open: "Open in PaperGo", close: "Close", noLines: "No lines yet", all: "All receipts", setUp: "Choose the Receipts library and its Receipt and Receipt line types in Workspace settings → Apps.",
     statusNew: "Reading", statusRead: "Read", statusReview: "Needs review",
     month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
-    byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
+    anyDate: "Any date", byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
     noReceipts: "No receipts yet", fileName: "Receipt", loading: "Loading…", loadFailed: "Could not load this; try again later",
     tooLarge: "the photo is larger than this PaperGo takes", forbidden: "you may not add receipts to this library", duplicate: "this photo is already in the library",
     gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; it will try again soon", tryNow: "Try now", keepOpen: "Keep this screen open until they are sent.", leaveTitle: "Photos not sent yet", leaveText: "Leaving this screen cancels the photos that have not been sent. Those you took with the camera may be lost.", stay: "Stay", leave: "Leave anyway", otherFailure: "the upload failed ({detail})",
@@ -82,7 +82,7 @@ const words = {
     open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y sus tipos Receipt y Receipt line en Configuración del espacio de trabajo → Aplicaciones.",
     statusNew: "Leyendo", statusRead: "Leído", statusReview: "Por revisar",
     month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
-    byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
+    anyDate: "Cualquier fecha", byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
     noReceipts: "Aún no hay tiques", fileName: "Tique", loading: "Cargando…", loadFailed: "No se pudo cargar; inténtalo de nuevo más tarde",
     tooLarge: "la foto supera el tamaño que admite este PaperGo", forbidden: "no puedes añadir tiques a esta biblioteca", duplicate: "esta foto ya está en la biblioteca",
     gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; se volverá a intentar en breve", tryNow: "Reintentar ahora", keepOpen: "Mantén esta pantalla abierta hasta que se envíen.", leaveTitle: "Fotos sin enviar", leaveText: "Si sales de esta pantalla se cancelan las fotos que aún no se han enviado. Las que hiciste con la cámara podrían perderse.", stay: "Quedarme", leave: "Salir de todos modos", otherFailure: "la subida falló ({detail})",
@@ -268,6 +268,8 @@ function Desk({ w }: { w: Words }) {
 
   // Receipts only: the folders of their lines have no status.
   const receipts = { contentTypeId: p.receipt, filter: { field: "status", op: "present" } };
+  // How many receipts wait for someone, whatever their date; those that have
+  // not been read may have none.
   const counts = useAggregates(p.library, { query: receipts, groups: [{ field: "status" }], aggregates: [{ op: "count", field: "status" }] }, { live: true });
   const count = (status: string) => counts.data.find((g) => g.keys[0]?.value === status)?.count ?? 0;
   // The table lists the latest receipts, or those that need review, however old.
@@ -299,6 +301,8 @@ function Desk({ w }: { w: Words }) {
   // An empty table says whether it is still loading, its query failed or
   // there is nothing to show.
   const emptyText = (loads: Loaded<unknown>[], none: string) => (loads.some((l) => l.error) ? w.loadFailed : loads.some((l) => l.loading) ? w.loading : none);
+  // A figure not known yet, or that failed, shows no number, not 0.
+  const figure = (load: Loaded<unknown[]>, n: number) => (load.error || (load.loading && load.data.length === 0) ? "–" : f.number(n, 0));
   const categoryName = (c: unknown) => (c === null || c === undefined ? w.categories.Other ?? "Other" : w.categories[String(c)] ?? String(c));
 
   const change = (key: number, patch: Partial<Upload>) => setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)));
@@ -438,10 +442,13 @@ function Desk({ w }: { w: Words }) {
           value={main ? f.currency(String(main.values.spent ?? 0), currency) : "–"}
           hint={main ? [main.count === 1 ? w.oneReceipt : say(w.receiptsCount, { n: main.count }), spent.data.length > 1 ? say(w.alsoIn, { amounts: spent.data.slice(1).map((g) => f.currency(String(g.values.spent ?? 0), String(g.keys[0]?.value ?? ""))).join(", ") }) : ""].filter(Boolean).join(" · ") : undefined}
         />
-        <Stat label={w.waiting} value={f.number(count("New"), 0)} />
-        <Stat label={w.read} value={f.number(count("Read"), 0)} tone="success" />
-        <Stat label={w.review} value={f.number(count("Needs review"), 0)} tone={count("Needs review") ? "warning" : "default"} />
+        {/* What was read follows the period; what waits for someone does not. */}
+        <Stat label={w.read} value={figure(spent, spent.data.reduce((n, g) => n + g.count, 0))} tone="success" />
+        <Stat label={w.waiting} value={figure(counts, count("New"))} hint={w.anyDate} />
+        <Stat label={w.review} value={figure(counts, count("Needs review"))} hint={w.anyDate} tone={count("Needs review") ? "warning" : "default"} />
       </Grid>
+
+      {(counts.error || spent.error) && <Notice tone="danger">{w.loadFailed}</Notice>}
 
       {count("New") > 0 && <p className="pg-stat-hint">{w.batchHint}</p>}
       {count("Needs review") > 0 && <Notice tone="warning" title={w.review} action={onlyReview ? undefined : { label: w.showThem, onClick: () => setReviewing(true) }}>{w.reviewHint}</Notice>}
