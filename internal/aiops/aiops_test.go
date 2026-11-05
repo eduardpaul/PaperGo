@@ -1,6 +1,7 @@
 package aiops_test
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"errors"
@@ -339,6 +340,24 @@ func TestBatchIdempotencySurvivesCacheChanges(t *testing.T) {
 	}
 }
 
+// A request the model refused fails at once: asking again would end the same way.
+func TestBatchRefusedAnswerFails(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	f.batch.refusing = "refuse me"
+	op := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"refuse me","workspace_id":"`+f.ws+`","execution":"batch"}`)
+	if _, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil {
+		t.Fatal(err)
+	}
+	f.batch.finish()
+	if err := f.a.Poll(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if ended := f.operation(t, op.ID); ended.Status != operations.StatusFailed || !strings.Contains(ended.Error, "declined") || len(f.batch.batches) != 1 {
+		t.Fatalf("a refused request: %+v, %d batches", ended, len(f.batch.batches))
+	}
+}
+
 func TestBatchRetriesExhaustAttempts(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)
@@ -469,6 +488,8 @@ type fakeBatch struct {
 	prepared []ai.BatchRequest
 	batches  map[string]*fakeBatchJob
 	failing  string
+	// refusing is what the model declines to answer.
+	refusing string
 	// crash stops the submission once the provider created the batch;
 	// refuse makes the provider refuse to create it.
 	crash, refuse bool
@@ -527,6 +548,9 @@ func (b *fakeBatch) Results(_ context.Context, batch ai.Batch, _ map[string]bool
 		result := ai.BatchResult{Key: r.Key, Answer: ai.Answer{Text: "batched answer"}}
 		if b.failing != "" && strings.Contains(r.Completion.Input, b.failing) {
 			result = ai.BatchResult{Key: r.Key, Err: errors.New("the provider rejected the request")}
+		}
+		if b.refusing != "" && strings.Contains(r.Completion.Input, b.refusing) {
+			result = ai.BatchResult{Key: r.Key, Err: fmt.Errorf("%w: it declined to answer", ai.ErrNoAnswer)}
 		}
 		out = append(out, result)
 	}

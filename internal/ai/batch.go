@@ -29,6 +29,10 @@ var ErrUncertain = errors.New("the batch submission did not confirm whether it w
 // never permits creating the submission again.
 var ErrUndetermined = errors.New("the provider cannot tell yet whether it holds the batch")
 
+// ErrNoAnswer marks a request the model finished without an answer, by
+// refusing or running out of length. Asking again would end the same way.
+var ErrNoAnswer = errors.New("the model gave no usable answer")
+
 // BatchConfig configures the batch provider (AI_BATCH_*): an
 // OpenAI-compatible Batch API (OpenAI, Azure OpenAI and Microsoft Foundry)
 // or Anthropic's Message Batches API. It is independent of the chat

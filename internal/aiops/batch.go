@@ -20,8 +20,8 @@ import (
 // queue, by its admission policy. A group is sent as one provider batch,
 // whose members park until Poll finds the batch finished and ends them
 // with its answers. A request the provider failed returns to the queue and
-// is sent again, within its attempts; a request whose answer does not
-// match its schema fails.
+// is sent again, within its attempts; a request the model refused or could
+// not finish, or whose answer does not match its schema, fails.
 
 const (
 	flightNamespace = "ai.batch.flight"
@@ -288,7 +288,7 @@ func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Tim
 		status, message := operations.StatusSucceeded, ""
 		var result json.RawMessage
 		switch {
-		case !ok || l.err != nil && !errors.Is(l.err, errSchema):
+		case !ok || l.err != nil && !errors.Is(l.err, errSchema) && !errors.Is(l.err, ai.ErrNoAnswer):
 			retry = append(retry, id)
 			continue
 		case l.err != nil:

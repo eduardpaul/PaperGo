@@ -253,9 +253,9 @@ func (b *anthropicBatch) Results(ctx context.Context, batch Batch, structured ma
 func anthropicAnswer(m anthropic.Message, structured bool) (Answer, error) {
 	switch m.StopReason {
 	case anthropic.StopReasonMaxTokens:
-		return Answer{}, errors.New("the answer was cut off at the model's length limit")
+		return Answer{}, fmt.Errorf("%w: it was cut off at the model's length limit", ErrNoAnswer)
 	case anthropic.StopReasonRefusal:
-		return Answer{}, errors.New("the model declined to answer")
+		return Answer{}, fmt.Errorf("%w: it declined to answer", ErrNoAnswer)
 	}
 	var text strings.Builder
 	for _, block := range m.Content {
