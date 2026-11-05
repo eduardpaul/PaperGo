@@ -1,4 +1,5 @@
 {
+  "key": "read-receipts",
   "name": "Read receipts",
   "description": "Reads a receipt photo and files the purchase lines.",
   "script": "read-receipts.ts",

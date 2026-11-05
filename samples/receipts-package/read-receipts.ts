@@ -5,7 +5,7 @@
 // keeps the receipt as a searchable PDF made from the photo. It marks the
 // receipt Read once the lines and the PDF are stored, and Needs review when
 // the extraction, the filing or the conversion fails, leaving the photo to
-// read again.
+// read again, saying why in the receipt's Problem field.
 import { json, OperationError, plain, workflow } from "@papergo/workflow";
 import type { models, PaperGoClient } from "@papergo/workflow";
 
@@ -189,10 +189,11 @@ export default workflow<unknown, unknown, Params>({
       .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.version! - a.version!)[0];
     if (!photo) {
       // One that never had a photo is not waiting to be read: it is for a person.
-      if (item.values?.additionalData?.status === "New") await update(api, id, item.version!, { status: "Needs review" });
+      if (item.values?.additionalData?.status === "New") await update(api, id, item.version!, { status: "Needs review", problem: "Not a photo" });
       return { status: "No photo" };
     }
     let version = item.version!;
+    let problem = "Not readable";
     try {
       // The model reads the photo as it was uploaded: the app shrinks it on
       // the phone to what the model needs.
@@ -200,11 +201,14 @@ export default workflow<unknown, unknown, Params>({
       // again says why this run asks: the same request would get the answer
       // that sent it to review.
       const again = item.values?.additionalData?.status === "Needs review";
+      // While it is read it waits to be read, whatever it was before.
+      if (item.values?.additionalData?.status !== "New") version = await update(api, id, version, { status: "New", problem: null });
       const answer = await ctx.wait((await api.v1.ai.completions.post({
         prompt, itemId: id, imageBlobId: photo.id, execution: "batch", queue: "shared", outputSchema: json(schema),
         input: again ? `An earlier answer could not be used; read the receipt again carefully. (${ctx.run.id})` : undefined,
       }))!);
       const receipt = readable((plain(answer.result) as { json: Receipt }).json);
+      problem = "Not filed";
       version = await update(api, id, version, { store: receipt.store, purchase_date: receipt.purchase_date, currency: receipt.currency, total: receipt.total });
 
       // Lines filed by an earlier run go first. Deleting a line hides its
@@ -238,6 +242,7 @@ export default workflow<unknown, unknown, Params>({
       // smallest text stays legible, compressed, with its OCR text. It
       // replaces the photo as the receipt's file; a file a workflow saves
       // starts no run.
+      problem = "No PDF";
       if (photo.isCurrent) {
         const composed = await ctx.wait((await api.v1.items.byId(id).composePdf.post({}))!);
         const artifact = (plain(composed.result) as { artifact_id: string }).artifact_id;
@@ -252,7 +257,8 @@ export default workflow<unknown, unknown, Params>({
       // become a PDF or a changed receipt leaves it for a person.
       ctx.warn("needs review:", e instanceof OperationError ? e.message : String(e));
       const current = (await api.v1.resources.byId(id).get())!.version!;
-      await update(api, id, current, { status: "Needs review" });
+      const changed = (e as { responseStatusCode?: number }).responseStatusCode === 412;
+      await update(api, id, current, { status: "Needs review", problem: changed ? "Changed" : problem });
       return { status: "Needs review" };
     }
   },

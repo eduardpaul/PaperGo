@@ -172,7 +172,8 @@ func installReceipts(t *testing.T) *receipts {
 		t.Fatalf("workflows: %+v %v", flows, err)
 	}
 	for _, flow := range flows {
-		if flow.Name == "Read receipts" && flow.AutomaticEnabled {
+		// The desk finds the workflow by this key.
+		if flow.Key == "read-receipts" && flow.AutomaticEnabled {
 			r.workflow = flow.ID
 		}
 	}
@@ -585,7 +586,7 @@ func TestReceiptsPackage(t *testing.T) {
 	r.flush(t)
 	reviewed := r.runOf(t, rejected, runstore.StatusCompleted)
 	// The photo stays, to be read again.
-	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
+	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.Values["problem"] != "Not readable" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
 		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
 
@@ -627,7 +628,7 @@ func TestReceiptsPackage(t *testing.T) {
 	// A file the model cannot read does not wait to be read forever.
 	heic := r.uploadFile(t, "photo.heic", "image/heic", []byte("not a photo the model reads"))
 	unread := r.runOf(t, heic, runstore.StatusCompleted)
-	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["status"] != "Needs review" {
+	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["status"] != "Needs review" || item.Values["problem"] != "Not a photo" {
 		t.Fatalf("a HEIC file: %s %+v", unread.Result, item)
 	}
 
@@ -660,6 +661,10 @@ func TestReceiptsPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.queued(t, 1)
+	// While it is read it waits to be read again, without its problem.
+	if item := r.item(t, bad); item.Values["status"] != "New" || item.Values["problem"] != nil {
+		t.Fatalf("a receipt read again: %+v", item)
+	}
 	r.flush(t)
 	r.runOf(t, bad, runstore.StatusCompleted, first.ID)
 	r.expectRead(t, bad)

@@ -9,6 +9,7 @@
     {"key": "currency", "label": "Currency", "type": "text", "indexed": true, "options": {"max_length": 3}},
     {"key": "total", "label": "Total", "type": "decimal", "scale": 2, "indexed": true},
     {"key": "status", "label": "Status", "type": "choice", "indexed": true, "choices": ["New", "Read", "Needs review"], "options": {"default_value": "New"}},
+    {"key": "problem", "label": "Problem", "type": "choice", "choices": ["Not a photo", "Not readable", "Not filed", "No PDF", "Changed"]},
     {"key": "description", "label": "Description", "type": "text", "options": {"max_length": 200}},
     {"key": "category", "label": "Category", "type": "choice", "indexed": true, "choices": ["Fruit and vegetables", "Meat and fish", "Dairy and eggs", "Bakery", "Pantry", "Frozen", "Drinks", "Snacks and sweets", "Household", "Personal care", "Health", "Baby", "Pets", "Other"]},
     {"key": "quantity", "label": "Quantity", "type": "decimal", "scale": 4},
@@ -16,7 +17,7 @@
     {"key": "amount", "label": "Amount", "type": "decimal", "scale": 2, "indexed": true}
   ],
   "content_types": [
-    {"key": "receipt", "name": "Receipt", "fields": ["store", "purchase_date", "currency", "total", "status"]},
+    {"key": "receipt", "name": "Receipt", "fields": ["store", "purchase_date", "currency", "total", "status", "problem"]},
     {"key": "receipt_line", "name": "Receipt line", "fields": ["description", "category", "quantity", "unit_price", "amount", "currency", "purchase_date", "status"]}
   ],
   "collections": [
@@ -36,7 +37,7 @@
         {
           "name": "Needs review",
           "layout": "table",
-          "columns": ["$name", "store", "purchase_date", "currency", "total", "status"],
+          "columns": ["$name", "store", "purchase_date", "currency", "total", "status", "problem"],
           "query": {"content_type_id": "$receipt", "filter": {"field": "status", "op": "eq", "value": "Needs review"}}
         },
         {

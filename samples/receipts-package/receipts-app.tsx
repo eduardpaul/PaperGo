@@ -50,13 +50,18 @@ const QUALITY = 0.85;
 // The relationship from a receipt to its lines, as the package names it.
 const contains = "contains receipt line";
 
+// The workflow that reads a receipt, by the key the package gives it.
+const readWorkflow = "read-receipts";
+
 const words = {
   en: {
     take: "Take a photo", choose: "Choose photos", uploads: "Uploads", latest: "Latest receipts",
     queued: "Waiting its turn…", optimizing: "Optimizing…", uploading: "Uploading…", uploaded: "Uploaded, waiting to be read", failed: "Failed: {reason}", unreadable: "This photo cannot be opened here; take it again or choose a JPEG",
-    shrunk: "{before} → {after}", waiting: "Waiting to be read", read: "Read", review: "Needs review", reviewHint: "The model could not read these. Open one to correct it, or take a better photo.",
+    shrunk: "{before} → {after}", waiting: "Waiting to be read", read: "Read", review: "Needs review", reviewHint: "The model could not read these. Open one to read it again, replace its photo or delete it.", showThem: "Show them",
     batchHint: "Receipts are read in batches: their lines can take until the nightly batch.",
     receipt: "Receipt", date: "Date", total: "Total", status: "Status", lines: "Lines", description: "Description", quantity: "Qty", unitPrice: "Price", amount: "Amount",
+    readAgain: "Read again", replacePhoto: "Replace photo", remove: "Delete", removeAsk: "Delete this receipt and its lines?", removeYes: "Yes, delete", cancel: "Cancel", actionFailed: "That did not work; try again",
+    problems: { "Not a photo": "This file is not a photo the model can read.", "Not readable": "The model could not read this photo or its amounts.", "Not filed": "Its lines could not be stored.", "No PDF": "The photo could not be kept as a PDF.", Changed: "The receipt changed while it was being read." } as Record<string, string>,
     open: "Open in PaperGo", close: "Close", noLines: "No lines yet", all: "All receipts", setUp: "Choose the Receipts library and its Receipt and Receipt line types in Workspace settings → Apps.",
     statusNew: "Reading", statusRead: "Read", statusReview: "Needs review",
     month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
@@ -69,9 +74,11 @@ const words = {
   es: {
     take: "Hacer una foto", choose: "Elegir fotos", uploads: "Subidas", latest: "Últimos tiques",
     queued: "Esperando su turno…", optimizing: "Optimizando…", uploading: "Subiendo…", uploaded: "Subido, pendiente de lectura", failed: "Error: {reason}", unreadable: "No se puede abrir esta foto aquí; hazla de nuevo o elige un JPEG",
-    shrunk: "{before} → {after}", waiting: "Por leer", read: "Leídos", review: "Por revisar", reviewHint: "El modelo no pudo leerlos. Abre uno para corregirlo, o haz una foto mejor.",
+    shrunk: "{before} → {after}", waiting: "Por leer", read: "Leídos", review: "Por revisar", reviewHint: "El modelo no pudo leerlos. Abre uno para leerlo de nuevo, cambiar su foto o eliminarlo.", showThem: "Ver cuáles",
     batchHint: "Los tiques se leen por lotes: sus líneas pueden tardar hasta el lote nocturno.",
     receipt: "Tique", date: "Fecha", total: "Total", status: "Estado", lines: "Líneas", description: "Descripción", quantity: "Cant.", unitPrice: "Precio", amount: "Importe",
+    readAgain: "Leer de nuevo", replacePhoto: "Cambiar la foto", remove: "Eliminar", removeAsk: "¿Eliminar este tique y sus líneas?", removeYes: "Sí, eliminar", cancel: "Cancelar", actionFailed: "No se pudo hacer; inténtalo de nuevo",
+    problems: { "Not a photo": "Este archivo no es una foto que el modelo pueda leer.", "Not readable": "El modelo no pudo leer esta foto o sus importes.", "Not filed": "No se pudieron guardar sus líneas.", "No PDF": "No se pudo guardar la foto como PDF.", Changed: "El tique cambió mientras se leía." } as Record<string, string>,
     open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y sus tipos Receipt y Receipt line en Configuración del espacio de trabajo → Aplicaciones.",
     statusNew: "Leyendo", statusRead: "Leído", statusReview: "Por revisar",
     month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
@@ -211,6 +218,12 @@ async function multipart(name: string, photo: Blob): Promise<{ body: ArrayBuffer
   return { body: body.buffer, type: `multipart/form-data; boundary=${boundary}` };
 }
 
+// removeItem deletes an item at the version it has now.
+async function removeItem(ctx: AppContext<Params>, id: string): Promise<void> {
+  const item = await ctx.request<{ version: number }>("GET", `/v1/resources/${id}`);
+  await ctx.request("DELETE", `/v1/resources/${id}`, { headers: { "if-match": `"${item.data.version}"` } });
+}
+
 // receiptName names a receipt after when it was taken, in the viewer's
 // time zone and language, as a file: Receipt 2026-11-05 14.32.10.jpg, or
 // Tique … in Spanish. The workflow gives it the PDF's extension once it
@@ -250,12 +263,18 @@ function Desk({ w }: { w: Words }) {
   // The photo of each row not uploaded yet: a phone's camera photo may be
   // nowhere else.
   const photos = useRef(new Map<number, File>());
+  // The receipt in review each better photo replaces once it is uploaded.
+  const replaced = useRef(new Map<number, string>());
 
   // Receipts only: the folders of their lines have no status.
   const receipts = { contentTypeId: p.receipt, filter: { field: "status", op: "present" } };
-  const latest = useQuery(p.library, { ...receipts, sort: [{ field: "$created_at", direction: "desc" }] }, { live: true, top: 20 });
   const counts = useAggregates(p.library, { query: receipts, groups: [{ field: "status" }], aggregates: [{ op: "count", field: "status" }] }, { live: true });
   const count = (status: string) => counts.data.find((g) => g.keys[0]?.value === status)?.count ?? 0;
+  // The table lists the latest receipts, or those that need review, however old.
+  const [reviewing, setReviewing] = useState(false);
+  const onlyReview = reviewing && count("Needs review") > 0;
+  const listed = onlyReview ? { contentTypeId: p.receipt, filter: { field: "status", op: "eq", value: "Needs review" } } : receipts;
+  const latest = useQuery(p.library, { ...listed, sort: [{ field: "$created_at", direction: "desc" }] }, { live: true, top: 20 });
 
   // What read receipts of the period cost, by currency; the categories are
   // those of the currency most receipts were paid in. Lines carry their
@@ -290,10 +309,11 @@ function Desk({ w }: { w: Words }) {
     queue.current = queue.current.then(() => send(key));
   };
 
-  const add = (files: FileList | null) => {
+  const add = (files: Iterable<File> | ArrayLike<File> | null, replaces?: string) => {
     for (const file of Array.from(files ?? [])) {
       const key = ++next.current;
       photos.current.set(key, file);
+      if (replaces) replaced.current.set(key, replaces);
       const upload: Upload = { key, name: file.name, state: "queued", before: file.size };
       setUploads((all) => [upload, ...all].slice(0, 10));
       enqueue(key);
@@ -332,6 +352,10 @@ function Desk({ w }: { w: Words }) {
           const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
           photos.current.delete(key);
           change(key, { state: "uploaded", name, itemId: created.data.item.id });
+          // The bad receipt goes once its photo is safe; if it stays, it
+          // stays in review.
+          const old = replaced.current.get(key);
+          if (old) await removeItem(ctx, old).catch(() => undefined);
           return;
         } catch (e) {
           if (!(e instanceof RequestError && e.code === "name_conflict" && copy < 20)) throw e;
@@ -419,7 +443,7 @@ function Desk({ w }: { w: Words }) {
       </Grid>
 
       {count("New") > 0 && <p className="pg-stat-hint">{w.batchHint}</p>}
-      {count("Needs review") > 0 && <Notice tone="warning" title={w.review}>{w.reviewHint}</Notice>}
+      {count("Needs review") > 0 && <Notice tone="warning" title={w.review} action={onlyReview ? undefined : { label: w.showThem, onClick: () => setReviewing(true) }}>{w.reviewHint}</Notice>}
 
       <Card title={w.byCategory}>
         <Table
@@ -448,7 +472,10 @@ function Desk({ w }: { w: Words }) {
         />
       </Card>
 
-      <Card title={w.latest} actions={<Button onClick={() => open({ listId: p.library })}>{w.all}</Button>}>
+      <Card
+        title={onlyReview ? w.review : w.latest}
+        actions={onlyReview ? <Button onClick={() => setReviewing(false)}>{w.latest}</Button> : <Button onClick={() => open({ listId: p.library })}>{w.all}</Button>}
+      >
         <Table
           columns={[{ key: "receipt", label: w.receipt }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
           rows={rows}
@@ -457,7 +484,8 @@ function Desk({ w }: { w: Words }) {
         />
       </Card>
 
-      <LinesDialog w={w} receipt={opened} open={open} onClose={() => setOpened(undefined)} />
+      {/* The dialog follows the receipt's status as it changes. */}
+      <ReceiptDialog w={w} receipt={latest.data.find((r) => r.id === opened?.id) ?? opened} open={open} replace={(receipt, file) => add([file], receipt.id)} onClose={() => setOpened(undefined)} />
 
       <Modal
         open={leaving !== undefined}
@@ -482,17 +510,24 @@ interface Line {
   values: Record<string, unknown>;
 }
 
-// LinesDialog shows a receipt's lines, through the links the workflow made,
-// in the order of the receipt: the workflow numbers them "1. Bread".
-function LinesDialog({ w, receipt, open, onClose }: { w: Words; receipt?: Item; open: (target: OpenTarget) => void; onClose: () => void }) {
+// ReceiptDialog shows a receipt's status and lines, through the links the
+// workflow made, in the order of the receipt: the workflow numbers them
+// "1. Bread". For a receipt in review it says why, and offers what can be done.
+function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; receipt?: Item; open: (target: OpenTarget) => void; replace: (receipt: Item, photo: File) => void; onClose: () => void }) {
   const ctx = useApp<Params>();
   const f = ctx.format;
   const [lines, setLines] = useState<Line[]>();
   const [failed, setFailed] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [actionFailed, setActionFailed] = useState(false);
+  const better = useRef<HTMLInputElement>(null);
   const id = receipt?.id;
   useEffect(() => {
     setLines(undefined);
     setFailed(false);
+    setAsking(false);
+    setActionFailed(false);
     if (!id) return;
     let stale = false;
     const q = new URLSearchParams({ direction: "outgoing", type: contains, $top: "100" });
@@ -515,6 +550,29 @@ function LinesDialog({ w, receipt, open, onClose }: { w: Words; receipt?: Item; 
   // A unit price can be finer than the currency, as fuel's 1.459 a litre.
   const price = (v: unknown) => (/\.\d\d0*[1-9]/.test(String(v)) ? `${f.number(String(v), 4)} ${currency}` : money(v));
   const sorted = lines ?? [];
+  const status = String(receipt.values.status ?? "");
+  const problem = String(receipt.values.problem ?? "");
+  const statusName = { New: w.statusNew, Read: w.statusRead, "Needs review": w.statusReview }[status] ?? status;
+  // An action that ends closes the dialog; the table follows the receipt.
+  const act = async (action: () => Promise<unknown>) => {
+    setWorking(true);
+    setActionFailed(false);
+    try {
+      await action();
+      onClose();
+    } catch {
+      setActionFailed(true);
+    } finally {
+      setWorking(false);
+    }
+  };
+  const readAgain = () =>
+    act(async () => {
+      const flows = await ctx.request<{ value: { id: string; key: string }[] }>("GET", `/v1/workspaces/${ctx.workspace.id}/workflows`);
+      const flow = flows.data.value.find((candidate) => candidate.key === readWorkflow);
+      if (!flow) throw new Error("the workflow is gone");
+      await ctx.request("POST", `/v1/workflows/${flow.id}/runs`, { body: { item_ids: [receipt.id] } });
+    });
   return (
     <Modal
       open
@@ -523,8 +581,29 @@ function LinesDialog({ w, receipt, open, onClose }: { w: Words; receipt?: Item; 
       actions={<><Button onClick={onClose}>{w.close}</Button><Button variant="primary" onClick={() => { onClose(); open({ itemId: receipt.id }); }}>{w.open}</Button></>}
     >
       <p className="pg-stat-hint">
-        {[receipt.values.purchase_date ? f.date(String(receipt.values.purchase_date)) : undefined, receipt.values.total !== undefined ? money(receipt.values.total) : undefined].filter(Boolean).join(" · ")}
+        {[statusName, receipt.values.purchase_date ? f.date(String(receipt.values.purchase_date)) : undefined, receipt.values.total !== undefined ? money(receipt.values.total) : undefined].filter(Boolean).join(" · ")}
       </p>
+      {status === "Needs review" && (
+        <Notice tone="warning" title={w.problems[problem] ?? w.reviewHint}>
+          <input ref={better} type="file" accept="image/*" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) { replace(receipt, file); onClose(); } e.target.value = ""; }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            {asking ? (
+              <>
+                <span style={{ flexBasis: "100%" }}>{w.removeAsk}</span>
+                <Button variant="danger" disabled={working} onClick={() => act(() => removeItem(ctx, receipt.id))}>{w.removeYes}</Button>
+                <Button disabled={working} onClick={() => setAsking(false)}>{w.cancel}</Button>
+              </>
+            ) : (
+              <>
+                {problem !== "Not a photo" && <Button disabled={working} onClick={readAgain}>{w.readAgain}</Button>}
+                <Button disabled={working} onClick={() => better.current?.click()}>{w.replacePhoto}</Button>
+                <Button variant="danger" disabled={working} onClick={() => setAsking(true)}>{w.remove}</Button>
+              </>
+            )}
+          </div>
+          {actionFailed && <div className="pg-field-error">{w.actionFailed}</div>}
+        </Notice>
+      )}
       <Table
         empty={failed ? w.loadFailed : lines === undefined ? w.loading : w.noLines}
         columns={[
