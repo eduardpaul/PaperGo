@@ -173,6 +173,15 @@ async function optimize(file: File): Promise<Blob> {
   return scale === 1 && file.type === "image/jpeg" && file.size <= jpeg.size ? file : jpeg;
 }
 
+// filenameParams names the file in a Content-Disposition header: an ASCII
+// stand-in in filename, and the name itself, in any language, in filename*
+// (RFC 5987), which the server reads first.
+function filenameParams(name: string): string {
+  const ascii = name.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return `filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 // multipart is the body of a document upload: the item's metadata and the
 // photo, both under the receipt's name. The app sends bytes, not a form,
 // through its request bridge.
@@ -181,7 +190,7 @@ async function multipart(name: string, photo: Blob): Promise<{ body: ArrayBuffer
   const text = new TextEncoder();
   const head = text.encode(
     `--${boundary}\r\nContent-Disposition: form-data; name="metadata"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name })}\r\n` +
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: image/jpeg\r\n\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; ${filenameParams(name)}\r\nContent-Type: image/jpeg\r\n\r\n`,
   );
   const tail = text.encode(`\r\n--${boundary}--\r\n`);
   const bytes = new Uint8Array(await photo.arrayBuffer());
