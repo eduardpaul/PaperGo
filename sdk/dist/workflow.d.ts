@@ -7524,7 +7524,6 @@ declare const Comment_sourceObject: {
 	readonly Workflow: "workflow";
 };
 declare const CommentSettings_effective_fromObject: {
-	readonly Deployment: "deployment";
 	readonly Organization: "organization";
 	readonly Workspace: "workspace";
 	readonly Collection: "collection";
@@ -7546,7 +7545,6 @@ declare const CommentSettingsInput_modeObject: {
 	readonly Readers: "readers";
 };
 declare const CommentThreadList_mode_fromObject: {
-	readonly Deployment: "deployment";
 	readonly Organization: "organization";
 	readonly Workspace: "workspace";
 	readonly Collection: "collection";

@@ -286,9 +286,6 @@ func (a *Assistant) complete(ctx context.Context, s *dms.Service, op *operations
 		}
 		return succeed(ctx, s, op, cached.answer(c.ModelKey, true))
 	}
-	if a.Chat == nil {
-		return ErrNoChat
-	}
 	if a.Chat.Key() != c.ModelKey {
 		return errors.New("the chat model changed before the request ran")
 	}

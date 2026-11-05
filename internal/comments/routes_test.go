@@ -1,21 +1,88 @@
-package httpapi
+package comments
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
-	"papergo/internal/comments"
+	"papergo/internal/auth"
+	"papergo/internal/dal/daltest"
 	directorydomain "papergo/internal/dal/directory"
 	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
+	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/notify"
+	"papergo/internal/storage"
 )
 
+func TestMain(m *testing.M) { daltest.Main(m) }
+
+const testToken = "0123456789abcdef0123456789abcdef"
+
+// setup is the API with comments, acting as alice, and its service.
+func setup(t *testing.T) (http.Handler, *dms.Service) {
+	t.Helper()
+	db := daltest.Database(t)
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := dms.NewService(db.SQL)
+	a := &httpapi.API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Storage: store, Logger: slog.Default(), Ready: db.SQL.PingContext, MaxUpload: 32, Modules: []httpapi.Module{Module()}}
+	return a.Handler(), s
+}
+
+func request(h http.Handler, method, path, body, token, match, contentType string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	if match != "" {
+		r.Header.Set("If-Match", match)
+	}
+	if contentType != "" {
+		r.Header.Set("Content-Type", contentType)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+type sseFrame struct{ kind, data string }
+
+func readFrame(t *testing.T, r *bufio.Reader) sseFrame {
+	t.Helper()
+	var frame sseFrame
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		line = strings.TrimSuffix(line, "\n")
+		if line == "" {
+			return frame
+		}
+		if value, ok := strings.CutPrefix(line, "event: "); ok {
+			frame.kind = value
+		}
+		if value, ok := strings.CutPrefix(line, "data: "); ok {
+			frame.data = value
+		}
+	}
+}
+
 func TestCommentRoutes(t *testing.T) {
-	h, s := setupWorkflows(t)
+	h, s := setup(t)
 	ctx := t.Context()
 	create := func(parent, kind, name string) string {
 		t.Helper()
@@ -42,7 +109,7 @@ func TestCommentRoutes(t *testing.T) {
 		}
 		return w.Body.String()
 	}
-	svc := &comments.Service{DMS: s, Enabled: true}
+	svc := &Service{DMS: s}
 	inbox := func(subject string, typ notifications.Type) []notify.View {
 		t.Helper()
 		page, err := (&notify.Service{DMS: s}).Inbox(ctx, subject, notify.Filter{Type: typ})
@@ -54,7 +121,7 @@ func TestCommentRoutes(t *testing.T) {
 
 	// A thread mentioning a collaborator and a visitor: only the
 	// collaborator, who reads drafts, is told.
-	var root comments.View
+	var root View
 	body := call("POST", "/v1/items/"+item+"/comments", `{"body": "Is clause 4 signed, <@user:bob>? cc <@user:dave>"}`, "", 201)
 	if err := json.Unmarshal([]byte(body), &root); err != nil || len(root.Mentions) != 2 || root.Author.Subject != "alice" || !root.CanEdit || !root.CanResolve {
 		t.Fatalf("root: %s %v", body, err)
@@ -72,7 +139,7 @@ func TestCommentRoutes(t *testing.T) {
 
 	// Replies tell the thread's participants, folding a burst into one.
 	for i, text := range []string{"Yes, on page 3", "And initialled"} {
-		if _, err := svc.Create(ctx, "bob", "", item, comments.Input{Body: text, ThreadID: root.ID}); err != nil {
+		if _, err := svc.Create(ctx, "bob", "", item, Input{Body: text, ThreadID: root.ID}); err != nil {
 			t.Fatal(i, err)
 		}
 	}
@@ -88,15 +155,15 @@ func TestCommentRoutes(t *testing.T) {
 	// discussion, and is suggested as someone who cannot see it.
 	body = call("GET", "/v1/items/"+item+"/comments", "", "", 200)
 	var page struct {
-		Value   []comments.Thread `json:"value"`
-		Mode    string            `json:"mode"`
-		From    string            `json:"mode_from"`
-		CanPost bool              `json:"can_post"`
+		Value   []Thread `json:"value"`
+		Mode    string   `json:"mode"`
+		From    string   `json:"mode_from"`
+		CanPost bool     `json:"can_post"`
 	}
 	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Value) != 1 || len(page.Value[0].Replies) != 2 || page.Mode != "collaborators" || page.From != "default" || !page.CanPost {
 		t.Fatalf("threads: %s %v", body, err)
 	}
-	if visitor, err := svc.Threads(ctx, "dave", item, comments.Query{Status: comments.StatusAll}); err != nil || visitor.CanRead || len(visitor.Data) != 0 {
+	if visitor, err := svc.Threads(ctx, "dave", item, Query{Status: StatusAll}); err != nil || visitor.CanRead || len(visitor.Data) != 0 {
 		t.Fatalf("a visitor read collaborators' discussion: %+v %v", visitor, err)
 	}
 	body = call("GET", "/v1/items/"+item+"/mentionable?q=da", "", "", 200)
@@ -133,7 +200,7 @@ func TestCommentRoutes(t *testing.T) {
 
 	// Someone who leaves stays mentioned: the author still edits the
 	// comment, but nobody mentions them anew.
-	var note comments.View
+	var note View
 	if err = json.Unmarshal([]byte(call("POST", "/v1/items/"+item+"/comments", `{"body": "Ask <@user:frank>"}`, "", 201)), &note); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +243,7 @@ func TestCommentRoutes(t *testing.T) {
 	// A manager deletes someone's reply; the thread keeps the others.
 	second := page.Value[0].Replies[1]
 	call("DELETE", "/v1/comments/"+second.ID, "", `"`+strconv.FormatInt(second.Version, 10)+`"`, 204)
-	if threads, _ := svc.Threads(ctx, "alice", item, comments.Query{Status: comments.StatusAll}); len(threads.Data[0].Replies) != 1 {
+	if threads, _ := svc.Threads(ctx, "alice", item, Query{Status: StatusAll}); len(threads.Data[0].Replies) != 1 {
 		t.Fatalf("a deleted reply remains: %+v", threads.Data[0].Replies)
 	}
 
@@ -189,7 +256,7 @@ func TestCommentRoutes(t *testing.T) {
 	}
 	call("PUT", "/v1/resources/"+item+"/settings/comments", `{"mode": "readers"}`, `"0"`, 422)
 	call("PUT", "/v1/resources/"+list+"/settings/comments", `{"mode": "everyone"}`, `"1"`, 422)
-	visitor, err := svc.Threads(ctx, "dave", item, comments.Query{Status: comments.StatusAll})
+	visitor, err := svc.Threads(ctx, "dave", item, Query{Status: StatusAll})
 	if err != nil || !visitor.CanRead || !visitor.CanPost || len(visitor.Data) != 1 || visitor.Data[0].CanResolve {
 		t.Fatalf("a visitor among readers: %+v %v", visitor, err)
 	}
@@ -200,7 +267,7 @@ func TestCommentRoutes(t *testing.T) {
 	// The workspace turns comments off, but the collection's own mode
 	// wins; the organization's switch wins over both.
 	call("PUT", "/v1/resources/"+ws+"/settings/comments", `{"mode": "off"}`, `"0"`, 200)
-	if settings, _ := svc.PlaceSettings(ctx, "alice", list); settings.Effective.Mode != comments.ModeReaders {
+	if settings, _ := svc.PlaceSettings(ctx, "alice", list); settings.Effective.Mode != ModeReaders {
 		t.Fatalf("collection under an off workspace: %+v", settings)
 	}
 	call("PUT", "/v1/organization/settings/comments", `{"enabled": false}`, `"0"`, 403)
@@ -219,7 +286,7 @@ func TestCommentRoutes(t *testing.T) {
 	}
 	call("POST", "/v1/items/"+item+"/comments", `{"body": "Anyone?"}`, "", 409)
 	call("PUT", "/v1/organization/settings/comments", `{"enabled": true, "mode": "collaborators"}`, `"1"`, 200)
-	if body = call("GET", "/v1/organization/settings/comments", "", "", 200); !strings.Contains(body, `"enabled":true,"mode":"collaborators","available":true,"version":2`) {
+	if body = call("GET", "/v1/organization/settings/comments", "", "", 200); !strings.Contains(body, `"enabled":true,"mode":"collaborators","version":2`) {
 		t.Fatalf("organization settings: %s", body)
 	}
 
@@ -252,7 +319,7 @@ func TestCommentRoutes(t *testing.T) {
 // An integration's identity has only its token's access, which carries it
 // through mentions and replies as through plain comments.
 func TestIntegrationsMentionAndReply(t *testing.T) {
-	h, s := setupWorkflows(t)
+	h, s := setup(t)
 	ctx := t.Context()
 	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: directorydomain.PrincipalUser, ID: "alice"}, false); err != nil {
 		t.Fatal(err)
@@ -276,10 +343,10 @@ func TestIntegrationsMentionAndReply(t *testing.T) {
 	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: token.Token.Subject, Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	post := func(body string) comments.View {
+	post := func(body string) View {
 		t.Helper()
 		w := request(h, "POST", "/v1/items/"+item.ID+"/comments", body, token.Secret, "", "application/json")
-		var out comments.View
+		var out View
 		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
 			t.Fatalf("integration comment %s: %d %s", body, w.Code, w.Body)
 		}
@@ -287,7 +354,7 @@ func TestIntegrationsMentionAndReply(t *testing.T) {
 	}
 	post(`{"body": "Ticket opened"}`)
 	root := post(`{"body": "Approve the order, <@user:alice>?"}`)
-	if _, err = (&comments.Service{DMS: s, Enabled: true}).Create(ctx, "alice", "", item.ID, comments.Input{Body: "Approved", ThreadID: root.ID}); err != nil {
+	if _, err = (&Service{DMS: s}).Create(ctx, "alice", "", item.ID, Input{Body: "Approved", ThreadID: root.ID}); err != nil {
 		t.Fatal(err)
 	}
 	post(`{"body": "Ordered", "thread_id": "` + root.ID + `"}`)
@@ -299,7 +366,7 @@ func TestIntegrationsMentionAndReply(t *testing.T) {
 // A comment's notifications show its current text, and its text leaves
 // with it when it is deleted.
 func TestCommentNotificationsFollowTheComment(t *testing.T) {
-	_, s := setupWorkflows(t)
+	_, s := setup(t)
 	ctx := t.Context()
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Legal"})
 	if err != nil {
@@ -316,10 +383,10 @@ func TestCommentNotificationsFollowTheComment(t *testing.T) {
 	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	svc := &comments.Service{DMS: s, Enabled: true}
-	post := func(subject, body, thread string) comments.View {
+	svc := &Service{DMS: s}
+	post := func(subject, body, thread string) View {
 		t.Helper()
-		v, err := svc.Create(ctx, subject, "", item.ID, comments.Input{Body: body, ThreadID: thread})
+		v, err := svc.Create(ctx, subject, "", item.ID, Input{Body: body, ThreadID: thread})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -382,7 +449,7 @@ func TestCommentNotificationsFollowTheComment(t *testing.T) {
 
 // An edit tells nobody what they may no longer read.
 func TestCommentEditsReachOnlyReaders(t *testing.T) {
-	_, s := setupWorkflows(t)
+	_, s := setup(t)
 	ctx := t.Context()
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Legal"})
 	if err != nil {
@@ -399,10 +466,10 @@ func TestCommentEditsReachOnlyReaders(t *testing.T) {
 	if err = s.SetWorkspaceMember(ctx, "alice", ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	svc := &comments.Service{DMS: s, Enabled: true}
-	post := func(subject, body, thread string) comments.View {
+	svc := &Service{DMS: s}
+	post := func(subject, body, thread string) View {
 		t.Helper()
-		v, err := svc.Create(ctx, subject, "", item.ID, comments.Input{Body: body, ThreadID: thread})
+		v, err := svc.Create(ctx, subject, "", item.ID, Input{Body: body, ThreadID: thread})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -430,7 +497,7 @@ func TestCommentEditsReachOnlyReaders(t *testing.T) {
 }
 
 func TestCommentAnchors(t *testing.T) {
-	h, s := setupWorkflows(t)
+	h, s := setup(t)
 	ctx := t.Context()
 	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Legal"})
 	if err != nil {
@@ -453,7 +520,7 @@ func TestCommentAnchors(t *testing.T) {
 		return w.Body.String()
 	}
 	base := "/v1/items/" + item.ID + "/comments"
-	var root comments.View
+	var root View
 	body := call("POST", base, `{"body": "Check this clause", "anchor": {"kind": "file.region", "blob_id": "b1", "page": 2, "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.05}}`, 201)
 	if err = json.Unmarshal([]byte(body), &root); err != nil || !strings.Contains(string(root.Anchor), `"kind":"file.region"`) {
 		t.Fatalf("anchored: %s %v", body, err)
@@ -469,5 +536,90 @@ func TestCommentAnchors(t *testing.T) {
 	}
 	if got := call("GET", "/v1/comments/"+root.ID, "", 200); !strings.Contains(got, `"anchor":{`) {
 		t.Fatalf("one comment: %s", got)
+	}
+}
+
+// A comment frame tells people who may read the discussion what changed.
+func TestLiveCommentFrames(t *testing.T) {
+	_, s := setup(t)
+	a := &httpapi.API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second, Modules: []httpapi.Module{Module()}}
+	server := httptest.NewServer(a.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	mine, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Mine"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := s.Create(ctx, "bob", "", dms.CreateResource{Kind: "workspace", Name: "Theirs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(subject, workspace string) string {
+		t.Helper()
+		l, err := s.Create(ctx, subject, workspace, dms.CreateResource{Kind: "list", Name: "L"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		i, err := s.Create(ctx, subject, l.ID, dms.CreateResource{Kind: "item", Name: "I"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return i.ID
+	}
+	hidden, shown := item("bob", theirs.ID), item("alice", mine.ID)
+	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	stream, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	readFrame(t, reader)
+	svc := &Service{DMS: s}
+	if _, err = svc.Create(ctx, "bob", "", hidden, Input{Body: "Private"}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := svc.Create(ctx, "alice", "", shown, Input{Body: "Shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		frame := readFrame(t, reader)
+		if frame.kind == "keepalive" || frame.kind == "item" {
+			continue
+		}
+		if frame.kind != "comment" || !strings.Contains(frame.data, c.ID) || !strings.Contains(frame.data, shown) || !strings.Contains(frame.data, `"action":"created"`) {
+			t.Fatalf("comment frame: %+v", frame)
+		}
+		break
+	}
+	// A burst on both items, read as one batch, still shows only the
+	// discussion the stream may read.
+	var last View
+	for i := range 3 {
+		if _, err = svc.Create(ctx, "bob", "", hidden, Input{Body: "Private"}); err != nil {
+			t.Fatal(err)
+		}
+		if last, err = svc.Create(ctx, "alice", "", shown, Input{Body: fmt.Sprint("Shared ", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for seen := 0; seen < 3; {
+		frame := readFrame(t, reader)
+		if frame.kind == "keepalive" || frame.kind == "item" {
+			continue
+		}
+		if frame.kind != "comment" || !strings.Contains(frame.data, shown) || strings.Contains(frame.data, hidden) {
+			t.Fatalf("comment frame in a burst: %+v", frame)
+		}
+		seen++
+		if seen == 3 && !strings.Contains(frame.data, last.ID) {
+			t.Fatalf("the burst's last frame: %+v", frame)
+		}
 	}
 }

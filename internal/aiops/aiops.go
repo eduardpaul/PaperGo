@@ -40,7 +40,7 @@ const (
 )
 
 // Assistant runs AI operations with the deployment's models. A nil model
-// refuses the requests that need it.
+// runs no operations, and the requests that need it are refused.
 type Assistant struct {
 	Storage   storage.Store
 	Chat      ai.Chat
@@ -81,23 +81,67 @@ const (
 	maxAnswer = 256 << 10
 )
 
-// Register makes s run the operations. Requests that need a model the
-// deployment lacks are refused.
+// Register makes s run the operations of the models the deployment has.
 func (a *Assistant) Register(s *dms.Service) error {
 	a.svc = s
 	deadline := a.BatchDeadline
 	if deadline <= 0 {
 		deadline = defaultDeadline
 	}
-	handlers := map[string]dms.OperationHandler{
-		KindComplete: {Scope: "document.read", Validate: a.validateCompletion, Execute: a.complete},
-		KindBatch:    {Scope: "document.read", Validate: a.validateCompletion, Deadline: deadline, Admission: batchAdmission, ExecuteGroup: a.submit},
-		KindDecide:   {Scope: "document.read", Validate: a.validateDecision, Execute: a.decide},
-		KindTaxonomy: {Scope: "document.read", Validate: a.validateDecision, Execute: a.decide},
+	handlers := map[string]dms.OperationHandler{}
+	if a.Chat != nil {
+		handlers[KindComplete] = dms.OperationHandler{Scope: "document.read", Validate: a.validateCompletion, Execute: a.complete}
+	}
+	if a.Batch != nil {
+		handlers[KindBatch] = dms.OperationHandler{Scope: "document.read", Validate: a.validateCompletion, Deadline: deadline, Admission: batchAdmission, ExecuteGroup: a.submit}
+	}
+	if a.Decisions != nil {
+		handlers[KindDecide] = dms.OperationHandler{Scope: "document.read", Validate: a.validateDecision, Execute: a.decide}
+		handlers[KindTaxonomy] = dms.OperationHandler{Scope: "document.read", Validate: a.validateDecision, Execute: a.decide}
 	}
 	for kind, h := range handlers {
 		if err := s.RegisterOperationHandler(kind, h); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// EndOrphans fails the pending operations of the models this start lacks.
+// Without a handler nothing would run, expire or cancel them, so the runs
+// waiting for them would wait forever. It runs at startup, with or without
+// any model, before the runs' waits are reconciled.
+func (a *Assistant) EndOrphans(ctx context.Context, s *dms.Service) error {
+	orphans := map[string]error{}
+	if a.Chat == nil {
+		orphans[KindComplete] = ErrNoChat
+	}
+	if a.Batch == nil {
+		orphans[KindBatch] = ErrNoBatch
+	}
+	if a.Decisions == nil {
+		orphans[KindDecide], orphans[KindTaxonomy] = ErrNoDecisions, ErrNoDecisions
+	}
+	for kind, cause := range orphans {
+		for {
+			pending, err := s.DAL.Operations().List(ctx, operations.Filter{Kinds: []string{kind}, Statuses: []operations.Status{operations.StatusPending}, Limit: 100})
+			if err != nil {
+				return err
+			}
+			if len(pending) == 0 {
+				break
+			}
+			err = s.Write(ctx, func(t *dms.Service) error {
+				for _, op := range pending {
+					if _, e := t.DAL.Operations().Fail(ctx, op.ID, operations.ErrorNone, cause.Error(), time.Now()); e != nil {
+						return e
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

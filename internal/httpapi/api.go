@@ -43,14 +43,8 @@ type API struct {
 	RequestTimeout time.Duration
 	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
 	WebDAV *webdav.Handler
-	// MCP says the deployment serves AI assistants at /v1/mcp; the web app
-	// learns it from /auth/config.
-	MCP bool
 	// FileEditMax is the largest file the web app edits (FILE_EDIT_MAX_BYTES).
 	FileEditMax int64
-	// CommentsOff runs the deployment without discussions (COMMENTS=off):
-	// their routes are gone and the web app shows none.
-	CommentsOff bool
 	// PublicURL, when set, supplies the scheme and host of absolute links, so
 	// they are correct behind a TLS-terminating reverse proxy.
 	PublicURL *url.URL
@@ -208,17 +202,14 @@ func (a *API) root() (*router, error) {
 			signIn = a.BrowserSignIn
 		}
 		// Features tells the web app which optional parts the deployment
-		// runs.
-		type features struct {
-			Comments bool `json:"comments"`
-			MCP      bool `json:"mcp"`
-			// FileTypes are the kinds of file PaperGo names, and which
-			// of them get previews and text reading.
-			FileTypes []fileType `json:"file_types"`
-			// FileEditMax is the largest file the web app edits.
-			FileEditMax int64 `json:"file_edit_max_bytes"`
+		// runs, the kinds of file PaperGo names (and which of them get
+		// previews and text reading) and the largest file it edits.
+		features := map[string]any{"file_types": fileTypes(), "file_edit_max_bytes": a.FileEditMax}
+		for _, module := range a.Modules {
+			if advertised, ok := module.(Advertised); ok {
+				features[advertised.Feature()] = true
+			}
 		}
-		f := features{Comments: !a.CommentsOff, MCP: a.MCP, FileTypes: fileTypes(), FileEditMax: a.FileEditMax}
 		// PublicURL is the origin clients outside the browser reach, such
 		// as the address the web app gives AI assistants.
 		var public string
@@ -229,8 +220,8 @@ func (a *API) root() (*router, error) {
 			Mode      auth.Kind      `json:"mode"`
 			PublicURL string         `json:"public_url,omitempty"`
 			OIDC      *BrowserSignIn `json:"oidc,omitempty"`
-			Features  features       `json:"features"`
-		}{mode, public, signIn, f})
+			Features  map[string]any `json:"features"`
+		}{mode, public, signIn, features})
 	})
 	if local, ok := a.Auth.(auth.Local); ok {
 		root.HandleFunc("POST /auth/login", a.localLogin(local))

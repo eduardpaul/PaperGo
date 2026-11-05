@@ -45,9 +45,11 @@ storage:
 #   integrations  list integration refreshes, two at a time
 #   documents     text reads and OCR, Photos to PDF
 #   previews      file previews
-#   ai            AI completions, two at a time
+#   ai            AI completions, two at a time (only with a chat model)
 #   ai-batch      batch AI completions, in groups of 20 or at 01:00 UTC
-#   decisions     local workflow and taxonomy decisions
+#                 (only with a batch provider)
+#   decisions     local workflow and taxonomy decisions (only with the
+#                 decision engine)
 #   workflows     workflow runs, four slices at a time
 #   search        file content chunking, embedding and publishing, embedding
 #                 sweeps and search reindex (only with search)

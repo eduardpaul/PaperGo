@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"papergo/internal/dal"
+	"papergo/internal/dal/live"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"slices"
@@ -19,6 +20,30 @@ import (
 type Module interface {
 	Name() string
 	Routes() []Route
+}
+
+// Advertised is a module clients adapt to: /auth/config names it in its
+// features while the deployment serves it, under the key Feature returns.
+type Advertised interface {
+	Feature() string
+}
+
+// LiveSource is a module with changes of its own on the live stream. Changes
+// of a kind no module serves reach nobody.
+type LiveSource interface {
+	// LiveKind is the kind of change the module turns into frames.
+	LiveKind() live.Kind
+	// LiveBatch returns what turns the changes of one batch a stream reads
+	// into frames, for the stream's caller. It may share checks across the
+	// batch. A nil frame means the caller does not hear of the change, and
+	// an error ends the stream.
+	LiveBatch(r *http.Request, in Request) func(live.Change) (*LiveFrame, error)
+}
+
+// LiveFrame is one frame of the live stream: its event name and JSON data.
+type LiveFrame struct {
+	Event string
+	Data  any
 }
 
 // Route is one module route. Pattern is a method and a /v1 path in
@@ -111,10 +136,18 @@ func (m *router) Handle(pattern string, handler http.Handler) {
 func (m *router) ServeHTTP(w http.ResponseWriter, r *http.Request) { m.mux.ServeHTTP(w, r) }
 
 // registerModules adds the modules' routes. A pattern that another route
-// already serves, an invalid one or a reused operation ID is an error.
+// already serves, an invalid one, a reused operation ID or a live kind that
+// two modules serve is an error.
 func (a *API) registerModules(m *router) error {
 	operations := map[string]string{}
+	liveKinds := map[live.Kind]string{}
 	for _, module := range a.Modules {
+		if source, ok := module.(LiveSource); ok {
+			if previous, taken := liveKinds[source.LiveKind()]; taken {
+				return fmt.Errorf("module %s: live kind %s is also served by %s", module.Name(), source.LiveKind(), previous)
+			}
+			liveKinds[source.LiveKind()] = module.Name()
+		}
 		for _, route := range module.Routes() {
 			if !strings.HasPrefix(route.Pattern, "/v1/") || route.Method == "" || route.OperationID == "" || route.Handle == nil {
 				return fmt.Errorf("module %s: routes need a method, a /v1 pattern, an operation ID and a handler", module.Name())
@@ -129,10 +162,15 @@ func (a *API) registerModules(m *router) error {
 	return nil
 }
 
+// moduleRequest is what a module acts with to answer r.
+func (a *API) moduleRequest(r *http.Request) Request {
+	bearer, _ := r.Context().Value(bearerKey{}).(bool)
+	return Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a, caller: r.Context(), bearer: bearer}
+}
+
 func (a *API) moduleHandler(route Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bearer, _ := r.Context().Value(bearerKey{}).(bool)
-		in := Request{Subject: subject(r), Run: runOf(r), DMS: a.dms(r), api: a, caller: r.Context(), bearer: bearer}
+		in := a.moduleRequest(r)
 		a.idempotent(func(w http.ResponseWriter, r *http.Request) {
 			if err := route.Handle(w, r, in); err != nil {
 				a.failure(w, r, err)
@@ -191,7 +229,6 @@ func (a *API) routes() (api *router, err error) {
 	a.registerStorage(api)
 	a.registerTasks(api)
 	a.registerNotifications(api)
-	a.registerComments(api)
 	a.registerTrustedHosts(api)
 	a.registerResources(api)
 	if err := a.registerModules(api); err != nil {
@@ -221,6 +258,12 @@ func (p *Problem) Error() string { return p.Detail }
 // 428 without the header, 400 when it is not a quoted version.
 func (in Request) IfMatch(w http.ResponseWriter, r *http.Request) (int, bool) {
 	return in.api.version(w, r)
+}
+
+// IfMatchOrNew is IfMatch for a record that may not exist yet: it also takes
+// version 0, which names a record never written.
+func (in Request) IfMatchOrNew(w http.ResponseWriter, r *http.Request) (int, bool) {
+	return in.api.versionAtLeast(w, r, 0)
 }
 
 // ETag sets the response's ETag to a quoted version, as core routes do.

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -100,6 +101,92 @@ func (f *fixture) operation(t *testing.T, id string) *dms.OperationView {
 		t.Fatal(err)
 	}
 	return op
+}
+
+// A deployment runs only the operations of the models it has, and refuses
+// requests for the others. With no model it runs none.
+func TestKindsFollowModels(t *testing.T) {
+	kinds := func(a *aiops.Assistant) []string {
+		t.Helper()
+		s := dms.NewService(daltest.Database(t).SQL)
+		before := s.OperationKinds()
+		if err := a.Register(s); err != nil {
+			t.Fatal(err)
+		}
+		var added []string
+		for _, kind := range s.OperationKinds() {
+			if !slices.Contains(before, kind) {
+				added = append(added, kind)
+			}
+		}
+		slices.Sort(added)
+		return added
+	}
+	for _, tc := range []struct {
+		name string
+		a    *aiops.Assistant
+		want []string
+	}{
+		{"none", &aiops.Assistant{}, nil},
+		{"chat", &aiops.Assistant{Chat: &fakeChat{}}, []string{aiops.KindComplete}},
+		{"batch", &aiops.Assistant{Batch: &fakeBatch{}}, []string{aiops.KindBatch}},
+		{"decisions", &aiops.Assistant{Decisions: fakeDecisions{}}, []string{aiops.KindDecide, aiops.KindTaxonomy}},
+	} {
+		if got := kinds(tc.a); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: kinds %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	f := setup(t)
+	f.a.Chat = nil
+	f.refused(t, "/v1/ai/completions", `{"prompt":"Summarize","input":"text","workspace_id":"`+f.ws+`","execution":"immediate"}`, 422)
+}
+
+// Work queued for a model this start lacks ends with what it needs, whether
+// it waits, a stopped process claimed it or a provider batch holds it, and
+// work for the models it has stays queued.
+func TestEndOrphans(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	completion := func(execution, input string) string {
+		return f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"`+input+`","workspace_id":"`+f.ws+`","execution":"`+execution+`"}`).ID
+	}
+	waiting, claimed := completion("immediate", "waiting"), completion("immediate", "claimed")
+	// A process stopped while it ran this one, leaving its claim behind.
+	if _, err := f.s.DAL.Operations().Claim(ctx, operations.ClaimRequest{Ready: operations.Ready{Kinds: []string{aiops.KindComplete}, IDs: []string{claimed}, Now: time.Now(), Limit: 1}, Holder: "stopped", TTL: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	parked := completion("batch", "parked")
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	if op := f.operation(t, parked); op.Status != operations.StatusPending || op.Waiting != dms.WaitingRemote {
+		t.Fatalf("the batch member: %+v", op)
+	}
+	queued := completion("batch", "queued")
+
+	// The next start has the batch provider but no chat model.
+	if err := (&aiops.Assistant{Batch: f.batch}).EndOrphans(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{waiting, claimed} {
+		if op := f.operation(t, id); op.Status != operations.StatusFailed || op.Error != aiops.ErrNoChat.Error() {
+			t.Fatalf("immediate completion %s: %+v", id, op)
+		}
+	}
+	for _, id := range []string{parked, queued} {
+		if op := f.operation(t, id); op.Status != operations.StatusPending {
+			t.Fatalf("batch completion %s with its provider: %+v", id, op)
+		}
+	}
+	// The one after has no model at all.
+	if err := (&aiops.Assistant{}).EndOrphans(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{parked, queued} {
+		if op := f.operation(t, id); op.Status != operations.StatusFailed || op.Error != aiops.ErrNoBatch.Error() {
+			t.Fatalf("batch completion %s: %+v", id, op)
+		}
+	}
 }
 
 // Immediate completions call the chat model once per distinct request;

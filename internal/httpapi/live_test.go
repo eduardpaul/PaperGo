@@ -10,7 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"papergo/internal/auth"
-	"papergo/internal/comments"
+	commentstore "papergo/internal/dal/comments"
+	"papergo/internal/dal/live"
 	"papergo/internal/dal/notifications"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -257,38 +258,48 @@ func TestLiveNotificationsReachTheirRecipient(t *testing.T) {
 	}
 }
 
-// A comment frame tells people who may read the discussion what changed.
-func TestLiveCommentFrames(t *testing.T) {
-	_, s, _ := setup(t)
+// liveModule turns the changes of its kind into frames, leaving out updates.
+type liveModule struct {
+	name string
+	kind live.Kind
+}
+
+func (m liveModule) Name() string        { return m.name }
+func (liveModule) Routes() []Route       { return nil }
+func (m liveModule) LiveKind() live.Kind { return m.kind }
+func (m liveModule) LiveBatch(_ *http.Request, in Request) func(live.Change) (*LiveFrame, error) {
+	return func(change live.Change) (*LiveFrame, error) {
+		if change.Action == live.ActionUpdated {
+			return nil, nil
+		}
+		return &LiveFrame{Event: "module", Data: map[string]any{"id": change.EntityID, "subject": in.Subject}}, nil
+	}
+}
+
+// liveStream opens the live stream of an API with modules, and creates what
+// a discussion needs to change.
+func liveStream(t *testing.T, s *dms.Service, modules ...Module) (*bufio.Reader, string) {
+	t.Helper()
 	previousInterval := livePollInterval
 	livePollInterval = 20 * time.Millisecond
 	t.Cleanup(func() { livePollInterval = previousInterval })
-	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second}
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second, Modules: modules}
 	server := httptest.NewServer(a.Handler())
-	defer server.Close()
+	t.Cleanup(server.Close)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
-	mine, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Mine"})
+	t.Cleanup(cancel)
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "W"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	theirs, err := s.Create(ctx, "bob", "", dms.CreateResource{Kind: "workspace", Name: "Theirs"})
+	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "L"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	item := func(subject, workspace string) string {
-		t.Helper()
-		l, err := s.Create(ctx, subject, workspace, dms.CreateResource{Kind: "list", Name: "L"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		i, err := s.Create(ctx, subject, l.ID, dms.CreateResource{Kind: "item", Name: "I"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return i.ID
+	item, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "I"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	hidden, shown := item("bob", theirs.ID), item("alice", mine.ID)
 	req, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/v1/events", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -298,50 +309,81 @@ func TestLiveCommentFrames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stream.Body.Close()
+	t.Cleanup(func() { stream.Body.Close() })
 	reader := bufio.NewReader(stream.Body)
 	readFrame(t, reader)
-	svc := &comments.Service{DMS: s, Enabled: true}
-	if _, err = svc.Create(ctx, "bob", "", hidden, comments.Input{Body: "Private"}); err != nil {
+	return reader, item.ID
+}
+
+// A module's changes reach the stream as its frames, for the stream's
+// caller, unless the module leaves them out.
+func TestLiveModuleFrames(t *testing.T) {
+	_, s, _ := setup(t)
+	reader, item := liveStream(t, s, liveModule{"discussions", live.KindComment})
+	ctx := t.Context()
+	repo := s.DAL.Comments()
+	first, err := repo.Create(ctx, commentstore.Comment{ItemID: item, Author: "alice", Source: commentstore.SourceUser, Body: "One"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := svc.Create(ctx, "alice", "", shown, comments.Input{Body: "Shared"})
+	next := func() sseFrame {
+		t.Helper()
+		for {
+			if frame := readFrame(t, reader); frame.kind != "keepalive" && frame.kind != "item" {
+				return frame
+			}
+		}
+	}
+	if frame := next(); frame.kind != "module" || !strings.Contains(frame.data, first.ID) || !strings.Contains(frame.data, `"subject":"alice"`) {
+		t.Fatalf("module frame: %+v", frame)
+	}
+	if _, _, err = repo.Edit(ctx, first.ID, first.Version, "Edited", nil); err != nil {
+		t.Fatal(err)
+	}
+	second, err := repo.Create(ctx, commentstore.Comment{ItemID: item, Author: "alice", Source: commentstore.SourceUser, Body: "Two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame := next(); frame.kind != "module" || !strings.Contains(frame.data, second.ID) {
+		t.Fatalf("the frame after one the module left out: %+v", frame)
+	}
+}
+
+// A change of a kind no module serves reaches nobody, as when the feature
+// that serves it is off.
+func TestLiveKindWithoutModule(t *testing.T) {
+	_, s, _ := setup(t)
+	reader, item := liveStream(t, s)
+	ctx := t.Context()
+	if _, err := s.DAL.Comments().Create(ctx, commentstore.Comment{ItemID: item, Author: "alice", Source: commentstore.SourceUser, Body: "Unheard"}); err != nil {
+		t.Fatal(err)
+	}
+	// The stream reads on past the change, and only an item's frame comes.
+	current, err := s.Get(ctx, "alice", item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := s.Create(ctx, "alice", *current.ContainerID, dms.CreateResource{Kind: "item", Name: "Later"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for {
 		frame := readFrame(t, reader)
-		if frame.kind == "keepalive" || frame.kind == "item" {
-			continue
+		if frame.kind == "comment" || frame.kind == "module" {
+			t.Fatalf("a kind no module serves reached the stream: %+v", frame)
 		}
-		if frame.kind != "comment" || !strings.Contains(frame.data, c.ID) || !strings.Contains(frame.data, shown) || !strings.Contains(frame.data, `"action":"created"`) {
-			t.Fatalf("comment frame: %+v", frame)
-		}
-		break
-	}
-	// A burst on both items, read as one batch, still shows only the
-	// discussion the stream may read.
-	var last comments.View
-	for i := range 3 {
-		if _, err = svc.Create(ctx, "bob", "", hidden, comments.Input{Body: "Private"}); err != nil {
-			t.Fatal(err)
-		}
-		if last, err = svc.Create(ctx, "alice", "", shown, comments.Input{Body: fmt.Sprint("Shared ", i)}); err != nil {
-			t.Fatal(err)
+		if frame.kind == "item" && strings.Contains(frame.data, later.ID) {
+			return
 		}
 	}
-	for seen := 0; seen < 3; {
-		frame := readFrame(t, reader)
-		if frame.kind == "keepalive" || frame.kind == "item" {
-			continue
-		}
-		if frame.kind != "comment" || !strings.Contains(frame.data, shown) || strings.Contains(frame.data, hidden) {
-			t.Fatalf("comment frame in a burst: %+v", frame)
-		}
-		seen++
-		if seen == 3 && !strings.Contains(frame.data, last.ID) {
-			t.Fatalf("the burst's last frame: %+v", frame)
-		}
+}
+
+// Two modules cannot serve one kind of live change.
+func TestLiveKindsAreServedOnce(t *testing.T) {
+	_, s, _ := setup(t)
+	a := &API{DMS: s, Logger: slog.Default(), Modules: []Module{liveModule{"one", live.KindComment}, liveModule{"two", live.KindComment}}}
+	if err := a.Validate(); err == nil || !strings.Contains(err.Error(), "live kind comment") {
+		t.Fatalf("Validate = %v", err)
 	}
 }
 

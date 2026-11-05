@@ -10,23 +10,27 @@ import (
 	"testing"
 )
 
+// advertisedModule is a feature the web app adapts to.
+type advertisedModule struct{ feature string }
+
+func (m advertisedModule) Name() string    { return m.feature }
+func (m advertisedModule) Feature() string { return m.feature }
+func (advertisedModule) Routes() []Route   { return nil }
+
 func TestAuthConfigNamesTheDeploymentsFeatures(t *testing.T) {
 	_, s, _ := setup(t)
 	public, _ := url.Parse("https://docs.example.com")
-	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), MCP: true, CommentsOff: true, PublicURL: public}).Handler()
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), Modules: []Module{advertisedModule{"mcp"}}, PublicURL: public}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","public_url":"https://docs.example.com","features":{"comments":false,"mcp":true}}` {
+	if config.Code != 200 || discoveredCore(t, config.Body.String()) != `{"mode":"bearer","public_url":"https://docs.example.com","features":{"mcp":true}}` {
 		t.Fatal(config.Code, config.Body.String())
-	}
-	if w := request(h, "GET", "/v1/items/x/comments", "", testToken, "", ""); w.Code != 404 {
-		t.Fatalf("comment routes without comments: %d", w.Code)
 	}
 }
 
 func TestPublicFrontendAndReservedNamespaces(t *testing.T) {
 	h, _, _ := setup(t)
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	if config.Code != 200 || discoveredCore(config.Body.String()) != `{"mode":"bearer","features":{"comments":true,"mcp":false}}` {
+	if config.Code != 200 || discoveredCore(t, config.Body.String()) != `{"mode":"bearer","features":{}}` {
 		t.Fatal("bearer capability discovery", config.Code, config.Body.String())
 	}
 	for _, route := range []string{"/", "/login", "/admin/users", "/w/workspace/l/collection"} {
@@ -58,22 +62,32 @@ func TestAuthConfigAdvertisesBrowserSignIn(t *testing.T) {
 	signIn := &BrowserSignIn{Issuer: "https://auth.example.com/application/o/papergo/", ClientID: "papergo", Scope: "openid profile email offline_access"}
 	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), BrowserSignIn: signIn}).Handler()
 	config := request(h, "GET", "/auth/config", "", "", "", "")
-	want := `{"mode":"bearer","oidc":{"issuer":"https://auth.example.com/application/o/papergo/","client_id":"papergo","scope":"openid profile email offline_access"},"features":{"comments":true,"mcp":false}}`
-	if config.Code != 200 || discoveredCore(config.Body.String()) != want || config.Header().Get("Cache-Control") != "private, no-store" {
+	want := `{"mode":"bearer","oidc":{"issuer":"https://auth.example.com/application/o/papergo/","client_id":"papergo","scope":"openid profile email offline_access"},"features":{}}`
+	if config.Code != 200 || discoveredCore(t, config.Body.String()) != want || config.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatal("browser sign-in discovery", config.Code, config.Body.String(), config.Header())
 	}
 }
 
 // discoveredCore is an /auth/config body without its file descriptions,
 // which TestAuthConfigDescribesFiles checks.
-func discoveredCore(body string) string {
-	body = strings.TrimSpace(body)
-	start, end := strings.Index(body, `,"file_types":`), strings.Index(body, `,"file_edit_max_bytes":`)
-	if start < 0 || end < 0 {
-		return body
+func discoveredCore(t *testing.T, body string) string {
+	t.Helper()
+	var config struct {
+		Mode      string                     `json:"mode"`
+		PublicURL string                     `json:"public_url,omitempty"`
+		OIDC      *BrowserSignIn             `json:"oidc,omitempty"`
+		Features  map[string]json.RawMessage `json:"features"`
 	}
-	rest := body[end+len(`,"file_edit_max_bytes":`):]
-	return body[:start] + rest[strings.IndexByte(rest, '}'):]
+	if err := json.Unmarshal([]byte(body), &config); err != nil {
+		t.Fatal(err)
+	}
+	delete(config.Features, "file_types")
+	delete(config.Features, "file_edit_max_bytes")
+	core, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(core)
 }
 
 func TestAuthConfigDescribesFiles(t *testing.T) {

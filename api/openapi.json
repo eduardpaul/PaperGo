@@ -15348,19 +15348,17 @@
                       "additionalProperties": false,
                       "description": "The optional parts this deployment runs, and what the web app needs to know about files.",
                       "required": [
-                        "comments",
-                        "mcp",
                         "file_types",
                         "file_edit_max_bytes"
                       ],
                       "properties": {
                         "comments": {
                           "type": "boolean",
-                          "description": "False when the deployment runs without discussions (COMMENTS=off)."
+                          "description": "True when the deployment runs discussions (COMMENTS=on, the default); absent when it does not."
                         },
                         "mcp": {
                           "type": "boolean",
-                          "description": "True when the deployment serves AI assistants at /v1/mcp (MCP=on, the default)."
+                          "description": "True when the deployment serves AI assistants at /v1/mcp (MCP=on, the default); absent when it does not."
                         },
                         "file_types": {
                           "type": "array",
@@ -35107,7 +35105,6 @@
           "mode_from": {
             "type": "string",
             "enum": [
-              "deployment",
               "organization",
               "workspace",
               "collection",
@@ -35273,7 +35270,6 @@
               "from": {
                 "type": "string",
                 "enum": [
-                  "deployment",
                   "organization",
                   "workspace",
                   "collection",
@@ -35308,7 +35304,6 @@
         "required": [
           "enabled",
           "mode",
-          "available",
           "version"
         ],
         "properties": {
@@ -35324,10 +35319,6 @@
             ],
             "nullable": true,
             "description": "The default mode; null means collaborators."
-          },
-          "available": {
-            "type": "boolean",
-            "description": "False when the deployment runs without comments."
           },
           "version": {
             "type": "integer",

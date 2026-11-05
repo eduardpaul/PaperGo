@@ -15969,7 +15969,6 @@ export const Comment_sourceObject = {
     Workflow: "workflow",
 } as const;
 export const CommentSettings_effective_fromObject = {
-    Deployment: "deployment",
     Organization: "organization",
     Workspace: "workspace",
     Collection: "collection",
@@ -15994,7 +15993,6 @@ export const CommentSettingsInput_modeObject = {
     Readers: "readers",
 } as const;
 export const CommentThreadList_mode_fromObject = {
-    Deployment: "deployment",
     Organization: "organization",
     Workspace: "workspace",
     Collection: "collection",

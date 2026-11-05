@@ -22,7 +22,6 @@
   "turnedOffBy": {
     "collection": "this list or library",
     "default": "default",
-    "deployment": "this deployment",
     "organization": "the organization",
     "workspace": "this workspace"
   },
@@ -64,7 +63,6 @@
     "setBy": {
       "collection": "this list or library",
       "default": "the default",
-      "deployment": "the deployment",
       "organization": "the organization",
       "workspace": "the workspace"
     }

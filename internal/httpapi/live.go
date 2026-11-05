@@ -99,6 +99,13 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	mine := notifications.RecipientKey(subject(r))
 	notes := map[string]bool{}
 	_, token := identity.AccessTokenContext(r.Context())
+	sources := map[live.Kind]LiveSource{}
+	for _, module := range a.Modules {
+		if source, ok := module.(LiveSource); ok {
+			sources[source.LiveKind()] = source
+		}
+	}
+	in := a.moduleRequest(r)
 	for {
 		if err = identity.RequireCredential(r.Context(), dal.NewStore(a.dms(r).Directory().DB), subject(r)); err != nil {
 			_ = frame("reauthenticate", position, map[string]any{})
@@ -118,10 +125,10 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		for i, change := range changes {
 			last[key(change.Kind, change.EntityID)] = i
 		}
-		// One unread count serves a batch's notification frames, and one
-		// check of each item its comment frames: each would read the same.
+		// One unread count serves a batch's notification frames: each would
+		// read the same.
 		unread := int64(-1)
-		readable := map[string]bool{}
+		batches := map[live.Kind]func(live.Change) (*LiveFrame, error){}
 		count := func() (int64, error) {
 			if unread < 0 {
 				n, err := a.notifications(r).Unread(r.Context(), subject(r))
@@ -207,21 +214,6 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				if err = notificationFrame(frame, count, position, note.ID, change.Action, &note); err != nil {
 					return
 				}
-			case live.KindComment:
-				// A comment frame names what changed for people who may read
-				// its discussion; clients read the thread again.
-				if a.CommentsOff {
-					continue
-				}
-				c, visible, e := a.comments(r).Visible(r.Context(), subject(r), change.EntityID, readable)
-				if e != nil {
-					return
-				}
-				if visible {
-					if err = frame("comment", position, map[string]any{"id": c.ID, "item_id": c.ItemID, "thread_id": c.ThreadID, "action": change.Action}); err != nil {
-						return
-					}
-				}
 			case live.KindOperation, live.KindRun:
 				// A run is an operation: its manager follows it as a run.
 				if a.Workflows != nil {
@@ -244,6 +236,25 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 					}
 				} else if !errors.Is(e, dms.ErrForbidden) && !errors.Is(e, dms.ErrNotFound) {
 					return
+				}
+			default:
+				source, served := sources[change.Kind]
+				if !served {
+					continue
+				}
+				batch := batches[change.Kind]
+				if batch == nil {
+					batch = source.LiveBatch(r, in)
+					batches[change.Kind] = batch
+				}
+				f, e := batch(change)
+				if e != nil {
+					return
+				}
+				if f != nil {
+					if err = frame(f.Event, position, f.Data); err != nil {
+						return
+					}
 				}
 			}
 		}

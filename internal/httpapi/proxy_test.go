@@ -29,13 +29,12 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	var discovered struct {
 		Mode     string `json:"mode"`
 		Features struct {
-			Comments  bool `json:"comments"`
 			FileTypes []struct {
 				MediaType string `json:"media_type"`
 			} `json:"file_types"`
 		} `json:"features"`
 	}
-	if config.Code != 200 || json.Unmarshal(config.Body.Bytes(), &discovered) != nil || discovered.Mode != "proxy" || !discovered.Features.Comments || len(discovered.Features.FileTypes) == 0 || config.Header().Get("Cache-Control") != "private, no-store" {
+	if config.Code != 200 || json.Unmarshal(config.Body.Bytes(), &discovered) != nil || discovered.Mode != "proxy" || len(discovered.Features.FileTypes) == 0 || config.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatal("public proxy capability discovery", config.Code, config.Body.String(), config.Header())
 	}
 	do := func(method, path, body, subject, credential string) *httptest.ResponseRecorder {

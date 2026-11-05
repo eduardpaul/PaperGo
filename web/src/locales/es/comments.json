@@ -22,7 +22,6 @@
   "turnedOffBy": {
     "collection": "esta lista o biblioteca",
     "default": "el valor predeterminado",
-    "deployment": "esta instalación",
     "organization": "la organización",
     "workspace": "este espacio de trabajo"
   },
@@ -64,7 +63,6 @@
     "setBy": {
       "collection": "esta lista o biblioteca",
       "default": "el valor predeterminado",
-      "deployment": "la instalación",
       "organization": "la organización",
       "workspace": "el espacio de trabajo"
     }

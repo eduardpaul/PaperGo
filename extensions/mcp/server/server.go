@@ -52,6 +52,9 @@ type module struct{ s *Server }
 
 func (module) Name() string { return "mcp" }
 
+// Feature tells the web app to give AI assistants the endpoint.
+func (module) Feature() string { return "mcp" }
+
 // Routes serve MCP on POST. Without sessions there is no stream to open or
 // session to end, so GET and DELETE answer 405, as the transport requires.
 func (m module) Routes() []httpapi.Route {

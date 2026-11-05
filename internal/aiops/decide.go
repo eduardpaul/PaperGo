@@ -329,9 +329,6 @@ func (a *Assistant) decide(ctx context.Context, s *dms.Service, op *operations.O
 	if err := decode(op.Payload, &job); err != nil {
 		return err
 	}
-	if a.Decisions == nil {
-		return ErrNoDecisions
-	}
 	if a.Decisions.ID() != job.Model {
 		return errors.New("the decision model changed before the decision ran")
 	}

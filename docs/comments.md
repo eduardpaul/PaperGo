@@ -25,11 +25,12 @@ A discussion follows its item. Each list or library has a **mode**:
 | `readers` | everyone who can read a revision of the item, published or draft |
 | `off` | nobody; the comments are kept and come back when comments are on again |
 
+The operator runs discussions with `COMMENTS=on` (default) or `off`, or `comments` in `config.yaml`. Off is the same as not having the feature: no comment routes, no `comment` frames on the live stream, and no discussions in the web app. Stored comments stay and come back when it is on again.
+
 The mode is inherited, and each level shows where the mode that applies comes from (`mode_from`, `effective.from`):
 
 | Level | Set by | Setting |
 | --- | --- | --- |
-| Deployment | the operator: `COMMENTS=on` (default) or `off`, or `comments` in `config.yaml` | off removes the comment routes, and the web app shows no discussions |
 | Organization | `organization.manage`: `PUT /v1/organization/settings/comments` | `enabled`, a switch that turns comments off everywhere whatever the levels below set, and the default `mode` |
 | Workspace | its managers: `PUT /v1/resources/{id}/settings/comments` | `mode`, or `null` to inherit the organization's |
 | List or library | its managers, the same route | `mode`, or `null` to inherit the workspace's |
@@ -60,7 +61,7 @@ Only people who may read the discussion are told, never the comment's author. A 
 | `POST /v1/comments/counts` | `{item_ids}`, up to 200: open and resolved thread counts of the items whose discussions the caller may read |
 | `GET /v1/items/{id}/mentionable?q=` | up to 20 of the people the item is shared with (granted on it, its folders, its list or library, or its workspace, in person or through a group) whose subject, name or email contains `q`, each with `can_see` |
 | `GET`, `PUT /v1/resources/{id}/settings/comments` | a workspace's, list's or library's mode |
-| `GET`, `PUT /v1/organization/settings/comments` | the organization's switch and default mode; `available` is false when the deployment runs without comments |
+| `GET`, `PUT /v1/organization/settings/comments` | the organization's switch and default mode |
 
 Changes are recorded in the workspace's audit trail: `comment.create`, `comment.edit`, `comment.delete`, `comment.resolve`, `comment.reopen` and `settings.comments`. The [live stream](application-foundation.md#live-api-updates) sends a `comment` frame, naming the comment, its item and thread, to the connections of people who may read the discussion.
 

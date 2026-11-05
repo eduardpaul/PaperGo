@@ -9,35 +9,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"papergo/extensions/mcp"
-	"papergo/extensions/mcp/builtin"
-	mcpserver "papergo/extensions/mcp/server"
 	"papergo/internal/admin"
-	"papergo/internal/ai"
-	"papergo/internal/aiops"
 	"papergo/internal/auth"
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
-	"papergo/internal/dal/activitystore"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
-	"papergo/internal/dal/resultcache"
-	"papergo/internal/dal/search/pgstore"
-	"papergo/internal/dal/search/sqlitestore"
-	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
-	"papergo/internal/documentfiles"
-	"papergo/internal/documentpreview"
-	"papergo/internal/documentsearch"
-	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
-	"papergo/internal/ocr"
 	"papergo/internal/officefiles"
 	"papergo/internal/scriptrun"
-	"papergo/internal/search"
 	"papergo/internal/storage"
 	"papergo/internal/textfiles"
 	"papergo/internal/webdav"
@@ -151,29 +135,6 @@ func run(log *slog.Logger) error {
 	}
 	service.ConfigureIntegrations(secrets)
 
-	// Search is an extension: without a store PaperGo runs without it, and
-	// listings match search text by name.
-	var index search.Store
-	switch c.SearchStore {
-	case config.SearchSQLite:
-		index, err = sqlitestore.Open(startup, c.SearchPath, sqlitestore.Options{Languages: c.SearchLanguages})
-	case config.SearchPostgres:
-		index, err = pgstore.Open(startup, db.SQL, pgstore.Options{Languages: c.SearchLanguages})
-	}
-	if err != nil {
-		return fmt.Errorf("open the search store: %w", err)
-	}
-	var embeddings ai.Embedder
-	if index != nil {
-		defer index.Close()
-		if embeddings, err = ai.NewEmbedder(c.Embeddings, nil); err != nil {
-			return fmt.Errorf("configure embeddings: %w", err)
-		}
-		if embeddings != nil {
-			defer embeddings.Close()
-			log.Info("semantic search enabled", "provider", c.Embeddings.Provider, "model", c.Embeddings.Model)
-		}
-	}
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
@@ -192,88 +153,30 @@ func run(log *slog.Logger) error {
 	if err = service.RegisterPortability(store); err != nil {
 		return err
 	}
-	chat, err := ai.NewChat(c.Chat, nil)
-	if err != nil {
-		return fmt.Errorf("configure the chat model: %w", err)
-	}
-	if chat != nil {
-		log.Info("ai steps enabled", "model", chat.Key())
-	}
-	batch, err := ai.NewBatch(c.Batch, nil)
-	if err != nil {
-		return fmt.Errorf("configure the batch model: %w", err)
-	}
-	if batch != nil {
-		log.Info("ai batch enabled", "model", batch.Key())
-	}
-	var decisions *decision.Engine
-	if c.Decisions.Models != "" {
-		decisions, err = decision.New(c.Decisions)
-		if err != nil {
-			return fmt.Errorf("configure decisions: %w", err)
-		}
-		defer decisions.Close()
-		log.Info("local decisions enabled", "model", decisions.ID())
-	}
-	// PDFium's compiled code is kept beside the database, as derived data
-	// that backups leave out and the next start rebuilds when it is gone.
-	pdf := pdfium.New(pdfium.Options{CacheDir: filepath.Join(filepath.Dir(c.DatabasePath), "cache", "pdfium"), Log: log})
-	log.Info("pdf reading enabled", "reader", pdf.Name())
-	var reader ocr.Engine
-	if c.OCRLibrary != "" {
-		engine, e := openOCR(c)
-		if e != nil {
-			return e
-		}
-		if engine == nil {
-			log.Info("ocr disabled", "models", c.OCRModels)
-		} else {
-			defer engine.Close()
-			reader = engine
-			log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
-		}
-	}
-	workflows := &workflow.Service{DMS: service, OCR: reader != nil}
+	workflows := &workflow.Service{DMS: service}
 	// Markdown, text, CSV and Office files have their text read.
 	textfiles.Register()
 	officefiles.Register()
-	feats := features{
-		text:    &documenttext.Reader{Storage: store, PDF: pdf, OCR: reader, Languages: c.SearchLanguages},
-		preview: &documentpreview.Renderer{Storage: store, PDF: pdf},
-		ai: &aiops.Assistant{Storage: store, Chat: chat, Batch: batch, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL,
-			Records: activitystore.New(db.SQL), DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline},
-		files: &documentfiles.Maker{Storage: store, OCR: reader, MaxFileBytes: c.MaxUpload},
-	}
-	if decisions != nil {
-		feats.ai.Decisions = decisions
-	}
-	if index != nil {
-		feats.search = &documentsearch.Search{Storage: store, Store: index, Embeddings: embeddings}
-	}
-	if c.MCP {
-		registry, err := mcp.NewRegistry(builtin.Tools(), mcpContributions, c.MCPExtensions)
-		if err != nil {
-			return fmt.Errorf("MCP_EXTENSIONS: %w", err)
-		}
-		feats.mcp = mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: log, AppURL: c.PublicURL, RequestTimeout: c.RequestTimeout}, registry)
-	}
-	if err = feats.register(service); err != nil {
+	list, err := enabled(startup, environment{config: c, db: db, service: service, store: store, workflows: workflows, log: log})
+	if err != nil {
 		return err
 	}
-	if feats.search != nil {
-		if err = feats.search.Start(startup); err != nil {
-			return fmt.Errorf("start the search index: %w", err)
-		}
+	defer list.close()
+	if err = list.register(service); err != nil {
+		return err
+	}
+	if err = list.start(startup); err != nil {
+		return err
 	}
 	if err = workflows.SyncBuiltIns(startup); err != nil {
 		return fmt.Errorf("update built-in workflows: %w", err)
 	}
-	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: feats.modules(), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: list.modules(), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, MCP: feats.mcp != nil, CommentsOff: !c.Comments, FileEditMax: c.FileEditMax}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL, FileEditMax: c.FileEditMax}
 	if c.ClientID != "" {
 		a.BrowserSignIn = &httpapi.BrowserSignIn{Issuer: c.Issuer, ClientID: c.ClientID, Scope: c.ClientScopes}
 	}
@@ -297,7 +200,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
-	runtime := workers(service, store, feats, runs, log)
+	runtime := workers(service, store, list, runs, log)
 	if err = configure(runtime, c.Workers); err != nil {
 		return err
 	}
@@ -312,7 +215,6 @@ func run(log *slog.Logger) error {
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	log.Info("api listening", "address", c.Address, "environment", c.Env)
-	warmPDF(log, pdf)
 	select {
 	case err = <-result:
 		if errors.Is(err, http.ErrServerClosed) {

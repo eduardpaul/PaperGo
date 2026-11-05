@@ -651,7 +651,7 @@ export interface CommentThread extends Comment {
 /** An item's threads and what the reader may do in its discussion. */
 export interface CommentPage extends Page<CommentThread> {
   mode: CommentMode;
-  mode_from: 'deployment' | 'organization' | 'workspace' | 'collection' | 'default';
+  mode_from: 'organization' | 'workspace' | 'collection' | 'default';
   can_read: boolean;
   can_post: boolean;
 }
@@ -669,7 +669,6 @@ export interface CommentSettings {
 export interface OrganizationCommentSettings {
   enabled: boolean;
   mode: CommentMode | null;
-  available: boolean;
   version: number;
 }
 

@@ -98,7 +98,7 @@ func setup(t *testing.T, o options) *env {
 		t.Fatal(err)
 	}
 	a := &httpapi.API{DMS: e.svc, Auth: auth.Development{Token: aliceToken, Subject: "alice"}, Storage: files, Logger: log,
-		Ready: db.SQL.PingContext, MaxUpload: 1 << 20, MaxInFlight: o.maxInFlight, MCP: true,
+		Ready: db.SQL.PingContext, MaxUpload: 1 << 20, MaxInFlight: o.maxInFlight,
 		Modules: []httpapi.Module{New(cfg, registry).Module()}}
 	if o.search {
 		e.search = &documentsearch.Search{Storage: files, Store: searchstore.Open(t, db, []string{"english"})}

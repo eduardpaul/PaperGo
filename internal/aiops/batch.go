@@ -63,9 +63,6 @@ func batchAdmission(payload json.RawMessage) (string, string, error) {
 // submit sends a group of batch completions as one provider batch. Cached
 // answers end their members at once.
 func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operations.Operation) error {
-	if a.Batch == nil {
-		return ErrNoBatch
-	}
 	requests := map[string]completion{}
 	var send []*operations.Operation
 	var keys []string
@@ -204,7 +201,7 @@ func doneFlight(ctx context.Context, records *activitystore.Store, tag string) e
 // its tag, and members of a batch that never reached the provider return
 // to the queue. It is a maintenance task.
 func (a *Assistant) Poll(ctx context.Context, now time.Time) error {
-	if a.Batch == nil || a.Records == nil {
+	if a.Records == nil {
 		return nil
 	}
 	after := ""

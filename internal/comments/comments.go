@@ -5,8 +5,8 @@
 // Who takes part follows the item: a collection's mode decides whether its
 // discussions are off, open to the people who can read drafts
 // (collaborators), or to everyone who can read the item (readers). The mode
-// is inherited from the workspace and the organization, and the deployment
-// can turn comments off altogether. A mention never shares the item.
+// is inherited from the workspace and the organization. A mention never
+// shares the item.
 package comments
 
 import (
@@ -53,7 +53,6 @@ func (m Mode) Valid() bool { return m == ModeOff || m == ModeCollaborators || m 
 type Origin string
 
 const (
-	OriginDeployment   Origin = "deployment"
 	OriginOrganization Origin = "organization"
 	OriginWorkspace    Origin = "workspace"
 	OriginCollection   Origin = "collection"
@@ -92,10 +91,9 @@ func Mentions(body string) []string {
 }
 
 // Service reads and writes discussions for the API, each call in its own
-// transaction. Enabled is the deployment's switch.
+// transaction.
 type Service struct {
-	DMS     *dms.Service
-	Enabled bool
+	DMS *dms.Service
 }
 
 // organizationValue is the organization's setting: a hard switch and the
@@ -113,9 +111,6 @@ type placeValue struct {
 // effective resolves the mode of a workspace, collection or anything in
 // one.
 func (s *Service) effective(ctx context.Context, t *dms.Service, r *resources.Resource) (Effective, error) {
-	if !s.Enabled {
-		return Effective{ModeOff, OriginDeployment}, nil
-	}
 	collection := ""
 	switch r.Kind {
 	case refs.KindList, refs.KindLibrary:
@@ -1144,16 +1139,14 @@ type OrganizationSettings struct {
 	// Enabled is false when the organization turned comments off.
 	Enabled bool `json:"enabled"`
 	// Mode is the default mode; nil means collaborators.
-	Mode *Mode `json:"mode"`
-	// Available is false when the deployment runs without comments.
-	Available bool  `json:"available"`
-	Version   int64 `json:"version"`
+	Mode    *Mode `json:"mode"`
+	Version int64 `json:"version"`
 }
 
 // Organization reads the organization's comment setting.
 func (s *Service) Organization(ctx context.Context) (OrganizationSettings, error) {
 	stored, found, err := s.DMS.DAL.Settings().Find(ctx, settings.KeyComments, "")
-	out := OrganizationSettings{Enabled: true, Available: s.Enabled}
+	out := OrganizationSettings{Enabled: true}
 	if err != nil || !found {
 		return out, err
 	}
