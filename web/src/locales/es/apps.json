@@ -3,7 +3,7 @@
     "title": "Aplicaciones",
     "description": "Pantallas de este espacio de trabajo que sus personas abren desde la barra lateral. Una aplicación lee y cambia los datos del espacio de trabajo como la persona que la ve.",
     "app": "Aplicación",
-    "settings": "Ajustes de la aplicación",
+    "settings": "Configuración de la aplicación",
     "needScope": "Escribir aplicaciones requiere acceso de gestión al espacio de trabajo y el permiso app.manage, que tienen los administradores.",
     "empty": "Este espacio de trabajo aún no tiene aplicaciones.",
     "version": "Versión {{version}} · {{key}}",
@@ -42,7 +42,7 @@
     "description": "Todas las aplicaciones que puedes abrir, en todos tus espacios de trabajo.",
     "filter": "Buscar una aplicación",
     "empty": "Aún no hay aplicaciones",
-    "emptyHint": "Los responsables de cada espacio de trabajo las añaden en Ajustes del espacio de trabajo → Aplicaciones.",
+    "emptyHint": "Los responsables de cada espacio de trabajo las añaden en Configuración del espacio de trabajo → Aplicaciones.",
     "noMatches": "Ninguna aplicación coincide con «{{q}}»."
   }
 }
