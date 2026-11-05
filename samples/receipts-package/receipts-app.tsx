@@ -485,7 +485,8 @@ function Desk({ w }: { w: Words }) {
         actions={onlyReview ? <Button onClick={() => setReviewing(false)}>{w.latest}</Button> : <Button onClick={() => open({ listId: p.library })}>{w.all}</Button>}
       >
         <Table
-          columns={[{ key: "receipt", label: w.receipt }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
+          // A phone has no date column: the date shows under the store.
+          columns={[{ key: "receipt", label: w.receipt, render: (row) => <>{row.receipt}{narrow && <div className="pg-stat-hint">{row.date}</div>}</> }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
           rows={rows}
           empty={emptyText([latest], w.noReceipts)}
           onRowClick={(row) => setOpened(latest.data.find((r) => r.id === row.id))}
@@ -524,6 +525,7 @@ interface Line {
 function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; receipt?: Item; open: (target: OpenTarget) => void; replace: (receipt: Item, photo: File) => void; onClose: () => void }) {
   const ctx = useApp<Params>();
   const f = ctx.format;
+  const narrow = useNarrow();
   const [lines, setLines] = useState<Line[]>();
   const [failed, setFailed] = useState(false);
   const [working, setWorking] = useState(false);
@@ -615,8 +617,9 @@ function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; recei
       <Table
         empty={failed ? w.loadFailed : lines === undefined ? w.loading : w.noLines}
         columns={[
-          // The category under the description, so a phone has room for both.
-          { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div></> },
+          // The category under the description, so a phone has room for both,
+          // and there the quantity and price too, which have no column.
+          { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div>{narrow && <div className="pg-stat-hint">{row.quantity} × {row.unit}</div>}</> },
           { key: "quantity", label: w.quantity, align: "right", optional: true },
           { key: "unit", label: w.unitPrice, align: "right", optional: true },
           { key: "amount", label: w.amount, align: "right" },
