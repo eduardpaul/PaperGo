@@ -79,6 +79,22 @@ async function update(api: PaperGoClient, id: string, version: number, values: R
   return item!.version!;
 }
 
+// removeLine deletes a line at the version it has now: the receipt's status
+// changing makes Sync receipt lines change it meanwhile.
+async function removeLine(api: PaperGoClient, id: string): Promise<void> {
+  for (let tries = 0; ; tries++) {
+    try {
+      const line = await api.v1.resources.byId(id).get();
+      await api.v1.resources.byId(id).delete({ headers: { "If-Match": `"${line!.version}"` } });
+      return;
+    } catch (e) {
+      const status = (e as { responseStatusCode?: number }).responseStatusCode;
+      if (status === 404) return;
+      if (status !== 412 || tries >= 5) throw e;
+    }
+  }
+}
+
 // renamePdf gives a receipt named after its photo the PDF's extension, and
 // returns its version. A name another file has already keeps the old one.
 async function renamePdf(api: PaperGoClient, id: string): Promise<number> {
@@ -217,17 +233,14 @@ export default workflow<unknown, unknown, Params>({
       for (;;) {
         const page = await api.v1.items.byId(id).relationships.get({ queryParameters: { direction: "outgoing", type: contains } });
         if (!page?.value?.length) break;
-        for (const link of page.value) {
-          const line = await api.v1.resources.byId(link.targetId!).get();
-          await api.v1.resources.byId(link.targetId!).delete({ headers: { "If-Match": `"${line!.version}"` } });
-        }
+        for (const link of page.value) await removeLine(api, link.targetId!);
       }
       // A run replaced before it linked a line leaves that line unlinked in
       // the receipt's folder; it goes too.
       const lines = await folder(api, await folder(api, ctx.params.library, linesFolder), id);
       const lineType = listType(ctx.params.line_type);
       for (const old of await children(api, lines, "item")) {
-        if (old.contentTypeId === lineType) await api.v1.resources.byId(old.id!).delete({ headers: { "If-Match": `"${old.version}"` } });
+        if (old.contentTypeId === lineType) await removeLine(api, old.id!);
       }
       for (const [i, line] of receipt.lines.entries()) {
         const created = await api.v1.resources.byId(lines).children.post({
