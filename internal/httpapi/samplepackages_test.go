@@ -20,6 +20,7 @@ import (
 
 	"papergo/internal/auth"
 	appstore "papergo/internal/dal/apps"
+	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/database"
 	"papergo/internal/dms"
@@ -156,26 +157,32 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	var source workflow.Save
 	switch w.Name {
 	case "Read receipts":
-		types, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Receipt lines"])
-		if err != nil || len(types) != 1 {
-			t.Fatal(types, err)
+		// One library holds the receipts and their lines, receipts by default.
+		listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Receipts"])
+		if err != nil || len(listTypes) != 2 {
+			t.Fatal(listTypes, err)
 		}
-		// The workflow names the catalog type; the list accepts it.
-		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINES", ids["Receipt lines"], "$LINE_TYPE", *types[0].ParentID)
-		for _, name := range []string{"Receipts", "Receipt lines"} {
-			views, err := s.Views(t.Context(), "organization-admin", ids[name], "", 100)
-			if err != nil {
-				t.Fatal(err)
+		types := map[string]*catalog.ContentType{}
+		for _, lt := range listTypes {
+			types[lt.Key] = lt
+		}
+		if types["receipt"] == nil || !types["receipt"].IsDefault || types["receipt_line"] == nil {
+			t.Fatal("receipts library types", listTypes)
+		}
+		// The workflow names the catalog type; the library accepts it.
+		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINE_TYPE", *types["receipt_line"].ParentID)
+		views, err := s.Views(t.Context(), "organization-admin", ids["Receipts"], "", 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defaults := 0
+		for _, view := range views.Data {
+			if view.IsDefault {
+				defaults++
 			}
-			defaults := 0
-			for _, view := range views.Data {
-				if view.IsDefault {
-					defaults++
-				}
-			}
-			if defaults != 1 {
-				t.Fatal("missing default sample view", name, views)
-			}
+		}
+		if defaults != 1 {
+			t.Fatal("missing default sample view", views)
 		}
 	case "Diesel levels", "Diesel measuring reminder", "Diesel refill", "Load diesel sample data":
 		file := map[string]string{"Diesel levels": "diesel/diesel-levels.json", "Diesel measuring reminder": "diesel/diesel-measure-reminder.json", "Diesel refill": "diesel/diesel-refill.json", "Load diesel sample data": "diesel/diesel-sample-data.json"}[w.Name]
@@ -324,7 +331,6 @@ func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[str
 		Collections []struct {
 			Name, Kind string
 			WebDAV     bool     `json:"webdav_enabled"`
-			Type       string   `json:"content_type"`
 			Types      []string `json:"content_types"`
 			Views      []struct {
 				dms.ViewInput
@@ -381,10 +387,8 @@ func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[str
 	}
 	for _, in := range spec.Collections {
 		accepted := []string{}
-		for _, key := range append([]string{in.Type}, in.Types...) {
-			if key != "" {
-				accepted = append(accepted, types[key])
-			}
+		for _, key := range in.Types {
+			accepted = append(accepted, types[key])
 		}
 		c, err := s.Create(t.Context(), "organization-admin", ws.ID, dms.CreateResource{Kind: in.Kind, Name: in.Name, ContentTypeIDs: accepted, WebDAVEnabled: in.WebDAV})
 		if err != nil {
@@ -447,7 +451,7 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		var collections map[string]string
 		var types map[string]string
 		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
-		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$LINES", collections["Receipt lines"], "$LINE_TYPE", types["receipt_line"])
+		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$LINE_TYPE", types["receipt_line"])
 	case "diesel":
 		var collections map[string]string
 		var types map[string]string
@@ -599,7 +603,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
 					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
-					for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
+					for _, placeholder := range []string{"$LIBRARY", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)
 						}

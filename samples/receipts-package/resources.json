@@ -23,7 +23,7 @@
       "name": "Receipts",
       "kind": "library",
       "webdav_enabled": true,
-      "content_type": "receipt",
+      "content_types": ["receipt", "receipt_line"],
       "views": [
         {
           "name": "Receipts",
@@ -37,18 +37,10 @@
           "layout": "table",
           "columns": ["$name", "store", "purchase_date", "currency", "total", "status"],
           "query": {"content_type_id": "$receipt", "filter": {"field": "status", "op": "eq", "value": "Needs review"}}
-        }
-      ]
-    },
-    {
-      "name": "Receipt lines",
-      "kind": "list",
-      "content_type": "receipt_line",
-      "views": [
+        },
         {
           "name": "Lines",
           "layout": "table",
-          "is_default": true,
           "columns": ["$name", "description", "quantity", "unit_price", "amount"],
           "query": {"content_type_id": "$receipt_line"}
         }

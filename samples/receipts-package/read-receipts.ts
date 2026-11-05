@@ -1,13 +1,12 @@
 // Reads a receipt photo: asks a model in batch mode for the store, date,
-// currency, total and product lines, and files the lines in the lines list, each linked to the receipt.
-// It marks the receipt Read once the lines are stored, and Needs review
-// when the extraction or the filing fails.
+// currency, total and product lines, and files the lines next to the receipt in
+// its library, each linked to the receipt. It marks the receipt Read once the
+// lines are stored, and Needs review when the extraction or the filing fails.
 import { json, OperationError, plain, workflow } from "@papergo/workflow";
 import type { PaperGoClient } from "@papergo/workflow";
 
 interface Params {
   library: string;
-  lines: string;
   line_type: string;
 }
 
@@ -67,12 +66,14 @@ export default workflow<unknown, unknown, Params>({
   async run(ctx) {
     const id = ctx.itemId!;
     const api = ctx.api;
-    let version: number;
+    // Lines share the library with the receipts. They, and a receipt without
+    // a photo, have nothing to read.
+    const item = (await api.v1.resources.byId(id).get())!;
+    if (!item.file) return { status: "No photo" };
+    let version = item.version!;
     try {
-      version = (await api.v1.resources.byId(id).get())!.version!;
       // The model reads the receipt's current photo.
-      const files = (await api.v1.items.byId(id).content.versions.get())!.value!;
-      const image = files.find((f) => f.isCurrent)!.id!;
+      const image = item.file.blobId!;
       const answer = await ctx.wait((await api.v1.ai.completions.post({
         prompt, itemId: id, imageBlobId: image, execution: "batch", queue: "shared", outputSchema: json(schema),
       }))!);
@@ -90,9 +91,11 @@ export default workflow<unknown, unknown, Params>({
           await api.v1.resources.byId(link.targetId!).delete({ headers: { "If-Match": `"${line!.version}"` } });
         }
       }
-      for (const line of receipt.lines) {
-        const created = await api.v1.resources.byId(ctx.params.lines).children.post({
-          kind: "item", name: line.description, contentTypeId: ctx.params.line_type, values: json({ ...line }),
+      // Library names are unique in a folder, so each line is named after its
+      // receipt, in the receipt's folder.
+      for (const [i, line] of receipt.lines.entries()) {
+        const created = await api.v1.resources.byId(item.parentId!).children.post({
+          kind: "item", name: `${item.name} line ${i + 1}`, contentTypeId: ctx.params.line_type, values: json({ ...line }),
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }

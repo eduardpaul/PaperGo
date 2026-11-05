@@ -204,7 +204,7 @@ func TestSampleTemplateArchiveHasOnlyManifest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, placeholder := range []string{"$LIBRARY", "$LINES", "$LINE_TYPE", "$TERM_SET", "$FIELD"} {
+		for _, placeholder := range []string{"$LIBRARY", "$LINE_TYPE", "$TERM_SET", "$FIELD"} {
 			if strings.Contains(string(raw), placeholder) {
 				t.Fatal("unresolved placeholder", path, placeholder)
 			}

@@ -68,7 +68,6 @@ type receipts struct {
 	ai       *aiops.Assistant
 	batch    *aitest.BatchServer
 	library  string
-	lines    string
 	workflow string
 }
 
@@ -152,14 +151,11 @@ func installReceipts(t *testing.T) *receipts {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range collections {
-		switch c.Name {
-		case "Receipts":
-			r.library = c.ID
-		case "Receipt lines":
-			r.lines = c.ID
-		}
+	// One library holds the receipts and their lines.
+	if len(collections) != 1 || collections[0].Name != "Receipts" {
+		t.Fatalf("collections: %+v", collections)
 	}
+	r.library = collections[0].ID
 	flows, err := wf.List(ctx, admin, result.WorkspaceID)
 	if err != nil || len(flows) != 1 || flows[0].Name != "Read receipts" || !flows[0].AutomaticEnabled {
 		t.Fatalf("workflows: %+v %v", flows, err)
@@ -362,13 +358,22 @@ func (r *receipts) expectRead(t *testing.T, id string) {
 	}
 }
 
+// lineCount counts the lines in the library: its items without a file.
 func (r *receipts) lineCount(t *testing.T) int {
 	t.Helper()
 	var page struct {
-		Value []json.RawMessage `json:"value"`
+		Value []struct {
+			File json.RawMessage `json:"file"`
+		} `json:"value"`
 	}
-	r.call(t, "GET", "/v1/resources/"+r.lines+"/children?kind=item&$top=100", "", nil, 200, &page)
-	return len(page.Value)
+	r.call(t, "GET", "/v1/resources/"+r.library+"/children?kind=item&$top=100", "", nil, 200, &page)
+	n := 0
+	for _, item := range page.Value {
+		if len(item.File) == 0 || string(item.File) == "null" {
+			n++
+		}
+	}
+	return n
 }
 
 // The receipts package reads uploaded photos: each run reads the photo,
@@ -416,6 +421,28 @@ func TestReceiptsPackage(t *testing.T) {
 	r.expectRead(t, small)
 	if n := r.lineCount(t); n != 4 || r.batch.Creates() != 1 {
 		t.Fatalf("%d lines and %d batches after the repeat", n, r.batch.Creates())
+	}
+
+	// Lines share the library and have no photo: a run started on one reads
+	// nothing.
+	var links struct {
+		Value []struct {
+			TargetID string `json:"target_id"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/items/"+small+"/relationships?direction=outgoing&type="+url.QueryEscape("contains receipt line"), "", nil, 200, &links)
+	if len(links.Value) != 2 {
+		t.Fatalf("links: %+v", links.Value)
+	}
+	line := links.Value[0].TargetID
+	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{line}}); err != nil {
+		t.Fatal(err)
+	}
+	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"No photo"}` {
+		t.Fatalf("a run on a line: %s", skipped.Result)
+	}
+	if n := r.lineCount(t); n != 4 || r.batch.Creates() != 1 {
+		t.Fatalf("%d lines and %d batches after a run on a line", n, r.batch.Creates())
 	}
 
 	// A newer file replaces the run still waiting for its answer.
