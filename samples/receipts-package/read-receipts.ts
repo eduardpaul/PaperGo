@@ -55,7 +55,8 @@ const schema = {
 };
 
 const prompt = "Read this receipt photo. Return only the object described by the schema. store is the seller. purchase_date is YYYY-MM-DD. " +
-  "currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers. One lines entry per product. " +
+  "currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers, with a dot as the decimal " +
+  "separator and no thousands separator or currency symbol, whatever the receipt shows: 1234.50, not 1.234,50 or 1,234.50 EUR. One lines entry per product. " +
   "category is the kind of product, one of the listed values; Other when none fits.";
 
 // The relationship that links a receipt to each of its lines.
@@ -120,6 +121,38 @@ async function folder(api: PaperGoClient, parent: string, name: string): Promise
   }
 }
 
+// decimal is an amount the model read, as a field of scale decimals takes it.
+// The prompt asks for 1234.50, but a model can copy the receipt's 12,50,
+// 1.234,50 EUR or 12,50-: the last separator is the decimal one, unless it
+// repeats, as in 1,234,567. Digits past scale are not rounded: an amount this
+// cannot read exactly throws, and the receipt goes to review.
+function decimal(text: string, scale: number): string {
+  const bare = text.replace(/[^\d.,+-]/g, "");
+  const digits = bare.replace(/^[+-]|[+-]$/g, "");
+  if (!/^\d[\d.,]*$/.test(digits)) throw new Error(`"${text}" is not an amount`);
+  const last = Math.max(digits.lastIndexOf("."), digits.lastIndexOf(","));
+  const point = last >= 0 && digits.indexOf(digits[last]) === last;
+  const whole = (point ? digits.slice(0, last) : digits).replace(/[.,]/g, "") || "0";
+  const fraction = (point ? digits.slice(last + 1) : "").replace(/0+$/, "");
+  if (fraction.length > scale) throw new Error(`"${text}" has more than ${scale} decimals`);
+  const negative = bare.startsWith("-") || bare.endsWith("-");
+  return `${negative ? "-" : ""}${whole}${fraction && `.${fraction}`}`;
+}
+
+// readable checks the answer and puts it as the fields take it, so nothing of
+// a receipt the fields would refuse is stored. Change the scales together
+// with resources.json.
+function readable(r: Receipt): Receipt {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(r.purchase_date) && !Number.isNaN(Date.parse(r.purchase_date));
+  if (!day) throw new Error(`"${r.purchase_date}" is not a date`);
+  const currency = r.currency.toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error(`"${r.currency}" is not a currency`);
+  return {
+    ...r, currency, total: decimal(r.total, 2),
+    lines: r.lines.map((l) => ({ ...l, quantity: decimal(l.quantity, 4), unit_price: decimal(l.unit_price, 4), amount: decimal(l.amount, 2) })),
+  };
+}
+
 // lineName numbers a line, so lines with the same description differ, and
 // keeps only characters a library name may hold.
 function lineName(n: number, description: string): string {
@@ -155,10 +188,15 @@ export default workflow<unknown, unknown, Params>({
     try {
       // The model reads the photo as it was uploaded: the app shrinks it on
       // the phone to what the model needs.
+      // An answer is cached by its request, so reading a receipt in review
+      // again says why this run asks: the same request would get the answer
+      // that sent it to review.
+      const again = item.values?.additionalData?.status === "Needs review";
       const answer = await ctx.wait((await api.v1.ai.completions.post({
         prompt, itemId: id, imageBlobId: photo.id, execution: "batch", queue: "shared", outputSchema: json(schema),
+        input: again ? `An earlier answer could not be used; read the receipt again carefully. (${ctx.run.id})` : undefined,
       }))!);
-      const receipt = (plain(answer.result) as { json: Receipt }).json;
+      const receipt = readable((plain(answer.result) as { json: Receipt }).json);
       version = await update(api, id, version, { store: receipt.store, purchase_date: receipt.purchase_date, currency: receipt.currency, total: receipt.total });
 
       // Lines filed by an earlier run go first. Deleting a line hides its

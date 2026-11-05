@@ -452,6 +452,8 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
   if (!receipt) return null;
   const currency = String(receipt.values.currency ?? "EUR");
   const money = (v: unknown) => (v === undefined || v === null ? "–" : f.currency(String(v), currency));
+  // A unit price can be finer than the currency, as fuel's 1.459 a litre.
+  const price = (v: unknown) => (/\.\d\d0*[1-9]/.test(String(v)) ? `${f.number(String(v), 4)} ${currency}` : money(v));
   const sorted = lines ?? [];
   return (
     <Modal
@@ -476,8 +478,8 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
           id: l.id,
           description: String(l.values.description ?? ""),
           category: w.categories[String(l.values.category ?? "")] ?? String(l.values.category ?? ""),
-          quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 3),
-          unit: money(l.values.unit_price),
+          quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 4),
+          unit: price(l.values.unit_price),
           amount: money(l.values.amount),
         }))}
       />

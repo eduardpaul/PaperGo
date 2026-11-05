@@ -11,8 +11,8 @@
     {"key": "status", "label": "Status", "type": "choice", "indexed": true, "choices": ["New", "Read", "Needs review"], "options": {"default_value": "New"}},
     {"key": "description", "label": "Description", "type": "text", "options": {"max_length": 200}},
     {"key": "category", "label": "Category", "type": "choice", "indexed": true, "choices": ["Fruit and vegetables", "Meat and fish", "Dairy and eggs", "Bakery", "Pantry", "Frozen", "Drinks", "Snacks and sweets", "Household", "Personal care", "Health", "Baby", "Pets", "Other"]},
-    {"key": "quantity", "label": "Quantity", "type": "decimal", "scale": 3},
-    {"key": "unit_price", "label": "Unit price", "type": "decimal", "scale": 2},
+    {"key": "quantity", "label": "Quantity", "type": "decimal", "scale": 4},
+    {"key": "unit_price", "label": "Unit price", "type": "decimal", "scale": 4},
     {"key": "amount", "label": "Amount", "type": "decimal", "scale": 2, "indexed": true}
   ],
   "content_types": [

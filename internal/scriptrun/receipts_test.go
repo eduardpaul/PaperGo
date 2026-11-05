@@ -390,7 +390,7 @@ func (r *receipts) expectRead(t *testing.T, id string) {
 		}
 	}
 	lines := r.lineValues(t, id)
-	if len(lines) != 2 || lines["Plums"] != "Fruit and vegetables 2.000 4.00 8.00 EUR 2026-10-15" || lines["Bread"] != "Bakery 1.000 4.50 4.50 EUR 2026-10-15" {
+	if len(lines) != 2 || lines["Plums"] != "Fruit and vegetables 2.0000 4.0000 8.00 EUR 2026-10-15" || lines["Bread"] != "Bakery 1.0000 4.5000 4.50 EUR 2026-10-15" {
 		t.Fatalf("lines: %+v", lines)
 	}
 }
@@ -553,4 +553,37 @@ func TestReceiptsPackage(t *testing.T) {
 	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
 		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
+
+	// Amounts copied as the receipt prints them are read as what they mean.
+	r.batch.SetReceiptMode("local-amounts")
+	local := r.upload(t, "fuel.png", receiptPhoto(t, 880, 590))
+	r.queued(t, 1)
+	r.flush(t)
+	r.runOf(t, local, runstore.StatusCompleted)
+	if item := r.item(t, local); item.Values["status"] != "Read" || item.Values["total"] != "1012.50" || item.Values["currency"] != "EUR" {
+		t.Fatalf("local amounts: %+v", item)
+	}
+	if lines := r.lineValues(t, local); lines["Diesel"] != "Other 40.1200 1.4590 58.53 EUR 2026-10-15" || lines["Refund"] != "Other 1.0000 4.5000 -4.50 EUR 2026-10-15" {
+		t.Fatalf("local amounts' lines: %+v", lines)
+	}
+
+	// An amount that cannot be stored exactly stores nothing and sends the
+	// receipt to review, though the answer matched the schema and is cached.
+	r.batch.SetReceiptMode("bad-amount")
+	bad := r.upload(t, "bad.png", receiptPhoto(t, 870, 580))
+	r.queued(t, 1)
+	r.flush(t)
+	first := r.runOf(t, bad, runstore.StatusCompleted)
+	if item := r.item(t, bad); item.Values["status"] != "Needs review" || item.Values["store"] != nil || len(r.lineValues(t, bad)) != 0 {
+		t.Fatalf("a bad amount: %+v %s", item, dump(r, t, []workflow.Run{first}))
+	}
+	// Reading it again asks the model again, whose new answer files it.
+	r.batch.SetReceiptMode("ok")
+	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{bad}}); err != nil {
+		t.Fatal(err)
+	}
+	r.queued(t, 1)
+	r.flush(t)
+	r.runOf(t, bad, runstore.StatusCompleted, first.ID)
+	r.expectRead(t, bad)
 }
