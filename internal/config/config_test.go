@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"papergo/internal/ai"
 )
 
 func TestBatchExecutionConfig(t *testing.T) {
@@ -39,12 +41,34 @@ func TestBatchExecutionConfig(t *testing.T) {
 	if c.AIExecution != "batch" || c.Batch.Model != "gpt-batch" || c.Batch.APIKey != "batch-secret" || c.Batch.Endpoint != "https://example.openai.azure.com/openai/v1/" || c.BatchDeadline != 48*time.Hour {
 		t.Fatalf("batch config: %+v execution %s deadline %s", c.Batch, c.AIExecution, c.BatchDeadline)
 	}
+	// Anthropic's Message Batches API defaults to its own endpoint and
+	// takes a bound on its answers.
+	t.Run("anthropic", func(t *testing.T) {
+		t.Setenv("AI_BATCH_PROVIDER", "anthropic")
+		t.Setenv("AI_BATCH_ENDPOINT", "")
+		t.Setenv("AI_BATCH_MODEL", "claude-haiku-5-5")
+		t.Setenv("AI_BATCH_MAX_TOKENS", "200000")
+		c, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Batch.Endpoint != ai.DefaultAnthropicEndpoint || c.Batch.Model != "claude-haiku-5-5" || c.Batch.MaxTokens != 200000 || c.Batch.APIKey != "batch-secret" {
+			t.Fatalf("anthropic batch: %+v", c.Batch)
+		}
+		for _, bad := range []struct{ key, value string }{{"AI_BATCH_MAX_TOKENS", "lots"}, {"AI_BATCH_MAX_TOKENS", "300001"}, {"AI_BATCH_MODEL", ""}} {
+			t.Setenv(bad.key, bad.value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("accepted %s=%q", bad.key, bad.value)
+			}
+		}
+	})
 	for _, tc := range []struct{ key, value string }{
 		{"AI_EXECUTION", "sometimes"},
 		{"AI_BATCH_DEADLINE", "30s"},
 		{"AI_BATCH_DEADLINE", "721h"},
 		{"AI_BATCH_MODEL", ""},
 		{"AI_BATCH_PROVIDER", "local"},
+		{"AI_BATCH_MAX_TOKENS", "100"},
 	} {
 		t.Run(tc.key+" "+tc.value, func(t *testing.T) {
 			t.Setenv(tc.key, tc.value)

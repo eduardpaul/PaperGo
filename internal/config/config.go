@@ -689,15 +689,27 @@ func (c *Config) loadBatch() error {
 		Endpoint: os.Getenv("AI_BATCH_ENDPOINT"),
 		Model:    os.Getenv("AI_BATCH_MODEL"),
 	}
-	if strings.TrimSpace(batch.Endpoint) == "" {
-		if c.Chat.Enabled() && c.Chat.Endpoint != "" {
-			batch.Endpoint = c.Chat.Endpoint
-		} else {
-			batch.Endpoint = ai.DefaultEndpoint
+	// Anthropic's Message Batches API has its own endpoint and models; an
+	// OpenAI-compatible batch provider shares the chat provider's.
+	switch {
+	case batch.Provider == ai.ProviderAnthropic:
+		if strings.TrimSpace(batch.Endpoint) == "" {
+			batch.Endpoint = ai.DefaultAnthropicEndpoint
 		}
+	case strings.TrimSpace(batch.Endpoint) == "" && c.Chat.Enabled() && c.Chat.Endpoint != "":
+		batch.Endpoint = c.Chat.Endpoint
+	case strings.TrimSpace(batch.Endpoint) == "":
+		batch.Endpoint = ai.DefaultEndpoint
 	}
-	if strings.TrimSpace(batch.Model) == "" {
+	if strings.TrimSpace(batch.Model) == "" && batch.Provider != ai.ProviderAnthropic {
 		batch.Model = c.Chat.Model
+	}
+	if v := os.Getenv("AI_BATCH_MAX_TOKENS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("AI_BATCH_MAX_TOKENS must be a whole number")
+		}
+		batch.MaxTokens = n
 	}
 	if path := os.Getenv("AI_BATCH_API_KEY_FILE"); path != "" && batch.Enabled() {
 		key, err := readAPIKey(path)

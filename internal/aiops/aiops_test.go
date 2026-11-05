@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -460,16 +459,16 @@ func (c *fakeChat) calls() int {
 }
 
 type fakeBatchJob struct {
-	lines    []byte
+	requests []ai.BatchRequest
 	finished bool
 }
 
-// fakeBatch answers every line, except those whose input is failing.
+// fakeBatch answers every request, except those whose input is failing.
 type fakeBatch struct {
-	mu      sync.Mutex
-	files   []string
-	batches map[string]*fakeBatchJob
-	failing string
+	mu       sync.Mutex
+	prepared []ai.BatchRequest
+	batches  map[string]*fakeBatchJob
+	failing  string
 	// crash stops the submission once the provider created the batch;
 	// refuse makes the provider refuse to create it.
 	crash, refuse bool
@@ -479,33 +478,31 @@ func (*fakeBatch) Key() string        { return "fake-batch" }
 func (*fakeBatch) Connection() string { return "fake" }
 func (*fakeBatch) Model() string      { return "fake-model" }
 
-func (b *fakeBatch) Upload(_ context.Context, jsonl []byte) (string, error) {
+func (b *fakeBatch) Prepare(_ context.Context, requests []ai.BatchRequest) (ai.BatchInput, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.files = append(b.files, string(jsonl))
-	return fmt.Sprint("file-", len(b.files)), nil
+	b.prepared = requests
+	return ai.BatchInput{FileID: "prepared"}, nil
 }
 
-func (b *fakeBatch) Create(_ context.Context, file, tag string) (string, error) {
+func (b *fakeBatch) Create(_ context.Context, _ ai.BatchInput, tag string) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.refuse {
 		return "", errors.New("the provider refused the batch")
 	}
-	var n int
-	fmt.Sscanf(file, "file-%d", &n)
-	b.batches[tag] = &fakeBatchJob{lines: []byte(b.files[n-1])}
+	b.batches[tag] = &fakeBatchJob{requests: b.prepared}
 	if b.crash {
 		panic("the process stopped")
 	}
 	return tag, nil
 }
 
-func (b *fakeBatch) FindByTag(_ context.Context, tag string) (string, bool, error) {
+func (b *fakeBatch) Find(_ context.Context, s ai.BatchSubmission) (string, bool, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	_, ok := b.batches[tag]
-	return tag, ok, nil
+	_, ok := b.batches[s.Tag]
+	return s.Tag, ok, nil
 }
 
 func (b *fakeBatch) finish() {
@@ -519,27 +516,19 @@ func (b *fakeBatch) finish() {
 func (b *fakeBatch) Get(_ context.Context, id string) (ai.Batch, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !b.batches[id].finished {
-		return ai.Batch{ID: id, Status: "in_progress"}, nil
-	}
-	return ai.Batch{ID: id, Status: "completed", OutputFileID: id}, nil
+	return ai.Batch{ID: id, Ended: b.batches[id].finished}, nil
 }
 
-func (b *fakeBatch) Download(_ context.Context, id string) ([]byte, error) {
+func (b *fakeBatch) Results(_ context.Context, batch ai.Batch, _ map[string]bool) ([]ai.BatchResult, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	var out []byte
-	for _, row := range strings.Split(strings.TrimSpace(string(b.batches[id].lines)), "\n") {
-		var line struct {
-			CustomID string `json:"custom_id"`
+	var out []ai.BatchResult
+	for _, r := range b.batches[batch.ID].requests {
+		result := ai.BatchResult{Key: r.Key, Answer: ai.Answer{Text: "batched answer"}}
+		if b.failing != "" && strings.Contains(r.Completion.Input, b.failing) {
+			result = ai.BatchResult{Key: r.Key, Err: errors.New("the provider rejected the request")}
 		}
-		_ = json.Unmarshal([]byte(row), &line)
-		status, body := 200, `{"choices":[{"message":{"content":"batched answer"}}]}`
-		if b.failing != "" && strings.Contains(row, b.failing) {
-			status, body = 500, `{}`
-		}
-		raw, _ := json.Marshal(map[string]any{"custom_id": line.CustomID, "response": map[string]any{"status_code": status, "body": json.RawMessage(body)}})
-		out = append(append(out, raw...), '\n')
+		out = append(out, result)
 	}
 	return out, nil
 }

@@ -35,13 +35,27 @@ The figures are worked out by the server ([aggregates](../../docs/application-fo
 
 ## Batch execution
 
-The script asks for `execution: "batch"` and queue `shared`. `AI_EXECUTION` can stay `immediate`; that deployment default applies only when a request leaves execution empty. Batch mode does not fall back to the chat provider. Configure the batch endpoint on its own, with a model that reads images:
+The script asks for `execution: "batch"` and queue `shared`. `AI_EXECUTION` can stay `immediate`; that deployment default applies only when a request leaves execution empty. Batch mode does not fall back to the chat provider. Configure the [batch provider](../../docs/ai.md#models) on its own, with a model that reads images: an OpenAI-compatible Batch API (OpenAI, Azure OpenAI, Microsoft Foundry) or Anthropic's Message Batches API.
 
 ```bash
+# OpenAI, Azure OpenAI or Microsoft Foundry
 AI_BATCH_PROVIDER=openai
 AI_BATCH_MODEL=...
 AI_BATCH_ENDPOINT=...          # optional; defaults to the chat endpoint
 AI_BATCH_API_KEY_FILE=...      # when the endpoint requires a key
+
+# or Claude
+AI_BATCH_PROVIDER=anthropic
+AI_BATCH_MODEL=claude-haiku-5-5
+AI_BATCH_API_KEY_FILE=...      # a Claude API key
 ```
 
-The `ai-batch` worker sends a full group of 20 distinct requests at once, and whatever waits at 01:00 UTC. One receipt waits for that flush unless other requests fill a group of 20. Change the group size, a maximum wait or the flush schedule in the `workers.ai-batch` section of `config.yaml`, or send what waits now with `papergo admin workers flush ai-batch`. The `shared` queue is installation-wide, so other workflows can batch with these receipts. A run waits for its answer without holding a worker. A request that is still open after `AI_BATCH_DEADLINE` (default 72h) fails, which marks the receipt **Needs review**. Repeating the workflow on a receipt reuses the cached answer at once.
+The `ai-batch` worker sends a full group of 20 distinct requests at once, and whatever waits at 01:00 UTC. One receipt waits for that flush unless other requests fill a group of 20. Change the group size, a maximum wait or the flush schedule in the `workers.ai-batch` section of `config.yaml`, or send what waits now with `papergo admin workers flush ai-batch`. To send each photo as soon as it waits, admit a group of one:
+
+```yaml
+workers:
+  ai-batch:
+    admission:
+      policy: threshold
+      threshold: 1
+``` The `shared` queue is installation-wide, so other workflows can batch with these receipts. A run waits for its answer without holding a worker. A request that is still open after `AI_BATCH_DEADLINE` (default 72h) fails, which marks the receipt **Needs review**. Repeating the workflow on a receipt reuses the cached answer at once.

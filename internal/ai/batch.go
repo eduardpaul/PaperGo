@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // MetadataKey is the provider batch metadata entry that identifies one
@@ -23,13 +24,23 @@ const MetadataKey = "papergo_batch"
 // creating it again.
 var ErrUncertain = errors.New("the batch submission did not confirm whether it was created")
 
-// BatchConfig configures the OpenAI-compatible batch endpoint (AI_BATCH_*).
-// It is independent of the chat endpoint, model and credential.
+// ErrUndetermined means the provider cannot tell yet whether it holds a
+// submission: a batch that could be it has not ended. Look again later; it
+// never permits creating the submission again.
+var ErrUndetermined = errors.New("the provider cannot tell yet whether it holds the batch")
+
+// BatchConfig configures the batch provider (AI_BATCH_*): an
+// OpenAI-compatible Batch API (OpenAI, Azure OpenAI and Microsoft Foundry)
+// or Anthropic's Message Batches API. It is independent of the chat
+// endpoint, model and credential.
 type BatchConfig struct {
 	Provider string
 	Endpoint string
 	Model    string
 	APIKey   string
+	// MaxTokens bounds each answer of an anthropic batch; zero is
+	// DefaultMaxTokens. Above 128,000 it asks for extended output.
+	MaxTokens int
 }
 
 func (c BatchConfig) Enabled() bool { return c.Provider != "" && c.Provider != ProviderNone }
@@ -38,12 +49,15 @@ func (c BatchConfig) Validate() error {
 	switch c.Provider {
 	case "", ProviderNone:
 		return nil
-	case ProviderOpenAI:
+	case ProviderOpenAI, ProviderAnthropic:
 	default:
-		return errors.New("the provider must be none or openai")
+		return errors.New("the provider must be none, openai or anthropic")
 	}
 	if strings.TrimSpace(c.Model) == "" || len(c.Model) > 200 {
 		return errors.New("a batch model needs a name of at most 200 characters")
+	}
+	if c.MaxTokens != 0 && (c.Provider != ProviderAnthropic || c.MaxTokens < 1 || c.MaxTokens > MaxExtendedTokens) {
+		return fmt.Errorf("max tokens belong to the anthropic provider, from 1 to %d", MaxExtendedTokens)
 	}
 	u, err := url.Parse(c.Endpoint)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -54,20 +68,42 @@ func (c BatchConfig) Validate() error {
 
 // Batch is one provider batch.
 type Batch struct {
-	ID           string
-	Status       string
+	ID string
+	// Ended reports a batch that will not produce more output.
+	Ended        bool
 	OutputFileID string
 	ErrorFileID  string
 }
 
-// Terminal reports a batch that will not produce more output.
-func (b Batch) Terminal() bool {
-	switch b.Status {
-	case "completed", "failed", "expired", "cancelled":
-		return true
-	default:
-		return false
-	}
+// BatchRequest is one completion of a batch, under its request key: at
+// most 64 letters, digits, hyphens and underscores, unique in the batch.
+type BatchRequest struct {
+	Key        string
+	Completion Completion
+}
+
+// BatchInput is a prepared batch, ready to create.
+type BatchInput struct {
+	// FileID is the uploaded input file of an OpenAI-compatible batch.
+	FileID string
+	// requests are an anthropic batch's requests, sent with the batch.
+	requests []BatchRequest
+}
+
+// BatchSubmission is what a submission whose create did not confirm is
+// looked up by: its tag, its request keys and when it was prepared.
+type BatchSubmission struct {
+	Tag   string
+	Keys  []string
+	Since time.Time
+}
+
+// BatchResult is one request's outcome in an ended batch. Err is a
+// provider failure or an answer that is not a completion of the request.
+type BatchResult struct {
+	Key    string
+	Answer Answer
+	Err    error
 }
 
 // Batcher submits independent chat requests and reads them back. Create does
@@ -79,13 +115,19 @@ type Batcher interface {
 	// Connection is the batch API base. Requests are grouped by it and the
 	// effective model.
 	Connection() string
-	// Model is the provider model or deployment name sent in each line.
+	// Model is the provider model or deployment name sent in each request.
 	Model() string
-	Upload(ctx context.Context, jsonl []byte) (string, error)
-	Create(ctx context.Context, inputFileID, tag string) (string, error)
-	FindByTag(ctx context.Context, tag string) (string, bool, error)
+	// Prepare readies requests for Create. It creates nothing that runs:
+	// its failures can be retried.
+	Prepare(ctx context.Context, requests []BatchRequest) (BatchInput, error)
+	Create(ctx context.Context, in BatchInput, tag string) (string, error)
+	// Find looks up a submission Create did not confirm. ErrUndetermined
+	// means look again later.
+	Find(ctx context.Context, s BatchSubmission) (string, bool, error)
 	Get(ctx context.Context, batchID string) (Batch, error)
-	Download(ctx context.Context, fileID string) ([]byte, error)
+	// Results reads an ended batch's answers; structured names the keys
+	// whose requests asked for a JSON object.
+	Results(ctx context.Context, b Batch, structured map[string]bool) ([]BatchResult, error)
 }
 
 type openAIBatch struct {
@@ -94,6 +136,9 @@ type openAIBatch struct {
 	apiKey string
 	client *http.Client
 }
+
+// maxOpenAIBatchBytes bounds an OpenAI-compatible batch's input file.
+const maxOpenAIBatchBytes = 100 << 20
 
 // NewBatch returns the configured batch client, or nil when none is.
 func NewBatch(c BatchConfig, client *http.Client) (Batcher, error) {
@@ -105,6 +150,9 @@ func NewBatch(c BatchConfig, client *http.Client) (Batcher, error) {
 	}
 	if client == nil {
 		client = &http.Client{}
+	}
+	if c.Provider == ProviderAnthropic {
+		return newAnthropicBatch(c, client), nil
 	}
 	return &openAIBatch{model: c.Model, base: BatchBase(c.Endpoint), apiKey: c.APIKey, client: client}, nil
 }
@@ -125,7 +173,28 @@ func (b *openAIBatch) Connection() string { return b.base }
 
 func (b *openAIBatch) Model() string { return b.model }
 
-func (b *openAIBatch) Upload(ctx context.Context, jsonl []byte) (string, error) {
+// Prepare uploads the requests as a JSONL file of chat completions.
+func (b *openAIBatch) Prepare(ctx context.Context, requests []BatchRequest) (BatchInput, error) {
+	var jsonl bytes.Buffer
+	for _, r := range requests {
+		line, err := json.Marshal(map[string]any{
+			"custom_id": r.Key, "method": "POST", "url": "/v1/chat/completions",
+			"body": CompletionBody(b.model, r.Completion),
+		})
+		if err != nil {
+			return BatchInput{}, err
+		}
+		if jsonl.Len()+len(line)+1 > maxOpenAIBatchBytes {
+			return BatchInput{}, errors.New("the batch input exceeds 100 MiB; lower the worker's batch size")
+		}
+		jsonl.Write(line)
+		jsonl.WriteByte('\n')
+	}
+	id, err := b.upload(ctx, jsonl.Bytes())
+	return BatchInput{FileID: id}, err
+}
+
+func (b *openAIBatch) upload(ctx context.Context, jsonl []byte) (string, error) {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
 	if err := w.WriteField("purpose", "batch"); err != nil {
@@ -160,9 +229,9 @@ func (b *openAIBatch) Upload(ctx context.Context, jsonl []byte) (string, error) 
 	return out.ID, nil
 }
 
-func (b *openAIBatch) Create(ctx context.Context, inputFileID, tag string) (string, error) {
+func (b *openAIBatch) Create(ctx context.Context, in BatchInput, tag string) (string, error) {
 	payload, err := json.Marshal(map[string]any{
-		"input_file_id":     inputFileID,
+		"input_file_id":     in.FileID,
 		"endpoint":          "/v1/chat/completions",
 		"completion_window": "24h",
 		"metadata":          map[string]string{MetadataKey: tag},
@@ -187,7 +256,9 @@ func (b *openAIBatch) Create(ctx context.Context, inputFileID, tag string) (stri
 	return parsed.ID, nil
 }
 
-func (b *openAIBatch) FindByTag(ctx context.Context, tag string) (string, bool, error) {
+// Find looks the submission up by its tag in the batches' metadata.
+func (b *openAIBatch) Find(ctx context.Context, s BatchSubmission) (string, bool, error) {
+	tag := s.Tag
 	after := ""
 	for page := 0; ; page++ {
 		if page >= 100 {
@@ -269,7 +340,61 @@ func (b *openAIBatch) Get(ctx context.Context, batchID string) (Batch, error) {
 	return decodeBatch(raw)
 }
 
-func (b *openAIBatch) Download(ctx context.Context, fileID string) ([]byte, error) {
+// Results reads the output and error files of an ended batch.
+func (b *openAIBatch) Results(ctx context.Context, batch Batch, structured map[string]bool) ([]BatchResult, error) {
+	var out []BatchResult
+	for _, file := range []string{batch.OutputFileID, batch.ErrorFileID} {
+		if file == "" {
+			continue
+		}
+		raw, err := b.download(ctx, file)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range bytes.Split(raw, []byte("\n")) {
+			if r, ok := openAIResult(bytes.TrimSpace(row), structured); ok {
+				out = append(out, r)
+			}
+		}
+	}
+	return out, nil
+}
+
+// openAIResult reads one line of a batch output or error file.
+func openAIResult(row []byte, structured map[string]bool) (BatchResult, bool) {
+	var parsed struct {
+		CustomID string `json:"custom_id"`
+		Response struct {
+			StatusCode int             `json:"status_code"`
+			Body       json.RawMessage `json:"body"`
+		} `json:"response"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if len(row) == 0 || json.Unmarshal(row, &parsed) != nil || parsed.CustomID == "" {
+		return BatchResult{}, false
+	}
+	if parsed.Response.StatusCode != 200 {
+		message := "the provider rejected the request"
+		if parsed.Error != nil && parsed.Error.Message != "" {
+			message = parsed.Error.Message
+		}
+		return BatchResult{Key: parsed.CustomID, Err: errors.New(shortMessage(message))}, true
+	}
+	answer, err := ParseCompletion(parsed.Response.Body, structured[parsed.CustomID])
+	return BatchResult{Key: parsed.CustomID, Answer: answer, Err: err}, true
+}
+
+// shortMessage keeps a provider's message to 300 characters.
+func shortMessage(message string) string {
+	if r := []rune(message); len(r) > 300 {
+		return string(r[:300])
+	}
+	return message
+}
+
+func (b *openAIBatch) download(ctx context.Context, fileID string) ([]byte, error) {
 	raw, status, err := b.do(ctx, http.MethodGet, b.base+"/files/"+url.PathEscape(fileID)+"/content", nil, "")
 	if err != nil {
 		return nil, err
@@ -290,7 +415,11 @@ func decodeBatch(raw []byte) (Batch, error) {
 	if err := json.Unmarshal(raw, &out); err != nil || out.ID == "" {
 		return Batch{}, errors.New("the provider batch is unreadable")
 	}
-	return Batch{ID: out.ID, Status: out.Status, OutputFileID: out.OutputFileID, ErrorFileID: out.ErrorFileID}, nil
+	switch out.Status {
+	case "completed", "failed", "expired", "cancelled":
+		return Batch{ID: out.ID, Ended: true, OutputFileID: out.OutputFileID, ErrorFileID: out.ErrorFileID}, nil
+	}
+	return Batch{ID: out.ID}, nil
 }
 
 func (b *openAIBatch) do(ctx context.Context, method, endpoint string, body io.Reader, contentType string) ([]byte, int, error) {

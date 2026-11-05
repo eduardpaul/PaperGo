@@ -10,6 +10,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/jackc/pgx/v5` | PostgreSQL driver | MIT |
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
+| `github.com/anthropics/anthropic-sdk-go/v2` | Anthropic's Message Batches API, the `anthropic` batch provider (`internal/ai` only) | Apache-2.0; versions before v2 and contributions merged before the change are MIT |
 | `github.com/yalue/onnxruntime_go` | cgo ONNX Runtime binding shared by OCR, embeddings and decisions | MIT |
 | `github.com/klippa-app/go-pdfium` | PDF text reading and rendering with its embedded PDFium WebAssembly module (`internal/doctext/pdfium` only) | MIT |
 | `github.com/tetratelabs/wazero` | pure-Go WebAssembly runtime that runs PDFium in-process (`internal/doctext/pdfium` only) | Apache-2.0 |
