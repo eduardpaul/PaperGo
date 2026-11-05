@@ -14743,7 +14743,7 @@
         ],
         "operationId": "startPackageExport",
         "summary": "Export an organization or workspace with optional content",
-        "description": "Requires organization.manage. Set workspace_id for a self-contained workspace package; omit it for a whole-organization package. include_data defaults to true; false exports configuration only. Workspace packages include shared schema/taxonomy/group dependencies, permissions, views, smart folders and workflows, and exclude personal Home, personal smart folders, unrelated workspaces and organization roles/preferences. References outside the workspace fail with an actionable error. Credentials and execution state are excluded. Limits: 100000 records, 64 MiB manifest, 4 GiB ZIP/content. Exports expire after seven days.",
+        "description": "Requires organization.manage. Set workspace_id for a self-contained workspace package; omit it for a whole-organization package. include_data defaults to true; false exports configuration only. Workspace packages include shared schema/taxonomy/group dependencies, permissions, views, smart folders, workflows and apps, and exclude personal Home, personal smart folders, unrelated workspaces and organization roles/preferences. References outside the workspace fail with an actionable error. Credentials and execution state are excluded. Limits: 100000 records, 64 MiB manifest, 4 GiB ZIP/content. Exports expire after seven days.",
         "x-required-scopes": [
           "organization.manage"
         ],

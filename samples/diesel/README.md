@@ -1,6 +1,6 @@
 # Diesel tracker
 
-A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, how warm it is inside and out, and when to order. It is a workspace package with a list and four workflows, and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
+A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, how warm it is inside and out, and when to order. It is a workspace package with a list, four workflows and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
 
 ## Install
 
@@ -11,14 +11,11 @@ A heating-oil tank, read with a dipstick: how much is left, what it is worth, ho
      - **Heating**: when the heating went on or off;
      - **Temperature**: the date and time, and the indoor and outdoor °C, either or both;
    - five saved views: Readings, Purchases, Heating, Temperatures and Needs a look;
-   - the four workflows below.
+   - the four workflows below;
+   - the **Diesel dashboard** app, published, with its parameters set to the **Diesel** list and its **Reading**, **Purchase**, **Heating** and **Temperature** types. It appears in the sidebar under the list.
 
-   The importer becomes the workflows' author.
-2. **The app.** In the workspace, open **Workspace settings → Apps → New app** and paste [`diesel-app.tsx`](diesel-app.tsx).
-   - Save it, then choose its parameters with the pickers: the **Diesel** list and its **Reading**, **Purchase**, **Heating** and **Temperature** types. The tank and consumption settings have defaults.
-   - Set the state to **Published** and save again.
-   - The app appears in the sidebar under the list.
-3. **Search off.** In the **Diesel** list's settings, set **Search** to **Off: names only**. Readings and temperatures are found by date on the dashboard and in the views, not by searching their values, and a sensor filing a temperature every hour would otherwise index each one.
+   The importer becomes the author of the workflows and the app.
+2. **Search off.** In the **Diesel** list's settings, set **Search** to **Off: names only**. Readings and temperatures are found by date on the dashboard and in the views, not by searching their values, and a sensor filing a temperature every hour would otherwise index each one.
 
 To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings, three heating changes and eighteen temperatures taken with the readings. The tank's figures are real; the temperatures are illustrative.
 
@@ -71,6 +68,6 @@ Converting readings again after the tank's settings change is **Run once** of Di
 
 ## Sources
 
-[`resources.json`](resources.json), the workflow scripts with their settings (`diesel-*.ts` and `diesel-*.json`), and [`diesel-app.tsx`](diesel-app.tsx) are the editable sources.
+[`resources.json`](resources.json), the workflow scripts with their settings (`diesel-*.ts` and `diesel-*.json`), and the app, [`diesel-app.tsx`](diesel-app.tsx) with its settings [`diesel-app.json`](diesel-app.json), are the editable sources.
 - The [sample package test](../../internal/httpapi/samplepackages_test.go) imports the ZIP. It rebuilds it with `-update-sample-packages`.
 - The [diesel test](../../internal/scriptrun/diesel_test.go) runs the workflows end to end on the sample data.

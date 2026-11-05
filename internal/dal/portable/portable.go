@@ -32,7 +32,7 @@ var Tables = []string{
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
 	"resources", "schema_revisions", "schema_templates", "list_views", "smart_folders",
 	"blobs", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
-	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
+	"workflows", "workflow_versions", "workflow_triggers", "apps", "app_versions", "group_inboxes",
 }
 
 // DataTables hold content. A configuration package carries none of their rows.
@@ -454,7 +454,7 @@ func exportScope(table string, scope Scope) (string, []any) {
 			return "container_id IN (" + resourcesIn + ") AND id IN (SELECT schema_head_id FROM resources)", resourceArgs
 		}
 		return "container_id IN (" + resourcesIn + ")", resourceArgs
-	case "schema_templates", "smart_folders", "workflows", "workflow_triggers":
+	case "schema_templates", "smart_folders", "workflows", "workflow_triggers", "apps":
 		return "workspace_id=?", []any{ws}
 	case "blobs", "item_revisions", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys":
 		return "item_id IN (" + resourcesIn + ")", resourceArgs
@@ -464,6 +464,8 @@ func exportScope(table string, scope Scope) (string, []any) {
 		return "library_id IN (" + resourcesIn + ")", resourceArgs
 	case "workflow_versions":
 		return "workflow_id IN (SELECT id FROM workflows WHERE workspace_id=?)", []any{ws}
+	case "app_versions":
+		return "app_id IN (SELECT id FROM apps WHERE workspace_id=?)", []any{ws}
 	case "integration_revision_data":
 		return "revision_id IN (SELECT r.id FROM item_revisions r JOIN resources c ON c.id=r.container_id WHERE c.workspace_id=?)", []any{ws}
 	case "blob_previews":

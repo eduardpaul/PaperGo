@@ -484,12 +484,8 @@ func TestIntegrationPortablePackageRetainsGenericDataAndOmitsSecrets(t *testing.
 		t.Fatal("portable secret leaked")
 	}
 	target := emptyPackageTarget(t)
-	var result PackageResult
-	if err = target.Write(ctx, func(t *Service) error {
-		var e error
-		result, e = t.importCorePackage(ctx, store, "organization-admin", packagePayload{ObjectKey: object.Key})
-		return e
-	}); err != nil {
+	result, err := importPackageForTest(t, target, store, packagePayload{ObjectKey: object.Key})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.Valid || len(result.Warnings) != 1 {

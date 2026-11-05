@@ -17,7 +17,12 @@ import (
 
 func sampleTemplateForTest(t *testing.T) corePackage {
 	t.Helper()
-	raw, err := os.ReadFile("../../samples/receipts-package/receipts.zip")
+	return samplePackageForTest(t, "../../samples/receipts-package/receipts.zip")
+}
+
+func samplePackageForTest(t *testing.T, path string) corePackage {
+	t.Helper()
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

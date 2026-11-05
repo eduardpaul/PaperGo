@@ -4,10 +4,11 @@ A workspace package reproduces a shared workspace on another PaperGo instance.
 It carries the workspace's name, description, membership and permissions; lists
 and libraries with their settings; content types, fields and frozen schemas;
 workspace schema templates; list views; shared smart folders; taxonomy and
-relationship policies; workflow definitions, versions and triggers; and group
-inbox bindings. Shared dependencies are selected from the objects the workspace
-uses. PaperGo uses a ZIP containing `manifest.json` and deduplicated `objects/`
-entries, with an explicit organization or workspace scope.
+relationship policies; workflow definitions, versions and triggers; apps with
+their parameters and versions; and group inbox bindings. Shared dependencies are
+selected from the objects the workspace uses. PaperGo uses a ZIP containing
+`manifest.json` and deduplicated `objects/` entries, with an explicit
+organization or workspace scope.
 
 Choose whether to include content. With content enabled, the package also carries
 items and folders, typed values, unique permissions, retained revisions and
@@ -73,9 +74,13 @@ An omitted export request body uses those organization defaults.
 ## References and shared objects
 
 Workspace entities receive fresh IDs. References are remapped in containment,
-permissions, schemas, lookups, taxonomy values, view filters, smart folders and
-workflow configuration, including UUID references embedded in expressions.
+permissions, schemas, lookups, taxonomy values, view filters, smart folders,
+workflow configuration and app parameters, including UUID references embedded
+in expressions.
 Ordinary item text, person subjects and exact numeric values retain their values.
+An app's parameters are remapped only where its parameters form picks data, and
+its current version is compiled again from its source; see
+[apps](apps.md#copying-a-workspace).
 
 Catalog content types are matched by key, which is unique in a catalog, and
 their fields by field key; list types are copied with their collections and

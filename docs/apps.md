@@ -111,6 +111,14 @@ An app acts as everyone who opens it, so `app.manage` is not granted to the Memb
 
 Creating, changing and deleting an app are audited as `app.create`, `app.update` and `app.delete` in the workspace's audit trail, with the app's ID, key and version.
 
+## Copying a workspace
+
+A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, state and parameters, and every version with its source.
+- **Parameters.** The values of the parameters form's pickers are references: the lists, items, content types and terms they select become those of the copy, and people keep their accounts. Other values are the app's own and travel as they are, even when they hold an ID.
+- **Outside references.** A picker that selects a list or item outside the workspace, or an item a configuration-only package leaves out, fails the export with the name of what it selects; so does an ID in the current version's source, in any letter case. An import refuses a package whose pickers select anything it does not carry, or something other than what they pick, such as a collection picker that selects an item.
+- **Code.** Importing compiles each app's current version again from its source, before the import's transaction opens, so an app never runs code that came in the package. A current version that no longer compiles fails the import, naming the app. IDs of the copied workspace in the source, such as a picker limited to one list, become the copy's, in its code and form too.
+- **Earlier versions** are history that never runs: they keep their source, code and form, and the IDs they name are neither followed nor checked.
+
 ## API
 
 | Method | Route | Purpose |
@@ -130,4 +138,4 @@ The complete contract is in [OpenAPI](../api/openapi.json).
 
 ## Sample
 
-The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list and four workflows, and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures.
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures.

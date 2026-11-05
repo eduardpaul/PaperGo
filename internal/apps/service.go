@@ -1,3 +1,7 @@
+// Package apps is the apps feature: React screens that belong to a
+// workspace, written as one TSX file the server compiles, with parameters
+// chosen through a form and immutable versions. An app runs in a sandboxed
+// frame of the web app and acts as the person viewing it.
 package apps
 
 import (
@@ -11,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"papergo/internal/appcode"
 	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/resources"
@@ -319,24 +324,24 @@ func (s *Service) Versions(ctx context.Context, subject, id string) ([]VersionVi
 // database connection: running a source may take seconds, so it runs after
 // authorizing and before the write's transaction, which would hold up every
 // other write meanwhile.
-func compile(ctx context.Context, in *Save) (Compiled, error) {
+func compile(ctx context.Context, in *Save) (appcode.Compiled, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" || utf8.RuneCountInString(in.Name) > 200 {
-		return Compiled{}, dms.Invalid("name needs 1 to 200 characters")
+		return appcode.Compiled{}, dms.Invalid("name needs 1 to 200 characters")
 	}
 	if utf8.RuneCountInString(in.Description) > 2000 {
-		return Compiled{}, dms.Invalid("description is limited to 2000 characters")
+		return appcode.Compiled{}, dms.Invalid("description is limited to 2000 characters")
 	}
 	if in.State == "" {
 		in.State = appstore.StateDraft
 	}
 	if !in.State.Valid() {
-		return Compiled{}, dms.Invalid("state is draft or published")
+		return appcode.Compiled{}, dms.Invalid("state is draft or published")
 	}
-	compiled, err := Compile(ctx, in.Source)
+	compiled, err := appcode.Compile(ctx, in.Source)
 	var problem *script.BundleError
 	if errors.As(err, &problem) {
-		return Compiled{}, dms.Invalid("the app does not compile:\n" + problem.Error())
+		return appcode.Compiled{}, dms.Invalid("the app does not compile:\n" + problem.Error())
 	}
 	return compiled, err
 }
@@ -344,7 +349,7 @@ func compile(ctx context.Context, in *Save) (Compiled, error) {
 // prepare checks a compiled app's parameters against its form as subject:
 // their types and picks always, and the form's required fields once the app
 // is published.
-func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, in *Save, compiled Compiled) (appstore.Content, error) {
+func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, in *Save, compiled appcode.Compiled) (appstore.Content, error) {
 	schema := map[string]any{}
 	dec := json.NewDecoder(bytes.NewReader(compiled.ParametersSchema))
 	dec.UseNumber()

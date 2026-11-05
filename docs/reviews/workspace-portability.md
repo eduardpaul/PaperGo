@@ -14,6 +14,7 @@ PaperGo uses its own JSON manifest, reference remapping and transactional import
 | Templates and views | Workspace schema templates, default/saved list views and shared smart folders |
 | Taxonomy and relationships | Referenced term sets and trees, relationship policies and optional content edges |
 | Workflows | Definitions, parameters, versions and triggers; schedule cursors are rebuilt at import |
+| Apps | Parameters, state and every version with its source, compiled code and parameters form |
 | Permissions and membership | Workspace members, unique ACLs and referenced groups with nested membership |
 | Content and files | Typed values, folders, retained revisions/history, publications and all physical file versions |
 | Import into a populated instance | New workspace and entity IDs, remapped internal references, optional new name |

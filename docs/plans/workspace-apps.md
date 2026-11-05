@@ -2,7 +2,7 @@
 
 Status: phase 0 implemented. [Apps](../apps.md) describes them as they are; the [diesel tracker](../../samples/diesel/README.md) runs on them as the complete sample ([analysis](use-case-diesel-analysis.md)). This plan keeps the decisions and what comes later.
 
-Decisions taken: apps run in a sandboxed frame and act with the viewer's own credentials; writing apps needs the new `app.manage` scope; apps join workspace packages later. Packaging lists, workflows and apps together ("solutions") comes after phase 0.
+Decisions taken: apps run in a sandboxed frame and act with the viewer's own credentials; writing apps needs the new `app.manage` scope; apps travel in workspace packages. Packaging lists, workflows and apps together ("solutions") comes after phase 0.
 
 ## What an app is
 
@@ -135,14 +135,13 @@ Saving compiles the source with the esbuild the server embeds, as workflows are 
 ## The diesel sample
 
 `samples/diesel/` holds the complete sample, built from its sources like the [receipts package](../../samples/receipts-package/README.md):
-- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading, Purchase, Heating and Temperature content types, the saved views, and the four workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`, `diesel-sample-data`);
-- **`diesel-app.tsx`**, the dashboard: the figures and charts of the use case, the reading, fill, heating and temperature dialogs, and the open reminder or refill task with a link to answer it;
+- **`diesel.zip`**, a workspace package: the Diesel list, its fields, the Reading, Purchase, Heating and Temperature content types, the saved views, the four workflows (`diesel-levels`, `diesel-measure-reminder`, `diesel-refill`, `diesel-sample-data`) and the dashboard app, published with its parameters;
+- **`diesel-app.tsx`** with its settings `diesel-app.json`, the dashboard: the figures and charts of the use case, the reading, fill, heating and temperature dialogs, and the open reminder or refill task with a link to answer it;
 - **a README** with the install steps:
   1. Import the package.
-  2. Add the app with its parameters chosen by the pickers.
-  3. Turn search off for the Diesel list in its settings.
+  2. Turn search off for the Diesel list in its settings.
 
-  Phase 0 has no way to install them at once: that comes with solutions, which should also carry a list's search setting.
+  The package does not carry a list's search setting: that comes with solutions.
 
 The [use case analysis](use-case-diesel-analysis.md) explains its design.
 
@@ -161,11 +160,11 @@ Each step is a commit with the narrowest tests that prove it:
    - Tests:
      - the sample package test;
      - a `scriptrun` test of the workflows;
-     - a browser check that imports the package, adds the app and sees a reading turn into litres on the dashboard.
+     - a browser check that imports the package, opens the app and sees a reading turn into litres on the dashboard.
 
 ## Core changes
 
-Only `app.manage` in the scope catalog (approved). The tables, routes, compiler and runtime belong to the apps feature. The bridge and pages are web feature code. It needs no change to workflows, tasks or items: manual trigger `access`, `unique` tasks and task updates already serve it.
+`app.manage` in the scope catalog, and the `apps` and `app_versions` tables among the tables workspace packages carry (both approved). The tables, routes, compiler and runtime belong to the apps feature. The bridge and pages are web feature code. It needs no change to workflows, tasks or items: manual trigger `access`, `unique` tasks and task updates already serve it.
 
 ## Phase 0 is done when
 
@@ -180,11 +179,10 @@ Only `app.manage` in the scope catalog (approved). The tables, routes, compiler 
 
 ## Later
 
-1. **Apps in workspace packages.** This needs a core hook that lets a module export and import its own objects, with the IDs in parameters remapped.
-2. **Solutions.** Lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together.
-3. **Narrower access.** Limit an app to the lists it declares, or to a short-lived limited credential.
-4. **Editor.** Live preview, type checking on save, several files.
-5. **A larger kit.** Forms from content types.
+1. **Solutions.** Lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together.
+2. **Narrower access.** Limit an app to the lists it declares, or to a short-lived limited credential.
+3. **Editor.** Live preview, type checking on save, several files.
+4. **A larger kit.** Forms from content types.
 
 ## Out of scope
 
