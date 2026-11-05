@@ -50,6 +50,9 @@ const QUALITY = 0.85;
 // The relationship from a receipt to its lines, as the package names it.
 const contains = "contains receipt line";
 
+// The space between the desk's sections.
+const section = { marginBottom: 12 };
+
 // The workflow that reads a receipt, by the key the package gives it.
 const readWorkflow = "read-receipts";
 
@@ -415,26 +418,28 @@ function Desk({ w }: { w: Words }) {
       </Toolbar>
 
       {uploads.length > 0 && (
-        <Card title={w.uploads}>
-          {unsent && <p className="pg-stat-hint">{w.keepOpen}</p>}
-          <Table
-            // The size it was shrunk to shows below the state, on a phone too,
-            // and why it failed wraps there, as the kit keeps values on one line.
-            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <div style={{ whiteSpace: "normal" }}>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</div> }]}
-            rows={uploads.map((u) => ({
-              id: u.key,
-              itemId: u.itemId,
-              name: u.name,
-              retry: u.retry,
-              state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { queued: w.queued, optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
-              size: u.after === undefined ? size(f, u.before) : say(w.shrunk, { before: size(f, u.before), after: size(f, u.after) }),
-            }))}
-            onRowClick={(row) => row.itemId && open({ itemId: String(row.itemId) })}
-          />
-        </Card>
+        <div style={section}>
+          <Card title={w.uploads}>
+            {unsent && <p className="pg-stat-hint">{w.keepOpen}</p>}
+            <Table
+              // The size it was shrunk to shows below the state, on a phone too,
+              // and why it failed wraps there, as the kit keeps values on one line.
+              columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <div style={{ whiteSpace: "normal" }}>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</div> }]}
+              rows={uploads.map((u) => ({
+                id: u.key,
+                itemId: u.itemId,
+                name: u.name,
+                retry: u.retry,
+                state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { queued: w.queued, optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
+                size: u.after === undefined ? size(f, u.before) : say(w.shrunk, { before: size(f, u.before), after: size(f, u.after) }),
+              }))}
+              onRowClick={(row) => row.itemId && open({ itemId: String(row.itemId) })}
+            />
+          </Card>
+        </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ ...section, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {(["month", "year", "all"] as const).map((key) => (
           <Button key={key} variant={period === key ? "primary" : "default"} onClick={() => setPeriod(key)}>
             {{ month: w.month, year: w.year, all: w.ever }[key]}
@@ -460,32 +465,34 @@ function Desk({ w }: { w: Words }) {
       {count("New") > 0 && <p className="pg-stat-hint">{w.batchHint}</p>}
       {count("Needs review") > 0 && <Notice tone="warning" title={w.review} action={onlyReview ? undefined : { label: w.showThem, onClick: () => setReviewing(true) }}>{w.reviewHint}</Notice>}
 
-      <Card title={w.byCategory}>
-        <Table
-          empty={emptyText([spent, byCategory], w.nothingSpent)}
-          columns={[
-            { key: "category", label: w.category },
-            {
-              key: "spent",
-              label: w.spent,
-              align: "right",
-              // A bar for the category's share of the period, under its amount.
-              render: (row) => (
-                <>
-                  {row.spent}
-                  <div style={{ height: 6, marginTop: 4, borderRadius: 3, background: "var(--pg-series-1)", width: `${row.pct}%`, marginLeft: "auto" }} />
-                </>
-              ),
-            },
-            { key: "share", label: "%", align: "right", optional: true },
-          ]}
-          rows={byCategory.data.map((g) => {
-            const value = Number(g.values.spent ?? 0);
-            const pct = categoryTotal ? Math.round((value / categoryTotal) * 100) : 0;
-            return { id: String(g.keys[0]?.value ?? "none"), category: categoryName(g.keys[0]?.value), spent: f.currency(value, currency), pct, share: say(w.share, { p: pct }) };
-          })}
-        />
-      </Card>
+      <div style={section}>
+        <Card title={w.byCategory}>
+          <Table
+            empty={emptyText([spent, byCategory], w.nothingSpent)}
+            columns={[
+              { key: "category", label: w.category },
+              {
+                key: "spent",
+                label: w.spent,
+                align: "right",
+                // A bar for the category's share of the period, under its amount.
+                render: (row) => (
+                  <>
+                    {row.spent}
+                    <div style={{ height: 6, marginTop: 4, borderRadius: 3, background: "var(--pg-series-1)", width: `${row.pct}%`, marginLeft: "auto" }} />
+                  </>
+                ),
+              },
+              { key: "share", label: "%", align: "right", optional: true },
+            ]}
+            rows={byCategory.data.map((g) => {
+              const value = Number(g.values.spent ?? 0);
+              const pct = categoryTotal ? Math.round((value / categoryTotal) * 100) : 0;
+              return { id: String(g.keys[0]?.value ?? "none"), category: categoryName(g.keys[0]?.value), spent: f.currency(value, currency), pct, share: say(w.share, { p: pct }) };
+            })}
+          />
+        </Card>
+      </div>
 
       <Card
         title={onlyReview ? w.review : w.latest}
@@ -621,25 +628,28 @@ function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; recei
           {actionFailed && <div className="pg-field-error">{w.actionFailed}</div>}
         </Notice>
       )}
-      <Table
-        empty={failed ? w.loadFailed : lines === undefined ? w.loading : w.noLines}
-        columns={[
-          // The category under the description, so a phone has room for both,
-          // and there the quantity and price too, which have no column.
-          { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div>{narrow && <div className="pg-stat-hint">{row.quantity} × {row.unit}</div>}</> },
-          { key: "quantity", label: w.quantity, align: "right", optional: true },
-          { key: "unit", label: w.unitPrice, align: "right", optional: true },
-          { key: "amount", label: w.amount, align: "right" },
-        ]}
-        rows={sorted.map((l) => ({
-          id: l.id,
-          description: String(l.values.description ?? ""),
-          category: w.categories[String(l.values.category ?? "")] ?? String(l.values.category ?? ""),
-          quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 4),
-          unit: price(l.values.unit_price),
-          amount: money(l.values.amount),
-        }))}
-      />
+      {/* A long receipt scrolls here, keeping the buttons in reach on a phone. */}
+      <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+        <Table
+          empty={failed ? w.loadFailed : lines === undefined ? w.loading : w.noLines}
+          columns={[
+            // The category under the description, so a phone has room for both,
+            // and there the quantity and price too, which have no column.
+            { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div>{narrow && <div className="pg-stat-hint">{row.quantity} × {row.unit}</div>}</> },
+            { key: "quantity", label: w.quantity, align: "right", optional: true },
+            { key: "unit", label: w.unitPrice, align: "right", optional: true },
+            { key: "amount", label: w.amount, align: "right" },
+          ]}
+          rows={sorted.map((l) => ({
+            id: l.id,
+            description: String(l.values.description ?? ""),
+            category: w.categories[String(l.values.category ?? "")] ?? String(l.values.category ?? ""),
+            quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 4),
+            unit: price(l.values.unit_price),
+            amount: money(l.values.amount),
+          }))}
+        />
+      </div>
     </Modal>
   );
 }
