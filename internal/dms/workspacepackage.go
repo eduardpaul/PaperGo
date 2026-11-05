@@ -50,8 +50,9 @@ func packageReferences(value any, visit func(string), fieldTypes map[string]stri
 	switch v := value.(type) {
 	case string:
 		visit(v)
+		// IDs are lowercase; a UUID embedded in text may not be.
 		for _, id := range packageUUID.FindAllString(v, -1) {
-			visit(id)
+			visit(strings.ToLower(id))
 		}
 		if strings.HasPrefix(v, "[") || strings.HasPrefix(v, "{") {
 			var node any
@@ -289,7 +290,7 @@ func remapPackageJSON(value any, ids map[string]string, fieldTypes map[string]st
 			return id
 		}
 		return packageUUID.ReplaceAllStringFunc(v, func(id string) string {
-			if target, ok := ids[id]; ok {
+			if target, ok := ids[strings.ToLower(id)]; ok {
 				return target
 			}
 			return id
@@ -559,9 +560,7 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 				}
 			}
 			if table == "app_versions" {
-				if err = remapPackageAppVersion(ctx, row, mapped, ids); err != nil {
-					return p, warnings, err
-				}
+				remapPackageAppVersion(row, mapped, ids)
 			}
 			if table == "relationships" && mapped["directed"] != true && fmt.Sprint(mapped["source_id"]) > fmt.Sprint(mapped["target_id"]) {
 				mapped["source_id"], mapped["target_id"] = mapped["target_id"], mapped["source_id"]
@@ -763,6 +762,7 @@ func validateWorkspaceReferences(p corePackage) error {
 			}
 		}
 	}
+	currentApps := currentAppVersions(map[string][]map[string]any{"apps": packageMaps(p.Tables["apps"]), "app_versions": packageMaps(p.Tables["app_versions"])})
 	referenceKeys := []string{"lookup_container_id", "term_set_id", "definition_id", "collection_id", "container_id", "workspace_id", "content_type_id", "schema_revision_id", "item_id", "workflow_id", "blob_id", "task_id", "run_id"}
 	var walk func(any, string) error
 	walk = func(value any, key string) error {
@@ -794,7 +794,7 @@ func validateWorkspaceReferences(p corePackage) error {
 	for table, data := range p.Tables {
 		for _, row := range packageMaps(data) {
 			for column, value := range row {
-				if table == "integration_revision_data" && column == "data" || table == "apps" && column == "parameters" {
+				if table == "integration_revision_data" && column == "data" || table == "apps" && column == "parameters" || table == "app_versions" && column == "parameters_schema" && !currentApps[fmt.Sprint(row["id"])] {
 					continue
 				}
 				if text, ok := value.(string); ok && (strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[")) {
@@ -814,11 +814,12 @@ func validateWorkspaceReferences(p corePackage) error {
 			}
 		}
 	}
-	return validateAppParameters(p, known)
+	return validateAppParameters(p)
 }
 
 type workspaceValueGraph struct {
 	appForms        map[string]map[string]any
+	currentApps     map[string]bool
 	fieldTypes      map[string]string
 	resourceSchemas map[string]string
 	revisions       map[string]map[string]any
@@ -847,6 +848,7 @@ func workspaceValueGraphFor(rows map[string][]map[string]any) (workspaceValueGra
 		}
 		graph.schemas[fmt.Sprint(row["id"])] = schema
 	}
+	graph.currentApps = currentAppVersions(rows)
 	var err error
 	graph.appForms, err = packageAppForms(rows)
 	return graph, err
@@ -1036,11 +1038,14 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 		if column == "external_id" || table == "app_versions" && (column == "bundle" || column == "bundle_hash") {
 			continue
 		}
+		// Earlier app versions are history that never runs: only the
+		// current version's source and form are references.
+		if table == "app_versions" && (column == "source" || column == "parameters_schema") && !graph.currentApps[fmt.Sprint(row["id"])] {
+			continue
+		}
 		if table == "app_versions" && column == "source" {
 			// UUIDs in an app's source are references, as in expressions.
-			for _, id := range packageUUID.FindAllString(fmt.Sprint(value), -1) {
-				visit(id)
-			}
+			packageReferences(value, visit, nil)
 			continue
 		}
 		if column == "id" || strings.HasSuffix(column, "_id") || strings.HasSuffix(column, "_by") {
@@ -1059,7 +1064,7 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 			continue
 		}
 		if table == "apps" && column == "parameters" {
-			appParameterIDs(graph.appForms[fmt.Sprint(row["id"])], node, func(_, _, id string) { visit(id) })
+			appParameterIDs(graph.appForms[fmt.Sprint(row["id"])], node, visit)
 			continue
 		}
 		if (column == "values" && table == "resources") || (column == "payload" && (table == "item_revisions" || table == "item_surfaces")) || (column == "snapshot" && table == "publications") {

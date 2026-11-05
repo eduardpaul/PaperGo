@@ -138,16 +138,8 @@ func (s *Service) RegisterPortability(store storage.Store) error {
 	}}); err != nil {
 		return err
 	}
-	return s.RegisterOperationHandler(OperationKindImport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *operations.Operation) error {
-		var in packagePayload
-		if err := json.Unmarshal(op.Payload, &in); err != nil {
-			return err
-		}
-		result, err := t.importCorePackage(ctx, store, op.CreatedBy, in)
-		if err != nil {
-			return err
-		}
-		return t.finishPackage(ctx, op, result)
+	return s.RegisterOperationHandler(OperationKindImport, OperationHandler{Scope: "organization.manage", Validate: validate, Execute: func(ctx context.Context, s *Service, op *operations.Operation) error {
+		return s.importPackage(ctx, store, op)
 	}})
 }
 func (s *Service) finishPackage(ctx context.Context, op *operations.Operation, result PackageResult) error {
@@ -388,59 +380,123 @@ func packageMaps(table packageTable) []map[string]any {
 	return rows
 }
 
-func (s *Service) importCorePackage(ctx context.Context, store storage.Store, subject string, in packagePayload) (PackageResult, error) {
+// packageImport is a package read, checked and compiled outside the
+// database writer, ready to apply in one transaction. Close removes its
+// spooled ZIP.
+type packageImport struct {
+	in      packagePayload
+	p       corePackage
+	result  PackageResult
+	store   storage.Store
+	entries map[string]*zip.File
+	spool   *os.File
+}
+
+func (i *packageImport) Close() {
+	i.spool.Close()
+	os.Remove(i.spool.Name())
+}
+
+// importPackage runs an import operation: it reads and compiles the package
+// outside the writer, which compiling apps must never hold up, then applies
+// it and finishes the operation in one transaction.
+func (s *Service) importPackage(ctx context.Context, store storage.Store, op *operations.Operation) error {
+	var in packagePayload
+	if err := json.Unmarshal(op.Payload, &in); err != nil {
+		return err
+	}
+	imp, err := s.readPackageImport(ctx, store, in)
+	if err != nil {
+		return err
+	}
+	defer imp.Close()
+	return s.write(ctx, func(t *Service) error {
+		current, e := t.DAL.Operations().Find(ctx, op.ID)
+		if e != nil {
+			return e
+		}
+		if current.Status != operations.StatusPending {
+			return nil
+		}
+		ctx, e := t.operationContext(ctx, op)
+		if e != nil {
+			return e
+		}
+		t.traceID = op.TraceID
+		result, e := t.applyPackageImport(ctx, op.CreatedBy, imp)
+		if e != nil {
+			return e
+		}
+		current.Claim = op.Claim
+		return t.finishPackage(ctx, &current, result)
+	})
+}
+
+// readPackageImport reads a package ZIP from store, checks its manifest,
+// rows and objects against the core contract, and compiles its apps.
+func (s *Service) readPackageImport(ctx context.Context, store storage.Store, in packagePayload) (*packageImport, error) {
+	imp, err := s.readPackage(ctx, store, in)
+	if err != nil {
+		if imp != nil {
+			imp.Close()
+		}
+		return nil, err
+	}
+	return imp, nil
+}
+
+func (s *Service) readPackage(ctx context.Context, store storage.Store, in packagePayload) (imp *packageImport, err error) {
 	result := PackageResult{DryRun: in.DryRun}
 	file, err := store.Open(ctx, in.ObjectKey)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	defer file.Close()
 	size, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
-		return result, err
+		return imp, err
 	}
 	if size > PackageLimit {
-		return result, storage.ErrTooLarge
+		return imp, storage.ErrTooLarge
 	}
 	// The storage contract is seekable; spooling avoids assuming ReaderAt.
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return result, err
+		return imp, err
 	}
 	spool, err := os.CreateTemp("", "papergo-import-*.zip")
 	if err != nil {
-		return result, err
+		return nil, err
 	}
-	defer os.Remove(spool.Name())
-	defer spool.Close()
+	imp = &packageImport{in: in, store: store, spool: spool}
 	if _, err = io.Copy(spool, file); err != nil {
-		return result, err
+		return imp, err
 	}
 	z, err := zip.NewReader(spool, size)
 	if err != nil {
-		return result, invalid("invalid ZIP package")
+		return imp, invalid("invalid ZIP package")
 	}
 	entries := map[string]*zip.File{}
 	var total uint64
 	for _, entry := range z.File {
 		if entries[entry.Name] != nil || entry.FileInfo().IsDir() || entry.Mode()&os.ModeSymlink != 0 {
-			return result, invalid("duplicate or invalid package entry")
+			return imp, invalid("duplicate or invalid package entry")
 		}
 		entries[entry.Name] = entry
 		if entry.UncompressedSize64 > uint64(PackageLimit) {
-			return result, storage.ErrTooLarge
+			return imp, storage.ErrTooLarge
 		}
 		total += entry.UncompressedSize64
 		if total > uint64(PackageLimit)+uint64(PackageManifestLimit) {
-			return result, storage.ErrTooLarge
+			return imp, storage.ErrTooLarge
 		}
 	}
 	manifest := entries["manifest.json"]
 	if manifest == nil || manifest.UncompressedSize64 > uint64(PackageManifestLimit) {
-		return result, invalid("package manifest missing or too large")
+		return imp, invalid("package manifest missing or too large")
 	}
 	reader, err := manifest.Open()
 	if err != nil {
-		return result, err
+		return imp, err
 	}
 	dec := json.NewDecoder(io.LimitReader(reader, PackageManifestLimit+1))
 	dec.UseNumber()
@@ -452,98 +508,97 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	}
 	reader.Close()
 	if err != nil || p.Format != "papergo-core" || (p.Scope != "organization" && p.Scope != "workspace") || len(p.Tables) != len(portable.Tables) {
-		return result, invalid("invalid core package manifest")
+		return imp, invalid("invalid core package manifest")
 	}
 	if p.Scope == "organization" && p.WorkspaceID != "" {
-		return result, invalid("organization packages cannot specify workspace_id")
+		return imp, invalid("organization packages cannot specify workspace_id")
 	}
 	if p.TemplateSubject != "" && (p.Scope != "workspace" || p.IncludeData) {
-		return result, invalid("template_subject requires a configuration-only workspace package")
+		return imp, invalid("template_subject requires a configuration-only workspace package")
 	}
 	if !p.IncludeData {
 		if len(p.Objects) != 0 {
-			return result, invalid("configuration package contains file objects")
+			return imp, invalid("configuration package contains file objects")
 		}
 		for _, table := range portable.DataTables {
 			if len(p.Tables[table].Rows) != 0 {
-				return result, invalid("configuration package contains content")
+				return imp, invalid("configuration package contains content")
 			}
 		}
 		for _, row := range packageMaps(p.Tables["resources"]) {
 			if row["kind"] == "item" || row["kind"] == "folder" {
-				return result, invalid("configuration package contains items or folders")
+				return imp, invalid("configuration package contains items or folders")
 			}
 		}
 	}
 	if len(entries) != 1+len(p.Objects) {
-		return result, invalid("package contains unexpected entries")
+		return imp, invalid("package contains unexpected entries")
 	}
-	objectKeys := map[string]string{}
 	objects := map[string]packageObject{}
 	objectHeads := map[string][]byte{}
 	for _, obj := range p.Objects {
 		if _, err = uuid.Parse(obj.Key); err != nil || len(obj.Key) != 36 || obj.Size < 0 || len(obj.SHA256) != 64 || objects[obj.Key].Key != "" {
-			return result, invalid("invalid package object descriptor")
+			return imp, invalid("invalid package object descriptor")
 		}
 		entry := entries["objects/"+obj.Key]
 		if entry == nil || entry.UncompressedSize64 != uint64(obj.Size) {
-			return result, invalid("package object missing or wrong size")
+			return imp, invalid("package object missing or wrong size")
 		}
 		objects[obj.Key] = obj
 		reader, err := entry.Open()
 		if err != nil {
-			return result, err
+			return imp, err
 		}
 		header := make([]byte, storage.HeadSize)
 		headerSize, e := io.ReadFull(reader, header)
 		if e != nil && !errors.Is(e, io.EOF) && !errors.Is(e, io.ErrUnexpectedEOF) {
 			reader.Close()
-			return result, e
+			return imp, e
 		}
 		objectHeads[obj.Key] = header[:headerSize]
 		h := sha256.New()
 		n, err := io.Copy(h, io.LimitReader(io.MultiReader(bytes.NewReader(header[:headerSize]), reader), obj.Size+1))
 		reader.Close()
 		if err != nil || n != obj.Size || hex.EncodeToString(h.Sum(nil)) != obj.SHA256 {
-			return result, invalid("package object checksum mismatch")
+			return imp, invalid("package object checksum mismatch")
 		}
 	}
 	for _, table := range portable.Tables {
 		data, ok := p.Tables[table]
 		if !ok {
-			return result, invalid("package table missing")
+			return imp, invalid("package table missing")
 		}
 		columns, err := s.DAL.Portable().Columns(ctx, table)
 		if err != nil {
-			return result, err
+			return imp, err
 		}
 		if !slices.EqualFunc(columns, data.Columns, func(c portable.Column, name string) bool { return c.Name == name }) {
-			return result, invalid("package columns do not match the core contract")
+			return imp, invalid("package columns do not match the core contract")
 		}
 		result.Rows += len(data.Rows)
 		if result.Rows > PackageRecordLimit {
-			return result, invalid(fmt.Sprintf("package exceeds %d core records", PackageRecordLimit))
+			return imp, invalid(fmt.Sprintf("package exceeds %d core records", PackageRecordLimit))
 		}
 		for i, row := range data.Rows {
 			if len(row) != len(columns) {
-				return result, invalid("invalid package record")
+				return imp, invalid("invalid package record")
 			}
 			for j, v := range row {
 				if n, ok := v.(json.Number); ok {
 					value, err := n.Int64()
 					if err != nil {
-						return result, invalid("package integers must be exact")
+						return imp, invalid("package integers must be exact")
 					}
 					v = value
 				} else {
 					switch v.(type) {
 					case nil, string, bool:
 					default:
-						return result, invalid("package records must contain scalar values")
+						return imp, invalid("package records must contain scalar values")
 					}
 				}
 				if data.Rows[i][j], err = portable.Normalize(columns[j], v); err != nil {
-					return result, invalid("invalid package record value in " + table + "." + columns[j].Name)
+					return imp, invalid("invalid package record value in " + table + "." + columns[j].Name)
 				}
 			}
 		}
@@ -552,17 +607,17 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	for _, blob := range packageMaps(p.Tables["blobs"]) {
 		key, ok := blob["object_key"].(string)
 		if !ok {
-			return result, invalid("invalid blob object")
+			return imp, invalid("invalid blob object")
 		}
 		obj, present := objects[key]
 		if blob["availability"] == "reclaimed" && !present {
 			continue
 		}
 		if !present || blob["size"] != obj.Size || blob["sha256"] != obj.SHA256 {
-			return result, invalid("blob metadata does not match packaged bytes")
+			return imp, invalid("blob metadata does not match packaged bytes")
 		}
 		if media, _ := blob["content_type"].(string); !storage.Fits(media, objectHeads[key]) {
-			return result, invalid("packaged file bytes do not match their media type")
+			return imp, invalid("packaged file bytes do not match their media type")
 		}
 	}
 	fileHashes := map[any]bool{}
@@ -571,7 +626,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	}
 	for _, preview := range packageMaps(p.Tables["blob_previews"]) {
 		if !fileHashes[preview["sha256"]] {
-			return result, invalid("preview has no packaged source file")
+			return imp, invalid("preview has no packaged source file")
 		}
 		if preview["status"] == "failed" {
 			continue
@@ -579,19 +634,27 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		key, _ := preview["object_key"].(string)
 		obj, ok := objects[key]
 		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || storage.Signature(objectHeads[key]) != string(blobs.MediaJPEG) {
-			return result, invalid("preview does not match its packaged JPEG object")
+			return imp, invalid("preview does not match its packaged JPEG object")
 		}
 	}
 	if err = validatePackageGroups(p); err != nil {
-		return result, err
+		return imp, err
 	}
 	if err = compilePackageApps(ctx, &p); err != nil {
-		return result, err
+		return imp, err
 	}
 	result.Objects = len(p.Objects)
+	imp.p, imp.result, imp.entries = p, result, entries
+	return imp, nil
+}
+
+// applyPackageImport applies a package read by readPackageImport as subject.
+func (s *Service) applyPackageImport(ctx context.Context, subject string, imp *packageImport) (PackageResult, error) {
+	in, p, result, entries, store := imp.in, imp.p, imp.result, imp.entries, imp.store
+	objectKeys := map[string]string{}
 	// Use the actual core constraints for the plan and application. A savepoint
 	// rolls back a dry run, including identities, indexes and live notifications.
-	err = s.DAL.Savepoint(ctx, "core_package", func() (bool, error) {
+	err := s.DAL.Savepoint(ctx, "core_package", func() (bool, error) {
 		populated, err := s.DAL.Resources().Exists(ctx, resources.Filter{})
 		if err != nil {
 			return false, err

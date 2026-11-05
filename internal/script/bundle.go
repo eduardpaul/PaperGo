@@ -131,8 +131,13 @@ func Compile(spec Spec) (Artifact, error) {
 		return Artifact{}, errors.New("the bundler produced no script")
 	}
 	code := string(result.OutputFiles[0].Contents)
+	return Artifact{Code: code, Hash: CodeHash(code)}, nil
+}
+
+// CodeHash is the hash that identifies a bundle's code.
+func CodeHash(code string) string {
 	sum := sha256.Sum256([]byte(code))
-	return Artifact{Code: code, Hash: hex.EncodeToString(sum[:])}, nil
+	return hex.EncodeToString(sum[:])
 }
 
 // Bundle compiles a workflow script into an artifact. A script is one file

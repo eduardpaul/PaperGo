@@ -61,10 +61,22 @@ func exportWorkspaceForTest(t *testing.T, s *Service, store storage.Store, optio
 
 func importWorkspaceForTest(t *testing.T, s *Service, store storage.Store, object storage.Object, dry bool, name string) (PackageResult, error) {
 	t.Helper()
+	return importPackageForTest(t, s, store, packagePayload{ObjectKey: object.Key, DryRun: dry, WorkspaceName: name})
+}
+
+// importPackageForTest imports as an import operation does: it reads the
+// package outside the writer, then applies it in a transaction.
+func importPackageForTest(t *testing.T, s *Service, store storage.Store, in packagePayload) (PackageResult, error) {
+	t.Helper()
+	imp, err := s.readPackageImport(t.Context(), store, in)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	defer imp.Close()
 	var result PackageResult
-	err := s.Write(t.Context(), func(tx *Service) error {
+	err = s.Write(t.Context(), func(tx *Service) error {
 		var err error
-		result, err = tx.importCorePackage(t.Context(), store, "organization-admin", packagePayload{ObjectKey: object.Key, DryRun: dry, WorkspaceName: name})
+		result, err = tx.applyPackageImport(t.Context(), "organization-admin", imp)
 		return err
 	})
 	return result, err

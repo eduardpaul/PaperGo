@@ -84,7 +84,8 @@ func read(s map[string]any, values any, path string, out *[]Picker) {
 }
 
 // Map returns values with each ID a picker of schema s selects replaced by
-// fn of the picker's kind and the ID. Values outside pickers stay as they
+// fn of the picker's kind and the ID: exactly the IDs Read reports, an
+// empty string in an array among them. Values outside pickers stay as they
 // are, whatever they hold.
 func Map(s map[string]any, values any, fn func(kind, id string) string) any {
 	if d, ok := s["x-papergo"].(map[string]any); ok {
@@ -98,7 +99,7 @@ func Map(s map[string]any, values any, fn func(kind, id string) string) any {
 			out := make([]any, len(v))
 			for i, e := range v {
 				out[i] = e
-				if id, ok := e.(string); ok && id != "" {
+				if id, ok := e.(string); ok {
 					out[i] = fn(kind, id)
 				}
 			}
