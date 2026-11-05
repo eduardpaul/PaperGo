@@ -407,8 +407,9 @@ function Desk({ w }: { w: Words }) {
         <Card title={w.uploads}>
           {unsent && <p className="pg-stat-hint">{w.keepOpen}</p>}
           <Table
-            // The size it was shrunk to shows below the state, on a phone too.
-            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</> }]}
+            // The size it was shrunk to shows below the state, on a phone too,
+            // and why it failed wraps there, as the kit keeps values on one line.
+            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <div style={{ whiteSpace: "normal" }}>{row.state}<div className="pg-stat-hint">{row.size}</div>{row.retry && <Button onClick={() => enqueue(row.id)}>{w.tryNow}</Button>}</div> }]}
             rows={uploads.map((u) => ({
               id: u.key,
               itemId: u.itemId,
