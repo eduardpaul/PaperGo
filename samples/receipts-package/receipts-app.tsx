@@ -171,8 +171,9 @@ function passing(e: unknown): boolean {
   return e instanceof RequestError && (e.status === 429 || e.status >= 500);
 }
 
-// optimize turns a photo upright and shrinks it to the photo the model
-// reads. A small JPEG that would not get smaller is sent as it is.
+// optimize turns a photo upright and shrinks it to the photo the model reads.
+// Every photo is drawn again, a small JPEG too, which would otherwise keep its
+// sideways orientation and the camera's metadata, such as where it was taken.
 async function optimize(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
@@ -187,7 +188,7 @@ async function optimize(file: File): Promise<Blob> {
   bitmap.close();
   const jpeg = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/jpeg", QUALITY));
   if (!jpeg) throw new Error("the photo could not be encoded");
-  return scale === 1 && file.type === "image/jpeg" && file.size <= jpeg.size ? file : jpeg;
+  return jpeg;
 }
 
 // filenameParams names the file in a Content-Disposition header: an ASCII
@@ -319,7 +320,11 @@ function Desk({ w }: { w: Words }) {
       photos.current.set(key, file);
       if (replaces) replaced.current.set(key, replaces);
       const upload: Upload = { key, name: file.name, state: "queued", before: file.size };
-      setUploads((all) => [upload, ...all].slice(0, 10));
+      // The last few uploaded ones, and every one still on its way.
+      setUploads((all) => {
+        let done = 0;
+        return [upload, ...all].filter((u) => u.state !== "uploaded" || ++done <= 10);
+      });
       enqueue(key);
     }
   };
@@ -347,7 +352,9 @@ function Desk({ w }: { w: Words }) {
       change(key, { state: "optimizing" });
       const photo = await optimize(file);
       change(key, { state: "uploading", after: photo.size });
-      const at = new Date();
+      // When it was taken, which a phone keeps as the file's date; it may be
+      // uploaded much later.
+      const at = new Date(file.lastModified || Date.now());
       // Two photos taken in the same second get numbered names.
       for (let copy = 1; ; copy++) {
         const name = receiptName(w.fileName, zone, at, copy);
