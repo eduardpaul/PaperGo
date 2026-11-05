@@ -134,7 +134,8 @@ function size(f: Format, bytes: number): string {
 // problem's code; only a problem the desk does not know shows the server's
 // own detail.
 function uploadError(w: Words, e: unknown): string {
-  if (!(e instanceof RequestError)) return w.unreachable;
+  // What is not PaperGo's answer is the phone failing to read the photo.
+  if (!(e instanceof RequestError)) return w.unreadable;
   switch (e.code) {
     case "payload_too_large":
       return w.tooLarge;
@@ -275,29 +276,26 @@ function Desk({ w }: { w: Words }) {
     }
   };
 
+  // It catches everything, so one photo's failure leaves the queue running.
   const send = async (key: number, file: File) => {
-    let photo: Blob;
     try {
-      photo = await optimize(file);
-    } catch {
-      change(key, { state: "failed", error: w.unreadable });
-      return;
-    }
-    change(key, { state: "uploading", after: photo.size });
-    const at = new Date();
-    // Two photos taken in the same second get numbered names.
-    for (let copy = 1; ; copy++) {
-      const name = receiptName(w.fileName, zone, at, copy);
-      const { body, type } = await multipart(name, photo);
-      try {
-        const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
-        change(key, { state: "uploaded", name, itemId: created.data.item.id });
-        return;
-      } catch (e) {
-        if (e instanceof RequestError && e.code === "name_conflict" && copy < 20) continue;
-        change(key, { state: "failed", error: uploadError(w, e) });
-        return;
+      const photo = await optimize(file);
+      change(key, { state: "uploading", after: photo.size });
+      const at = new Date();
+      // Two photos taken in the same second get numbered names.
+      for (let copy = 1; ; copy++) {
+        const name = receiptName(w.fileName, zone, at, copy);
+        const { body, type } = await multipart(name, photo);
+        try {
+          const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
+          change(key, { state: "uploaded", name, itemId: created.data.item.id });
+          return;
+        } catch (e) {
+          if (!(e instanceof RequestError && e.code === "name_conflict" && copy < 20)) throw e;
+        }
       }
+    } catch (e) {
+      change(key, { state: "failed", error: uploadError(w, e) });
     }
   };
 
