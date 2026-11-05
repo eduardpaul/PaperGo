@@ -70,6 +70,8 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 - **Data:** `Table`.
 - **Controls:** `Button`, `Notice`, `NumberField` (a decimal typed with a phone's numeric keyboard, with an optional live hint; `signed` adds a ± button that turns the typed number negative, as those keyboards have no minus), `TextField`, `DateField` and `DateTimeField` (dates picked and shown in the viewer's time zone, as `ctx.format` shows them).
 
+**Language.** The kit's own words follow the viewer's language preference, as PaperGo's web app does: Spanish for any `es` language, English otherwise. They are what screen readers say for a `Modal`'s close button and a signed `NumberField`'s sign button, what an empty `Table` says unless its `empty` says otherwise, and what an empty chart says. Everything else an app shows is its own text; `ctx.user.preferences.language` tells it which language to write in.
+
 **Phones.** The kit lays out for touch up to 640 pixels wide (`narrowWidth`), and `useNarrow()` tells an app when it is shown that narrow:
 - **Toolbar:** it becomes a bar fixed to the bottom of the app, in equal parts, under the thumb, and the content keeps clear of it.
 - **Charts:** they draw at their real width, so their text stays legible, and keep their ticks apart. Tapping a point, a marker or a bar shows what it is below the chart, since a phone has no hover.
@@ -136,6 +138,6 @@ A [workspace package](workspace-portability.md) carries the workspace's apps: th
 
 The complete contract is in [OpenAPI](../api/openapi.json).
 
-## Sample
+## Samples
 
-The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures.
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures. The [receipts desk](../samples/receipts-package/README.md) uploads receipt photos from a phone, shrunk on the phone to what the model reads, for a workflow that reads their lines and keeps each receipt as a PDF.

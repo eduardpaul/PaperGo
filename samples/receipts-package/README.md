@@ -1,35 +1,37 @@
 # Receipts package
 
-A library of receipt photos and the products on them, and a workflow that reads each photo. Install it by importing the included workspace package. PaperGo has no receipt routes, tables, or upload-time processing: the workflow is an ordinary TypeScript script, [`read-receipts.ts`](read-receipts.ts), and you can open and change it in the workflow editor.
+A library of receipts and the products on them, a workflow that reads each receipt photo and keeps the receipt as a PDF, and an [app](../../docs/apps.md), the **Receipts desk**, for taking those photos with a phone. Install the workspace by importing the included package. PaperGo has no receipt routes, tables, or upload-time processing: the workflow is an ordinary TypeScript script, [`read-receipts.ts`](read-receipts.ts), and the app an ordinary React screen, [`receipts-app.tsx`](receipts-app.tsx); you can open and change both in their editors.
 
-The workflow starts when a JPEG, PNG, or WebP file of a receipt is uploaded, restored, or saved over WebDAV, and when you start it by hand. A newer file for the same item replaces the run that is still going (`concurrency: "replace"`). A [batch completion](../../docs/ai.md#batches) reads the item's current image, with a schema for the store, purchase date, currency, total, and product lines. Amounts are exact decimal strings. The workflow writes the receipt's values at the version it read, so a newer file or edit is not overwritten, replaces any lines it filed earlier, and links each new line with **contains receipt line** (one parent receipt per line). Lines live in the same library, in a folder per receipt: `Receipt lines/<receipt ID>/`, numbered with their description (`1. Bread`). The folder follows the receipt, not its name or place, so renaming, moving or deleting a receipt never blocks another. A repeated run deletes the receipt's linked lines and every line left in its folder, including one an interrupted run did not link. A file saved over a line starts no run, and a run started by hand on a line, or on a receipt without an image, returns **Not a receipt photo** and changes nothing. It marks the receipt **Read** only after those lines are stored. A refused answer, a line that cannot be stored or a changed receipt marks it **Needs review**.
+## From photo to lines
+
+1. **The photo.** The app takes a photo with the phone's camera, or several from its gallery, and shrinks each one on the phone before uploading it to **Receipts**: turned upright, at most 2048 pixels long, as a JPEG of quality 0.85 (`MAX_EDGE` and `QUALITY` in the app). That is about the size a vision model reads, so a 4 MB camera photo uploads as a few hundred KB. The app names it after when it was taken, such as `Receipt 2026-11-05 14.32.10.jpg`.
+2. **The lines.** The workflow starts when a JPEG, PNG, or WebP file of a receipt is uploaded, restored, or saved over WebDAV, and when you start it by hand. A newer file for the same item replaces the run that is still going (`concurrency: "replace"`). A [batch completion](../../docs/ai.md#batches) reads the photo, with a schema for the store, purchase date, currency, total, and product lines. Amounts are exact decimal strings. The workflow writes the receipt's values at the version it read, so a newer file or edit is not overwritten, replaces any lines it filed earlier, and links each new line with **contains receipt line** (one parent receipt per line).
+3. **The PDF.** Once the lines are stored, the photo becomes a searchable PDF for keeping, with [Photos to PDF](../../docs/documents.md#photos-to-pdf): scaled so its smallest text stays legible, compressed, with its OCR text so it can be searched. The PDF replaces the photo as the receipt's file, and the receipt takes its extension (`Receipt 2026-11-05 14.32.10.pdf`) unless another file already has that name. Only then is the receipt marked **Read**.
+
+A refused answer, a line that cannot be stored, a photo that cannot become a PDF or a changed receipt marks the receipt **Needs review** and keeps its photo, to be read again. A run started by hand on a receipt kept as a PDF reads the photo it was made from while its bytes are kept: the library keeps no file history, so they are reclaimed an hour after the PDF replaces them. After that, it returns **No photo**. A run started on a line returns **Not a receipt**. Neither changes anything.
+
+**Lines** live in the same library, in a folder per receipt: `Receipt lines/<receipt ID>/`, numbered with their description (`1. Bread`). The folder follows the receipt, not its name or place, so renaming, moving or deleting a receipt never blocks another. A repeated run deletes the receipt's linked lines and every line left in its folder, including one an interrupted run did not link. A file saved over a line starts no run. Over WebDAV, lines appear as empty files under **Receipt lines**, apart from the receipts.
 
 ## Install
 
-1. As an organization administrator, open **Administration → Export and import**.
-2. Select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**.
-3. Open **Receipts desk** from the result and upload receipt photos to **Receipts**.
-4. Find the extracted products in the library's **Lines** view, linked to their receipt.
+1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**. This creates the **Receipts desk** workspace with the empty **Receipts** library, which accepts both content types (**Receipt** for uploads by default, and **Receipt line**), fields, saved views (Receipts, Needs review and Lines), relationship policy and the **Read receipts** workflow, its parameters pointing at the imported library and its two content types. No script, token, ID editing or pre-existing workspace is needed. To install another independent copy, enter a different workspace name when importing. Import does not call the model.
+2. **The app.** In the workspace, open **Workspace settings → Apps → New app** and paste [`receipts-app.tsx`](receipts-app.tsx).
+   - Save it, then choose its parameters with the pickers: the **Receipts** library and its **Receipt** type.
+   - Set the state to **Published** and save again.
+   - The app appears in the sidebar under the library, and in **Apps**. On a phone, its **Take a photo** and **Choose photos** buttons sit at the bottom of the screen.
+3. **OCR and the batch model.** Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
 
-Over WebDAV, lines appear as empty files under **Receipt lines**, apart from the photos.
+The importer becomes the workflow's author and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` and `read-receipts.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflow end to end, and the [app compile test](../../internal/apps/compile_test.go) compiles the app.
 
-The ZIP includes the empty library, which accepts both content types (**Receipt**
-for uploads by default, and **Receipt line**), fields, saved views, relationship
-policy and the **Read receipts** workflow, its parameters pointing at the imported
-library and its two content types. No script, token, ID editing or
-pre-existing workspace is needed. To install another independent copy, enter a
-different workspace name when importing. Import does not call the model.
+## The desk
 
-The importer becomes the workflow's author and the workspace's owner. Runs use
-that author's permissions. `resources.json`, `read-receipts.ts` and
-`read-receipts.json` are the editable sources for the package; the
-[sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP
-through the import API and can rebuild it during development, and the
-[receipts test](../../internal/scriptrun/receipts_test.go) runs it end to end.
+- **Uploads:** each photo in turn, with its size before and after it was shrunk, until it is uploaded and waits to be read. Tapping one opens it in PaperGo.
+- **Figures:** how many receipts wait to be read, are read and need review.
+- **Latest receipts:** the 20 most recent, with their store, date, total and status. Tapping one shows its lines, in the order of the receipt, and opens it in PaperGo.
 
 ## Batch execution
 
-The script asks for `execution: "batch"` and queue `shared`. `AI_EXECUTION` can stay `immediate`; that deployment default applies only when a request leaves execution empty. Batch mode does not fall back to the chat provider. Configure the batch endpoint on its own:
+The script asks for `execution: "batch"` and queue `shared`. `AI_EXECUTION` can stay `immediate`; that deployment default applies only when a request leaves execution empty. Batch mode does not fall back to the chat provider. Configure the batch endpoint on its own, with a model that reads images:
 
 ```bash
 AI_BATCH_PROVIDER=openai

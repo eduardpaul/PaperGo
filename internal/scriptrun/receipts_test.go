@@ -96,7 +96,8 @@ func installReceipts(t *testing.T) *receipts {
 	}
 	wf := &workflow.Service{DMS: s}
 	api := &httpapi.API{DMS: s, Workflows: wf, Storage: blobs, Logger: log, Auth: auth.Development{Token: token, Subject: admin}, MaxUpload: 32 << 20,
-		Modules: []httpapi.Module{assistant.Module()}}
+		// Read receipts are kept as PDFs, which need OCR.
+		Modules: []httpapi.Module{assistant.Module(), files(s, blobs)}}
 	runs := &Runner{DMS: s, API: api, Log: log}
 	if err = runs.Register(s); err != nil {
 		t.Fatal(err)
@@ -321,7 +322,11 @@ func (r *receipts) flush(t *testing.T) {
 }
 
 type receiptItem struct {
-	Name    string         `json:"name"`
+	Name string `json:"name"`
+	File struct {
+		ContentType string `json:"content_type"`
+		Filename    string `json:"filename"`
+	} `json:"file"`
 	Version int            `json:"version"`
 	Values  map[string]any `json:"values"`
 }
@@ -434,12 +439,10 @@ func TestReceiptsPackage(t *testing.T) {
 	r.runOf(t, small, runstore.StatusCompleted)
 	r.expectRead(t, large)
 	r.expectRead(t, small)
-	var versions struct {
-		Value []dms.FileVersion `json:"value"`
-	}
-	r.call(t, "GET", "/v1/items/"+large+"/content/versions", "", nil, 200, &versions)
-	if len(versions.Value) != 1 || versions.Value[0].ContentType != "image/png" {
-		t.Fatalf("the photo was replaced: %+v", versions.Value)
+	// Once read, the photo became the receipt's PDF, and the receipt is
+	// named after it.
+	if item := r.item(t, large); item.Name != "market.pdf" || item.File.ContentType != "application/pdf" || item.File.Filename != "market.pdf" {
+		t.Fatalf("the receipt's file: %+v", item)
 	}
 	if n := r.lineCount(t); n != 4 {
 		t.Fatalf("%d lines, want 4", n)
@@ -467,7 +470,7 @@ func TestReceiptsPackage(t *testing.T) {
 	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{line}}); err != nil {
 		t.Fatal(err)
 	}
-	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"Not a receipt photo"}` {
+	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"Not a receipt"}` {
 		t.Fatalf("a run on a line: %s", skipped.Result)
 	}
 	if n := r.lineCount(t); n != 4 || r.batch.Creates() != 1 {
@@ -476,7 +479,7 @@ func TestReceiptsPackage(t *testing.T) {
 
 	// A newer file replaces the run still waiting for its answer. It takes
 	// the name a renamed receipt had: lines are filed by receipt, not name.
-	rename := httptest.NewRequest("PATCH", "/v1/resources/"+large, strings.NewReader(`{"name":"market-old.png"}`))
+	rename := httptest.NewRequest("PATCH", "/v1/resources/"+large, strings.NewReader(`{"name":"market-old.pdf"}`))
 	rename.Header.Set("Authorization", "Bearer "+token)
 	rename.Header.Set("Content-Type", "application/json")
 	rename.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, large).Version))
@@ -507,6 +510,9 @@ func TestReceiptsPackage(t *testing.T) {
 	r.flush(t)
 	r.runOf(t, newer, runstore.StatusCompleted)
 	r.expectRead(t, newer)
+	if item := r.item(t, newer); item.Name != "market.pdf" || item.File.ContentType != "application/pdf" {
+		t.Fatalf("the newer receipt's file: %+v", item)
+	}
 	r.expectRead(t, large)
 	// The receipts view lists the receipts, not the folders of their lines.
 	var views struct {
@@ -543,7 +549,8 @@ func TestReceiptsPackage(t *testing.T) {
 	r.queued(t, 1)
 	r.flush(t)
 	reviewed := r.runOf(t, rejected, runstore.StatusCompleted)
-	if status := r.item(t, rejected).Values["status"]; status != "Needs review" || len(r.lineValues(t, rejected)) != 0 {
-		t.Fatalf("a refused answer: %v %s", status, dump(r, t, []workflow.Run{reviewed}))
+	// The photo stays, to be read again.
+	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
+		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
 }

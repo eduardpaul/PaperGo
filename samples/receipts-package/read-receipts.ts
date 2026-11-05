@@ -1,8 +1,10 @@
 // Reads a receipt photo: asks a model in batch mode for the store, date,
-// currency, total and product lines, and files the lines in the receipt's own
-// folder of its library, each linked to the receipt. It marks the receipt Read
-// once the lines are stored, and Needs review when the extraction or the
-// filing fails.
+// currency, total and product lines it shows, files the lines in the
+// receipt's own folder of its library, each linked to the receipt, and then
+// keeps the receipt as a searchable PDF made from the photo. It marks the
+// receipt Read once the lines and the PDF are stored, and Needs review when
+// the extraction, the filing or the conversion fails, leaving the photo to
+// read again.
 import { json, OperationError, plain, workflow } from "@papergo/workflow";
 import type { models, PaperGoClient } from "@papergo/workflow";
 
@@ -46,7 +48,8 @@ const prompt = "Read this receipt photo. Return only the object described by the
 // The relationship that links a receipt to each of its lines.
 const contains = "contains receipt line";
 
-const photos = ["image/*"];
+// The photos the model reads and the PDF is made from.
+const photos = ["image/jpeg", "image/png", "image/webp"];
 const sources = ["upload", "restore", "webdav"];
 
 // Lines are filed in Receipt lines/<receipt ID>/ of the library: a folder per
@@ -55,12 +58,25 @@ const sources = ["upload", "restore", "webdav"];
 // receipts' lines.
 const linesFolder = "Receipt lines";
 
-// update sets values of the item at version, the receipt as it was before
-// its image was chosen, and returns its new version. A newer file or edit
-// fails it.
+// update sets values of the item at version, the receipt as it was when its
+// text was read, and returns its new version. A newer file or edit fails it.
 async function update(api: PaperGoClient, id: string, version: number, values: Record<string, unknown>): Promise<number> {
   const item = await api.v1.resources.byId(id).patch({ values: json(values) }, { headers: { "If-Match": `"${version}"` } });
   return item!.version!;
+}
+
+// renamePdf gives a receipt named after its photo the PDF's extension, and
+// returns its version. A name another file has already keeps the old one.
+async function renamePdf(api: PaperGoClient, id: string): Promise<number> {
+  const item = (await api.v1.resources.byId(id).get())!;
+  const name = item.name!.replace(/\.(jpe?g|png|webp)$/i, ".pdf");
+  if (name === item.name) return item.version!;
+  try {
+    const renamed = await api.v1.resources.byId(id).patch({ name }, { headers: { "If-Match": `"${item.version}"` } });
+    return renamed!.version!;
+  } catch {
+    return (await api.v1.resources.byId(id).get())!.version!;
+  }
 }
 
 // children lists the direct children of parent of one kind, every page.
@@ -111,19 +127,23 @@ export default workflow<unknown, unknown, Params>({
     const id = ctx.itemId!;
     const api = ctx.api;
     // A manual start can name any item of the library. Only a receipt with
-    // a photo has something to read.
+    // a photo has something to read: its current file, or, once it is kept
+    // as a PDF, the photo it was made from until its bytes are reclaimed.
     const item = (await api.v1.resources.byId(id).get())!;
     const types = (await api.v1.resources.byId(ctx.params.library).contentTypes.get())!;
     const listType = (catalogType: string) => types.find((t) => t.parentId === catalogType)?.id;
-    if (item.contentTypeId !== listType(ctx.params.receipt_type) || !item.file?.contentType?.startsWith("image/")) {
-      return { status: "Not a receipt photo" };
-    }
+    if (item.contentTypeId !== listType(ctx.params.receipt_type)) return { status: "Not a receipt" };
+    const versions = (await api.v1.items.byId(id).content.versions.get())?.value ?? [];
+    const photo = versions
+      .filter((v) => photos.includes(v.contentType ?? "") && v.availability !== "reclaimed")
+      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.version! - a.version!)[0];
+    if (!photo) return { status: "No photo" };
     let version = item.version!;
     try {
-      // The model reads the receipt's current photo.
-      const image = item.file.blobId!;
+      // The model reads the photo as it was uploaded: the app shrinks it on
+      // the phone to what the model needs.
       const answer = await ctx.wait((await api.v1.ai.completions.post({
-        prompt, itemId: id, imageBlobId: image, execution: "batch", queue: "shared", outputSchema: json(schema),
+        prompt, itemId: id, imageBlobId: photo.id, execution: "batch", queue: "shared", outputSchema: json(schema),
       }))!);
       const receipt = (plain(answer.result) as { json: Receipt }).json;
       version = await update(api, id, version, { store: receipt.store, purchase_date: receipt.purchase_date, currency: receipt.currency, total: receipt.total });
@@ -152,12 +172,22 @@ export default workflow<unknown, unknown, Params>({
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }
-      version = (await api.v1.resources.byId(id).get())!.version!;
+      // The receipt is kept as a searchable PDF of the photo: scaled so its
+      // smallest text stays legible, compressed, with its OCR text. It
+      // replaces the photo as the receipt's file; a file a workflow saves
+      // starts no run.
+      if (photo.isCurrent) {
+        const composed = await ctx.wait((await api.v1.items.byId(id).composePdf.post({}))!);
+        const artifact = (plain(composed.result) as { artifact_id: string }).artifact_id;
+        const staged = (await api.v1.artifacts.byId(artifact).stage.post())!;
+        await api.v1.stagedFiles.byId(staged.id!).promote.post({});
+      }
+      version = await renamePdf(api, id);
       await update(api, id, version, { status: "Read" });
       return { status: "Read", lines: receipt.lines.length };
     } catch (e) {
-      // A refused answer, a line that cannot be stored or a changed
-      // receipt leaves it for a person.
+      // A refused answer, a line that cannot be stored, a photo that cannot
+      // become a PDF or a changed receipt leaves it for a person.
       ctx.warn("needs review:", e instanceof OperationError ? e.message : String(e));
       const current = (await api.v1.resources.byId(id).get())!.version!;
       await update(api, id, current, { status: "Needs review" });
