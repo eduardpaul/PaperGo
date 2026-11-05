@@ -30,7 +30,7 @@
           "layout": "table",
           "is_default": true,
           "columns": ["$name", "store", "purchase_date", "currency", "total", "status"],
-          "query": {"content_type_id": "$receipt", "sort": [{"field": "purchase_date", "direction": "desc"}]}
+          "query": {"content_type_id": "$receipt", "filter": {"field": "status", "op": "present"}, "sort": [{"field": "purchase_date", "direction": "desc"}]}
         },
         {
           "name": "Needs review",

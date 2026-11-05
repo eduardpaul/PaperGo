@@ -4,6 +4,7 @@
   "script": "read-receipts.ts",
   "parameters": {
     "library": "$LIBRARY",
+    "receipt_type": "$RECEIPT_TYPE",
     "line_type": "$LINE_TYPE"
   },
   "automatic_enabled": true,

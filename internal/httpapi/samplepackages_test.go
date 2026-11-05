@@ -170,7 +170,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 			t.Fatal("receipts library types", listTypes)
 		}
 		// The workflow names the catalog type; the library accepts it.
-		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$LINE_TYPE", *types["receipt_line"].ParentID)
+		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$RECEIPT_TYPE", *types["receipt"].ParentID, "$LINE_TYPE", *types["receipt_line"].ParentID)
 		views, err := s.Views(t.Context(), "organization-admin", ids["Receipts"], "", 100)
 		if err != nil {
 			t.Fatal(err)
@@ -451,7 +451,7 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		var collections map[string]string
 		var types map[string]string
 		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
-		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$LINE_TYPE", types["receipt_line"])
+		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", "$LIBRARY", collections["Receipts"], "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"])
 	case "diesel":
 		var collections map[string]string
 		var types map[string]string
@@ -603,7 +603,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
 					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
-					for _, placeholder := range []string{"$LIBRARY", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
+					for _, placeholder := range []string{"$LIBRARY", "$RECEIPT_TYPE", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)
 						}

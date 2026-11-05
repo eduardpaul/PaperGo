@@ -2,7 +2,7 @@
 
 A library of receipt photos and the products on them, and a workflow that reads each photo. Install it by importing the included workspace package. PaperGo has no receipt routes, tables, or upload-time processing: the workflow is an ordinary TypeScript script, [`read-receipts.ts`](read-receipts.ts), and you can open and change it in the workflow editor.
 
-The workflow starts when a JPEG, PNG, or WebP file is uploaded, restored, or saved over WebDAV, and when you start it by hand. A newer file for the same item replaces the run that is still going (`concurrency: "replace"`). A [batch completion](../../docs/ai.md#batches) reads the item's current image, with a schema for the store, purchase date, currency, total, and product lines. Amounts are exact decimal strings. The workflow writes the receipt's values at the version it read, so a newer file or edit is not overwritten, replaces any lines it filed earlier, and files each new line next to its receipt in the same library, named after the receipt (`market.png line 1`) and linked with **contains receipt line** (one parent receipt per line). Lines have no file, so they start no run; one started by hand on a line, or on a receipt without a photo, returns **No photo** and changes nothing. It marks the receipt **Read** only after those lines are stored. A refused answer, a line that cannot be stored or a changed receipt marks it **Needs review**.
+The workflow starts when a JPEG, PNG, or WebP file of a receipt is uploaded, restored, or saved over WebDAV, and when you start it by hand. A newer file for the same item replaces the run that is still going (`concurrency: "replace"`). A [batch completion](../../docs/ai.md#batches) reads the item's current image, with a schema for the store, purchase date, currency, total, and product lines. Amounts are exact decimal strings. The workflow writes the receipt's values at the version it read, so a newer file or edit is not overwritten, replaces any lines it filed earlier, and links each new line with **contains receipt line** (one parent receipt per line). Lines live in the same library, in a folder per receipt: `Receipt lines/<receipt ID>/`, numbered with their description (`1. Bread`). The folder follows the receipt, not its name or place, so renaming, moving or deleting a receipt never blocks another. A repeated run deletes the receipt's linked lines and every line left in its folder, including one an interrupted run did not link. A file saved over a line starts no run, and a run started by hand on a line, or on a receipt without an image, returns **Not a receipt photo** and changes nothing. It marks the receipt **Read** only after those lines are stored. A refused answer, a line that cannot be stored or a changed receipt marks it **Needs review**.
 
 ## Install
 
@@ -11,10 +11,12 @@ The workflow starts when a JPEG, PNG, or WebP file is uploaded, restored, or sav
 3. Open **Receipts desk** from the result and upload receipt photos to **Receipts**.
 4. Find the extracted products in the library's **Lines** view, linked to their receipt.
 
+Over WebDAV, lines appear as empty files under **Receipt lines**, apart from the photos.
+
 The ZIP includes the empty library, which accepts both content types (**Receipt**
 for uploads by default, and **Receipt line**), fields, saved views, relationship
 policy and the **Read receipts** workflow, its parameters pointing at the imported
-library and line content type. No script, token, ID editing or
+library and its two content types. No script, token, ID editing or
 pre-existing workspace is needed. To install another independent copy, enter a
 different workspace name when importing. Import does not call the model.
 

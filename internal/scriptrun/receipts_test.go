@@ -68,6 +68,7 @@ type receipts struct {
 	ai       *aiops.Assistant
 	batch    *aitest.BatchServer
 	library  string
+	lineType string
 	workflow string
 }
 
@@ -156,6 +157,15 @@ func installReceipts(t *testing.T) *receipts {
 		t.Fatalf("collections: %+v", collections)
 	}
 	r.library = collections[0].ID
+	types, err := s.CollectionContentTypes(ctx, admin, r.library)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lt := range types {
+		if lt.Key == "receipt_line" {
+			r.lineType = *lt.ParentID
+		}
+	}
 	flows, err := wf.List(ctx, admin, result.WorkspaceID)
 	if err != nil || len(flows) != 1 || flows[0].Name != "Read receipts" || !flows[0].AutomaticEnabled {
 		t.Fatalf("workflows: %+v %v", flows, err)
@@ -323,21 +333,43 @@ func (r *receipts) item(t *testing.T, id string) receiptItem {
 	return item
 }
 
-// lineValues returns the lines linked to a receipt, by description, as
-// quantity, unit price and amount.
-func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
+// links returns the links from a receipt to its lines.
+func (r *receipts) links(t *testing.T, id string) []receiptLink {
 	t.Helper()
 	q := url.Values{"direction": {"outgoing"}, "type": {"contains receipt line"}, "$top": {"50"}}
 	var page struct {
-		Value []struct {
-			Related struct {
-				Values map[string]any `json:"values"`
-			} `json:"related_item"`
-		} `json:"value"`
+		Value []receiptLink `json:"value"`
 	}
 	r.call(t, "GET", "/v1/items/"+id+"/relationships?"+q.Encode(), "", nil, 200, &page)
+	return page.Value
+}
+
+type receiptLink struct {
+	ID       string `json:"id"`
+	TargetID string `json:"target_id"`
+	Related  struct {
+		Name     string         `json:"name"`
+		ParentID string         `json:"parent_id"`
+		Values   map[string]any `json:"values"`
+	} `json:"related_item"`
+}
+
+// lineValues returns the lines linked to a receipt, by description, as
+// quantity, unit price and amount. Every line is in Receipt lines/<receipt
+// ID>/ of the library.
+func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
+	t.Helper()
 	out := map[string]string{}
-	for _, link := range page.Value {
+	for _, link := range r.links(t, id) {
+		var folder, root struct {
+			Name     string `json:"name"`
+			ParentID string `json:"parent_id"`
+		}
+		r.call(t, "GET", "/v1/resources/"+link.Related.ParentID, "", nil, 200, &folder)
+		r.call(t, "GET", "/v1/resources/"+folder.ParentID, "", nil, 200, &root)
+		if folder.Name != id || root.Name != "Receipt lines" || root.ParentID != r.library {
+			t.Fatalf("line %q is in %q of %q", link.Related.Name, folder.Name, root.Name)
+		}
 		v := link.Related.Values
 		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v", v["quantity"], v["unit_price"], v["amount"])
 	}
@@ -358,18 +390,22 @@ func (r *receipts) expectRead(t *testing.T, id string) {
 	}
 }
 
-// lineCount counts the lines in the library: its items without a file.
+// lineCount counts the items of the line type anywhere in the library.
 func (r *receipts) lineCount(t *testing.T) int {
 	t.Helper()
+	body, err := json.Marshal(map[string]any{"query": map[string]any{"content_type_id": r.lineType}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var page struct {
 		Value []struct {
-			File json.RawMessage `json:"file"`
+			Kind string `json:"kind"`
 		} `json:"value"`
 	}
-	r.call(t, "GET", "/v1/resources/"+r.library+"/children?kind=item&$top=100", "", nil, 200, &page)
+	r.call(t, "POST", "/v1/resources/"+r.library+"/query?$top=100", "application/json", body, 200, &page)
 	n := 0
 	for _, item := range page.Value {
-		if len(item.File) == 0 || string(item.File) == "null" {
+		if item.Kind == "item" {
 			n++
 		}
 	}
@@ -409,7 +445,10 @@ func TestReceiptsPackage(t *testing.T) {
 		t.Fatalf("%d lines, want 4", n)
 	}
 
-	// A repeated run replaces the receipt's lines with the cached answer.
+	// A repeated run replaces the receipt's lines with the cached answer,
+	// including a line left without its link.
+	unlinked := r.links(t, small)[0]
+	r.call(t, "DELETE", "/v1/items/"+small+"/relationships/"+unlinked.ID, "", nil, 204, nil)
 	ids, err := (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{small}})
 	if err != nil {
 		t.Fatal(err)
@@ -423,30 +462,30 @@ func TestReceiptsPackage(t *testing.T) {
 		t.Fatalf("%d lines and %d batches after the repeat", n, r.batch.Creates())
 	}
 
-	// Lines share the library and have no photo: a run started on one reads
-	// nothing.
-	var links struct {
-		Value []struct {
-			TargetID string `json:"target_id"`
-		} `json:"value"`
-	}
-	r.call(t, "GET", "/v1/items/"+small+"/relationships?direction=outgoing&type="+url.QueryEscape("contains receipt line"), "", nil, 200, &links)
-	if len(links.Value) != 2 {
-		t.Fatalf("links: %+v", links.Value)
-	}
-	line := links.Value[0].TargetID
+	// Lines share the library: a run started on one reads nothing.
+	line := r.links(t, small)[0].TargetID
 	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{line}}); err != nil {
 		t.Fatal(err)
 	}
-	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"No photo"}` {
+	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"Not a receipt photo"}` {
 		t.Fatalf("a run on a line: %s", skipped.Result)
 	}
 	if n := r.lineCount(t); n != 4 || r.batch.Creates() != 1 {
 		t.Fatalf("%d lines and %d batches after a run on a line", n, r.batch.Creates())
 	}
 
-	// A newer file replaces the run still waiting for its answer.
-	newer := r.upload(t, "newer.png", receiptPhoto(t, 1100, 740))
+	// A newer file replaces the run still waiting for its answer. It takes
+	// the name a renamed receipt had: lines are filed by receipt, not name.
+	rename := httptest.NewRequest("PATCH", "/v1/resources/"+large, strings.NewReader(`{"name":"market-old.png"}`))
+	rename.Header.Set("Authorization", "Bearer "+token)
+	rename.Header.Set("Content-Type", "application/json")
+	rename.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, large).Version))
+	renamed := httptest.NewRecorder()
+	r.handler.ServeHTTP(renamed, rename)
+	if renamed.Code != 200 {
+		t.Fatalf("rename: %d %s", renamed.Code, renamed.Body)
+	}
+	newer := r.upload(t, "market.png", receiptPhoto(t, 1100, 740))
 	r.queued(t, 1)
 	parked := r.runOf(t, newer, runstore.StatusWaiting)
 	item := r.item(t, newer)
@@ -468,6 +507,35 @@ func TestReceiptsPackage(t *testing.T) {
 	r.flush(t)
 	r.runOf(t, newer, runstore.StatusCompleted)
 	r.expectRead(t, newer)
+	r.expectRead(t, large)
+	// The receipts view lists the receipts, not the folders of their lines.
+	var views struct {
+		Value []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/resources/"+r.library+"/views", "", nil, 200, &views)
+	for _, v := range views.Value {
+		if v.Name != "Receipts" {
+			continue
+		}
+		var page struct {
+			Value []struct {
+				Kind string `json:"kind"`
+			} `json:"value"`
+		}
+		r.call(t, "POST", "/v1/views/"+v.ID+"/query", "application/json", []byte(`{}`), 200, &page)
+		items := 0
+		for _, row := range page.Value {
+			if row.Kind == "item" {
+				items++
+			}
+		}
+		if items != 3 || len(page.Value) != 3 {
+			t.Fatalf("receipts view: %+v", page.Value)
+		}
+	}
 
 	// An answer the provider refuses leaves the receipt for review.
 	r.batch.SetReceiptMode("reject")
