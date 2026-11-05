@@ -85,11 +85,37 @@ function say(text: string, values: Record<string, string | number>): string {
   return text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ""));
 }
 
+// WallTime is what a clock shows, two digits a part.
+interface WallTime {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+}
+
+// wallTime is what the clock of zone, the viewer's PaperGo time zone,
+// shows at an instant, as ctx.format shows dates: UTC when the zone is
+// unknown. The phone's own time zone may be another.
+function wallTime(zone: string, at: Date): WallTime {
+  const options: Intl.DateTimeFormatOptions = { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" };
+  let format: Intl.DateTimeFormat;
+  try {
+    format = new Intl.DateTimeFormat("en-US", { ...options, timeZone: zone || "UTC" });
+  } catch {
+    format = new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" });
+  }
+  const out: Record<string, string> = {};
+  for (const part of format.formatToParts(at)) if (part.type !== "literal") out[part.type] = part.value;
+  return out as unknown as WallTime;
+}
+
 // since is the first day of the period, in the viewer's calendar.
-function since(period: Period, now = new Date()): string | undefined {
-  const two = (n: number) => String(n).padStart(2, "0");
-  if (period === "month") return `${now.getFullYear()}-${two(now.getMonth() + 1)}-01`;
-  if (period === "year") return `${now.getFullYear()}-01-01`;
+function since(zone: string, period: Period, now = new Date()): string | undefined {
+  const today = wallTime(zone, now);
+  if (period === "month") return `${today.year}-${today.month}-01`;
+  if (period === "year") return `${today.year}-01-01`;
   return undefined;
 }
 
@@ -139,14 +165,12 @@ async function multipart(name: string, photo: Blob): Promise<{ body: ArrayBuffer
 }
 
 // receiptName names a receipt after when it was taken, in the viewer's
-// clock and language, as a file: Receipt 2026-11-05 14.32.10.jpg, or
+// time zone and language, as a file: Receipt 2026-11-05 14.32.10.jpg, or
 // Tique … in Spanish. The workflow gives it the PDF's extension once it
 // keeps it as one.
-function receiptName(prefix: string, at: Date, copy: number): string {
-  const two = (n: number) => String(n).padStart(2, "0");
-  const day = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
-  const time = `${two(at.getHours())}.${two(at.getMinutes())}.${two(at.getSeconds())}`;
-  return `${prefix} ${day} ${time}${copy > 1 ? ` (${copy})` : ""}.jpg`;
+function receiptName(prefix: string, zone: string, at: Date, copy: number): string {
+  const t = wallTime(zone, at);
+  return `${prefix} ${t.year}-${t.month}-${t.day} ${t.hour}.${t.minute}.${t.second}${copy > 1 ? ` (${copy})` : ""}.jpg`;
 }
 
 interface Upload {
@@ -181,7 +205,8 @@ function Desk({ w }: { w: Words }) {
   // those of the currency most receipts were paid in. Lines carry their
   // receipt's currency and date for this.
   const [period, setPeriod] = useState<Period>("month");
-  const from = since(period);
+  const zone = ctx.user.preferences.time_zone;
+  const from = since(zone, period);
   const inPeriod = from ? [{ field: "purchase_date", op: "gte", value: from }] : [];
   const spent = useAggregates(
     p.library,
@@ -225,7 +250,7 @@ function Desk({ w }: { w: Words }) {
     const at = new Date();
     // Two photos taken in the same second get numbered names.
     for (let copy = 1; ; copy++) {
-      const name = receiptName(w.fileName, at, copy);
+      const name = receiptName(w.fileName, zone, at, copy);
       const { body, type } = await multipart(name, photo);
       try {
         const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
