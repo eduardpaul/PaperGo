@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
@@ -44,6 +45,10 @@ type anthropicBatch struct {
 	base      string
 	maxTokens int64
 	client    anthropic.Client
+	// ended remembers the request keys of the ended batches Find has read,
+	// by batch: those results never change and can be large, and Find looks
+	// at the same batches on every poll.
+	ended sync.Map
 }
 
 func newAnthropicBatch(c BatchConfig, client *http.Client) *anthropicBatch {
@@ -147,8 +152,9 @@ func (b *anthropicBatch) Create(ctx context.Context, in BatchInput, _ string) (s
 
 // Find looks for the submission among the batches created since it was
 // prepared. Message batches carry no metadata, so a batch is the
-// submission when it ended holding exactly its request keys; while a
-// candidate is still running, Find cannot tell.
+// submission when it ended holding exactly its request keys. Only a batch
+// of the submission's size can be it; while one of those is still running,
+// Find cannot tell.
 func (b *anthropicBatch) Find(ctx context.Context, s BatchSubmission) (string, bool, error) {
 	want := slices.Clone(s.Keys)
 	slices.Sort(want)
@@ -163,6 +169,10 @@ func (b *anthropicBatch) Find(ctx context.Context, s BatchSubmission) (string, b
 		// Batches are listed newest first.
 		if batch.CreatedAt.Before(s.Since.Add(-findWindow)) {
 			break
+		}
+		counts := batch.RequestCounts
+		if counts.Processing+counts.Succeeded+counts.Errored+counts.Canceled+counts.Expired != int64(len(want)) {
+			continue
 		}
 		if batch.ProcessingStatus != anthropic.MessageBatchProcessingStatusEnded {
 			undetermined = true
@@ -187,6 +197,9 @@ func (b *anthropicBatch) Find(ctx context.Context, s BatchSubmission) (string, b
 
 // resultKeys are the sorted request keys of an ended batch's results.
 func (b *anthropicBatch) resultKeys(ctx context.Context, id string) ([]string, error) {
+	if keys, ok := b.ended.Load(id); ok {
+		return keys.([]string), nil
+	}
 	stream := b.client.Messages.Batches.ResultsStreaming(ctx, id, anthropic.MessageBatchResultsParams{})
 	defer stream.Close()
 	var keys []string
@@ -197,7 +210,9 @@ func (b *anthropicBatch) resultKeys(ctx context.Context, id string) ([]string, e
 		return nil, err
 	}
 	slices.Sort(keys)
-	return slices.Compact(keys), nil
+	keys = slices.Compact(keys)
+	b.ended.Store(id, keys)
+	return keys, nil
 }
 
 func (b *anthropicBatch) Get(ctx context.Context, id string) (Batch, error) {

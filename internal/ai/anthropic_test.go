@@ -89,6 +89,12 @@ func batchJSON(id, status string, created time.Time) map[string]any {
 	}
 }
 
+// sized is a batch that holds n requests.
+func sized(batch map[string]any, n int) map[string]any {
+	batch["request_counts"] = map[string]int{"processing": n, "succeeded": 0, "errored": 0, "canceled": 0, "expired": 0}
+	return batch
+}
+
 func (m *messageBatches) end(id string, results ...map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -269,25 +275,30 @@ func TestAnthropicBatchResults(t *testing.T) {
 }
 
 // Message batches have no metadata: an unconfirmed submission is the
-// ended batch since it was prepared that holds exactly its keys, and while
-// one that could be it runs, nobody can tell.
+// ended batch of its size since it was prepared that holds exactly its keys,
+// and while one that could be it runs, nobody can tell. Only batches of its
+// size are read, each once.
 func TestAnthropicBatchFindsAnUnconfirmedSubmissionByItsKeys(t *testing.T) {
 	m, server := newMessageBatches(t)
 	client := anthropicClient(t, server, 0)
 	ctx := context.Background()
 	since := time.Now()
 	m.batches = []map[string]any{
-		batchJSON("running", "in_progress", since),
-		batchJSON("other", "ended", since),
-		batchJSON("ours", "ended", since.Add(time.Minute)),
-		batchJSON("old", "ended", since.Add(-2*time.Hour)),
+		sized(batchJSON("running", "in_progress", since), 1),
+		sized(batchJSON("other", "ended", since), 1),
+		sized(batchJSON("ours", "ended", since.Add(time.Minute)), 2),
+		sized(batchJSON("old", "ended", since.Add(-2*time.Hour)), 1),
 	}
 	m.results["other"] = []map[string]any{succeeded("x", "a", "end_turn")}
 	m.results["ours"] = []map[string]any{succeeded("k2", "a", "end_turn"), succeeded("k1", "b", "end_turn")}
 	m.results["old"] = []map[string]any{succeeded("k1", "a", "end_turn")}
 	want := ai.BatchSubmission{Tag: "t", Keys: []string{"k1", "k2", "k1"}, Since: since}
-	if id, ok, err := client.Find(ctx, want); err != nil || !ok || id != "ours" {
-		t.Fatalf("find: %q %v %v", id, ok, err)
+	if id, ok, err := client.Find(ctx, want); err != nil || !ok || id != "ours" || m.resultsN != 1 {
+		t.Fatalf("find: %q %v %v, read %d batches", id, ok, err, m.resultsN)
+	}
+	// A running batch of another size cannot be it.
+	if _, ok, err := client.Find(ctx, ai.BatchSubmission{Tag: "t", Keys: []string{"k8", "k9"}, Since: since}); err != nil || ok {
+		t.Fatalf("another size running: %v %v", ok, err)
 	}
 	missing := ai.BatchSubmission{Tag: "t", Keys: []string{"k9"}, Since: since}
 	if _, ok, err := client.Find(ctx, missing); !errors.Is(err, ai.ErrUndetermined) || ok {
@@ -298,7 +309,10 @@ func TestAnthropicBatchFindsAnUnconfirmedSubmissionByItsKeys(t *testing.T) {
 	if _, ok, err := client.Find(ctx, missing); err != nil || ok {
 		t.Fatalf("absent: %v %v", ok, err)
 	}
-	if m.resultsN != 3 {
-		t.Fatalf("read the results of %d batches, want the 3 since the submission", m.resultsN)
+	if m.resultsN != 1 {
+		t.Fatalf("read the results of %d batches, want only the one that just ended", m.resultsN)
+	}
+	if _, ok, err := client.Find(ctx, missing); err != nil || ok || m.resultsN != 1 {
+		t.Fatalf("polling again: %v %v, read %d batches", ok, err, m.resultsN)
 	}
 }
