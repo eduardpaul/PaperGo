@@ -59,6 +59,8 @@ const words = {
     month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
     byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
     noReceipts: "No receipts yet", fileName: "Receipt", loading: "Loading…", loadFailed: "Could not load this; try again later",
+    tooLarge: "the photo is larger than this PaperGo takes", forbidden: "you may not add receipts to this library", duplicate: "this photo is already in the library",
+    gone: "the Receipts library is gone", refused: "PaperGo did not take the photo", unreachable: "PaperGo could not be reached; try again", otherFailure: "the upload failed ({detail})",
     categories: {} as Record<string, string>,
   },
   es: {
@@ -72,6 +74,8 @@ const words = {
     month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
     byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
     noReceipts: "Aún no hay tiques", fileName: "Tique", loading: "Cargando…", loadFailed: "No se pudo cargar; inténtalo de nuevo más tarde",
+    tooLarge: "la foto supera el tamaño que admite este PaperGo", forbidden: "no puedes añadir tiques a esta biblioteca", duplicate: "esta foto ya está en la biblioteca",
+    gone: "la biblioteca Receipts ya no existe", refused: "PaperGo no admitió la foto", unreachable: "no se pudo contactar con PaperGo; inténtalo de nuevo", otherFailure: "la subida falló ({detail})",
     categories: {
       "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
       Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
@@ -124,6 +128,30 @@ function since(zone: string, period: Period, now = new Date()): string | undefin
 function size(f: Format, bytes: number): string {
   const kb = Math.max(1, Math.round(bytes / 1024));
   return kb < 1024 ? `${f.number(kb, 0)} KB` : `${f.number(bytes / (1 << 20), 1)} MB`;
+}
+
+// uploadError says in the viewer's language why an upload failed, by the
+// problem's code; only a problem the desk does not know shows the server's
+// own detail.
+function uploadError(w: Words, e: unknown): string {
+  if (!(e instanceof RequestError)) return w.unreachable;
+  switch (e.code) {
+    case "payload_too_large":
+      return w.tooLarge;
+    case "forbidden":
+    case "app_refused":
+      return w.forbidden;
+    case "duplicate_file":
+      return w.duplicate;
+    case "not_found":
+      return w.gone;
+    case "invalid_upload":
+    case "validation_failed":
+      return w.refused;
+  }
+  if (e.status === 413) return w.tooLarge;
+  if (e.status === 429 || e.status >= 500) return w.unreachable;
+  return say(w.otherFailure, { detail: e.detail ?? e.code ?? String(e.status) });
 }
 
 // optimize turns a photo upright and shrinks it to the photo the model
@@ -258,7 +286,7 @@ function Desk({ w }: { w: Words }) {
         return;
       } catch (e) {
         if (e instanceof RequestError && e.code === "name_conflict" && copy < 20) continue;
-        change(key, { state: "failed", error: e instanceof RequestError ? e.detail ?? e.message : String(e) });
+        change(key, { state: "failed", error: uploadError(w, e) });
         return;
       }
     }
