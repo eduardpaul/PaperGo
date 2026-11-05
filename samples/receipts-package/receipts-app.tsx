@@ -93,9 +93,11 @@ function since(period: Period, now = new Date()): string | undefined {
   return undefined;
 }
 
-// size is a file size in the viewer's number format: 340 KB, 1,7 MB.
+// size is a file size in the viewer's number format: 340 KB, 1,7 MB. A
+// size that rounds to 1024 KB is 1 MB.
 function size(f: Format, bytes: number): string {
-  return bytes < 1 << 20 ? `${f.number(Math.max(1, Math.round(bytes / 1024)), 0)} KB` : `${f.number(bytes / (1 << 20), 1)} MB`;
+  const kb = Math.max(1, Math.round(bytes / 1024));
+  return kb < 1024 ? `${f.number(kb, 0)} KB` : `${f.number(bytes / (1 << 20), 1)} MB`;
 }
 
 // optimize turns a photo upright and shrinks it to the photo the model
