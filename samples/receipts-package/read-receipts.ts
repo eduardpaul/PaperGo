@@ -1,5 +1,6 @@
 // Reads a receipt photo: asks a model in batch mode for the store, date,
-// currency, total and product lines it shows, files the lines in the
+// currency, total and product lines it shows, each line with the category of
+// its product from a fixed list, files the lines in the
 // receipt's own folder of its library, each linked to the receipt, and then
 // keeps the receipt as a searchable PDF made from the photo. It marks the
 // receipt Read once the lines and the PDF are stored, and Needs review when
@@ -14,12 +15,19 @@ interface Params {
   line_type: string;
 }
 
+// The kinds of product a line is filed under: the choices of the line's
+// category field, in the same order. Change both together.
+const categories = [
+  "Fruit and vegetables", "Meat and fish", "Dairy and eggs", "Bakery", "Pantry", "Frozen", "Drinks",
+  "Snacks and sweets", "Household", "Personal care", "Health", "Baby", "Pets", "Other",
+];
+
 interface Receipt {
   store: string;
   purchase_date: string;
   currency: string;
   total: string;
-  lines: { description: string; quantity: string; unit_price: string; amount: string }[];
+  lines: { description: string; category: string; quantity: string; unit_price: string; amount: string }[];
 }
 
 const amount = { type: "string", minLength: 1, maxLength: 40 };
@@ -35,15 +43,20 @@ const schema = {
       type: "array", minItems: 1, maxItems: 100,
       items: {
         type: "object",
-        required: ["description", "quantity", "unit_price", "amount"],
-        properties: { description: { type: "string", minLength: 1, maxLength: 200 }, quantity: amount, unit_price: amount, amount },
+        required: ["description", "category", "quantity", "unit_price", "amount"],
+        properties: {
+          description: { type: "string", minLength: 1, maxLength: 200 },
+          category: { type: "string", enum: categories },
+          quantity: amount, unit_price: amount, amount,
+        },
       },
     },
   },
 };
 
 const prompt = "Read this receipt photo. Return only the object described by the schema. store is the seller. purchase_date is YYYY-MM-DD. " +
-  "currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers. One lines entry per product.";
+  "currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers. One lines entry per product. " +
+  "category is the kind of product, one of the listed values; Other when none fits.";
 
 // The relationship that links a receipt to each of its lines.
 const contains = "contains receipt line";
@@ -168,7 +181,10 @@ export default workflow<unknown, unknown, Params>({
       }
       for (const [i, line] of receipt.lines.entries()) {
         const created = await api.v1.resources.byId(lines).children.post({
-          kind: "item", name: lineName(i + 1, line.description), contentTypeId: ctx.params.line_type, values: json({ ...line }),
+          // Each line also carries its receipt's currency and date, so
+          // spending can be summed by category and period.
+          kind: "item", name: lineName(i + 1, line.description), contentTypeId: ctx.params.line_type,
+          values: json({ ...line, currency: receipt.currency, purchase_date: receipt.purchase_date }),
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }

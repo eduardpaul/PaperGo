@@ -352,9 +352,9 @@ func (s *BatchServer) receiptTextLocked() string {
 	case "reject":
 		return `{"store":1}`
 	case "bad-amount":
-		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","quantity":"2","unit_price":"4.00","amount":"1.999"}]}`
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4.00","amount":"1.999"}]}`
 	default:
-		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","quantity":"2","unit_price":"4.00","amount":"8.00"},{"description":"Bread","quantity":"1","unit_price":"4.50","amount":"4.50"}]}`
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4.00","amount":"8.00"},{"description":"Bread","category":"Bakery","quantity":"1","unit_price":"4.50","amount":"4.50"}]}`
 	}
 }
 

@@ -360,8 +360,8 @@ type receiptLink struct {
 }
 
 // lineValues returns the lines linked to a receipt, by description, as
-// quantity, unit price and amount. Every line is in Receipt lines/<receipt
-// ID>/ of the library.
+// category, quantity, unit price, amount, and its receipt's currency and
+// date. Every line is in Receipt lines/<receipt ID>/ of the library.
 func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -376,7 +376,7 @@ func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
 			t.Fatalf("line %q is in %q of %q", link.Related.Name, folder.Name, root.Name)
 		}
 		v := link.Related.Values
-		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v", v["quantity"], v["unit_price"], v["amount"])
+		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v %v %v %v", v["category"], v["quantity"], v["unit_price"], v["amount"], v["currency"], v["purchase_date"])
 	}
 	return out
 }
@@ -390,7 +390,7 @@ func (r *receipts) expectRead(t *testing.T, id string) {
 		}
 	}
 	lines := r.lineValues(t, id)
-	if len(lines) != 2 || lines["Plums"] != "2.000 4.00 8.00" || lines["Bread"] != "1.000 4.50 4.50" {
+	if len(lines) != 2 || lines["Plums"] != "Fruit and vegetables 2.000 4.00 8.00 EUR 2026-10-15" || lines["Bread"] != "Bakery 1.000 4.50 4.50 EUR 2026-10-15" {
 		t.Fatalf("lines: %+v", lines)
 	}
 }

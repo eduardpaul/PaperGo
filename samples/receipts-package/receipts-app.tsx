@@ -3,9 +3,12 @@
 // the Receipts library. The photo is what the model reads, so it is sent the
 // size the model needs, not the camera's: at most MAX_EDGE pixels long, as a
 // JPEG, turned upright. The Read receipts workflow then reads it in batch
-// mode, files its lines and keeps the receipt as a searchable PDF made from
-// the photo. Below, the latest receipts, how many wait to be read and need a
-// look, and each receipt's lines.
+// mode, files its lines, each with the category of its product, and keeps
+// the receipt as a searchable PDF made from the photo. Below, for this
+// month, this year or all time: what was spent and on which categories, how
+// many receipts wait to be read and need a look, the latest receipts and
+// each receipt's lines. The figures are worked out by the server and follow
+// new receipts live.
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   app,
@@ -28,7 +31,10 @@ import {
 interface Params {
   library: string;
   receipt: string;
+  line: string;
 }
+
+type Period = "month" | "year" | "all";
 
 // The photo the model reads: the long side at most this many pixels, as a
 // JPEG of this quality. Vision models scale larger photos down to about
@@ -46,8 +52,11 @@ const words = {
     shrunk: "{before} → {after}", waiting: "Waiting to be read", read: "Read", review: "Needs review", reviewHint: "The model could not read these. Open one to correct it, or take a better photo.",
     batchHint: "Receipts are read in batches: their lines can take until the nightly batch.",
     receipt: "Receipt", date: "Date", total: "Total", status: "Status", lines: "Lines", description: "Description", quantity: "Qty", unitPrice: "Price", amount: "Amount",
-    open: "Open in PaperGo", close: "Close", noLines: "No lines yet", all: "All receipts", setUp: "Choose the Receipts library and its Receipt type in Workspace settings → Apps.",
+    open: "Open in PaperGo", close: "Close", noLines: "No lines yet", all: "All receipts", setUp: "Choose the Receipts library and its Receipt and Receipt line types in Workspace settings → Apps.",
     statusNew: "Reading", statusRead: "Read", statusReview: "Needs review",
+    month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
+    byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
+    categories: {} as Record<string, string>,
   },
   es: {
     take: "Hacer una foto", choose: "Elegir fotos", uploads: "Subidas", latest: "Últimos tiques",
@@ -55,14 +64,29 @@ const words = {
     shrunk: "{before} → {after}", waiting: "Por leer", read: "Leídos", review: "Por revisar", reviewHint: "El modelo no pudo leerlos. Abre uno para corregirlo, o haz una foto mejor.",
     batchHint: "Los tiques se leen por lotes: sus líneas pueden tardar hasta el lote de la noche.",
     receipt: "Tique", date: "Fecha", total: "Total", status: "Estado", lines: "Líneas", description: "Descripción", quantity: "Cant.", unitPrice: "Precio", amount: "Importe",
-    open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y su tipo Receipt en Ajustes del espacio → Apps.",
+    open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y sus tipos Receipt y Receipt line en Ajustes del espacio → Apps.",
     statusNew: "Leyendo", statusRead: "Leído", statusReview: "Por revisar",
+    month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
+    byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
+    categories: {
+      "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
+      Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
+      "Personal care": "Cuidado personal", Health: "Salud", Baby: "Bebé", Pets: "Mascotas", Other: "Otros",
+    } as Record<string, string>,
   },
 };
 type Words = typeof words.en;
 
 function say(text: string, values: Record<string, string | number>): string {
   return text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ""));
+}
+
+// since is the first day of the period, in the viewer's calendar.
+function since(period: Period, now = new Date()): string | undefined {
+  const two = (n: number) => String(n).padStart(2, "0");
+  if (period === "month") return `${now.getFullYear()}-${two(now.getMonth() + 1)}-01`;
+  if (period === "year") return `${now.getFullYear()}-01-01`;
+  return undefined;
 }
 
 function size(bytes: number): string {
@@ -145,6 +169,27 @@ function Desk({ w }: { w: Words }) {
   const counts = useAggregates(p.library, { query: receipts, groups: [{ field: "status" }], aggregates: [{ op: "count", field: "status" }] }, { live: true });
   const count = (status: string) => counts.data.find((g) => g.keys[0]?.value === status)?.count ?? 0;
 
+  // What read receipts of the period cost, by currency; the categories are
+  // those of the currency most receipts were paid in. Lines carry their
+  // receipt's currency and date for this.
+  const [period, setPeriod] = useState<Period>("month");
+  const from = since(period);
+  const inPeriod = from ? [{ field: "purchase_date", op: "gte", value: from }] : [];
+  const spent = useAggregates(
+    p.library,
+    { query: { contentTypeId: p.receipt, filter: { and: [{ field: "status", op: "eq", value: "Read" }, ...inPeriod] } }, groups: [{ field: "currency" }], aggregates: [{ op: "sum", field: "total", as: "spent" }], sort: [{ field: "$count", direction: "desc" }] },
+    { live: true },
+  );
+  const main = spent.data[0];
+  const currency = main ? String(main.keys[0]?.value ?? "") : "";
+  const byCategory = useAggregates(
+    currency ? p.library : undefined,
+    { query: { contentTypeId: p.line, filter: { and: [{ field: "currency", op: "eq", value: currency }, ...inPeriod] } }, groups: [{ field: "category" }], aggregates: [{ op: "sum", field: "amount", as: "spent" }], sort: [{ field: "spent", direction: "desc" }] },
+    { live: true },
+  );
+  const categoryTotal = byCategory.data.reduce((sum, g) => sum + Number(g.values.spent ?? 0), 0);
+  const categoryName = (c: unknown) => (c === null || c === undefined ? w.categories.Other ?? "Other" : w.categories[String(c)] ?? String(c));
+
   const change = (key: number, patch: Partial<Upload>) => setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)));
 
   // One photo after another, so a phone's upload is not split between them.
@@ -201,7 +246,7 @@ function Desk({ w }: { w: Words }) {
     [latest.data, f, w],
   );
 
-  if (!p.library || !p.receipt) return <Notice title={w.receipt}>{w.setUp}</Notice>;
+  if (!p.library || !p.receipt || !p.line) return <Notice title={w.receipt}>{w.setUp}</Notice>;
 
   return (
     <>
@@ -229,13 +274,55 @@ function Desk({ w }: { w: Words }) {
         </Card>
       )}
 
-      <Grid min={narrow ? 100 : 160}>
-        <Stat label={w.waiting} value={f.number(count("New"), 0)} hint={count("New") ? w.batchHint : undefined} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {(["month", "year", "all"] as const).map((key) => (
+          <Button key={key} variant={period === key ? "primary" : "default"} onClick={() => setPeriod(key)}>
+            {{ month: w.month, year: w.year, all: w.ever }[key]}
+          </Button>
+        ))}
+      </div>
+
+      {/* Two figures a row on a phone. */}
+      <Grid min={narrow ? 140 : 160}>
+        <Stat
+          label={w.spent}
+          value={main ? f.currency(String(main.values.spent ?? 0), currency) : "–"}
+          hint={main ? [main.count === 1 ? w.oneReceipt : say(w.receiptsCount, { n: main.count }), spent.data.length > 1 ? say(w.alsoIn, { amounts: spent.data.slice(1).map((g) => f.currency(String(g.values.spent ?? 0), String(g.keys[0]?.value ?? ""))).join(", ") }) : ""].filter(Boolean).join(" · ") : undefined}
+        />
+        <Stat label={w.waiting} value={f.number(count("New"), 0)} />
         <Stat label={w.read} value={f.number(count("Read"), 0)} tone="success" />
         <Stat label={w.review} value={f.number(count("Needs review"), 0)} tone={count("Needs review") ? "warning" : "default"} />
       </Grid>
 
+      {count("New") > 0 && <p className="pg-stat-hint">{w.batchHint}</p>}
       {count("Needs review") > 0 && <Notice tone="warning" title={w.review}>{w.reviewHint}</Notice>}
+
+      <Card title={w.byCategory}>
+        <Table
+          empty={w.nothingSpent}
+          columns={[
+            { key: "category", label: w.category },
+            {
+              key: "spent",
+              label: w.spent,
+              align: "right",
+              // A bar for the category's share of the period, under its amount.
+              render: (row) => (
+                <>
+                  {row.spent}
+                  <div style={{ height: 6, marginTop: 4, borderRadius: 3, background: "var(--pg-series-1)", width: `${row.pct}%`, marginLeft: "auto" }} />
+                </>
+              ),
+            },
+            { key: "share", label: "%", align: "right", optional: true },
+          ]}
+          rows={byCategory.data.map((g) => {
+            const value = Number(g.values.spent ?? 0);
+            const pct = categoryTotal ? Math.round((value / categoryTotal) * 100) : 0;
+            return { id: String(g.keys[0]?.value ?? "none"), category: categoryName(g.keys[0]?.value), spent: f.currency(value, currency), pct, share: say(w.share, { p: pct }) };
+          })}
+        />
+      </Card>
 
       <Card title={w.latest} actions={<Button onClick={() => ctx.open({ listId: p.library })}>{w.all}</Button>}>
         <Table
@@ -297,10 +384,17 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
       </p>
       <Table
         empty={lines === undefined ? "…" : w.noLines}
-        columns={[{ key: "description", label: w.description }, { key: "quantity", label: w.quantity, align: "right", optional: true }, { key: "unit", label: w.unitPrice, align: "right", optional: true }, { key: "amount", label: w.amount, align: "right" }]}
+        columns={[
+          // The category under the description, so a phone has room for both.
+          { key: "description", label: w.description, render: (row) => <>{row.description}<div className="pg-stat-hint">{row.category}</div></> },
+          { key: "quantity", label: w.quantity, align: "right", optional: true },
+          { key: "unit", label: w.unitPrice, align: "right", optional: true },
+          { key: "amount", label: w.amount, align: "right" },
+        ]}
         rows={sorted.map((l) => ({
           id: l.id,
           description: String(l.values.description ?? ""),
+          category: w.categories[String(l.values.category ?? "")] ?? String(l.values.category ?? ""),
           quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 3),
           unit: money(l.values.unit_price),
           amount: money(l.values.amount),
@@ -313,10 +407,11 @@ function LinesDialog({ w, receipt, onClose }: { w: Words; receipt?: Item; onClos
 export default app<Params>({
   parameters: {
     type: "object",
-    required: ["library", "receipt"],
+    required: ["library", "receipt", "line"],
     properties: {
       library: { type: "string", title: "Receipts library", "x-papergo": { kind: "collection" } },
       receipt: { type: "string", title: "Receipt type", "x-papergo": { kind: "content_type" } },
+      line: { type: "string", title: "Receipt line type", "x-papergo": { kind: "content_type" } },
     },
   },
   render(ctx) {
