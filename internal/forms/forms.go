@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/resources"
 	"papergo/internal/dal/taxonomy"
 	"papergo/internal/dms"
+	"papergo/internal/forms/pickers"
 	"reflect"
 	"regexp"
 	"slices"
@@ -604,80 +605,17 @@ func Values(s map[string]any, values map[string]any, path string) (map[string]an
 	return out, nil
 }
 
-// domainField is one x-papergo picker with the IDs it holds.
-type domainField struct {
-	path string
-	kind string
-	opts map[string]any
-	ids  []string
-}
-
-// domainFields collects the pickers of a schema; with values, it collects
-// their selected IDs too.
-func domainFields(s map[string]any, values any, path string, out *[]domainField) {
-	if d, ok := s["x-papergo"].(map[string]any); ok {
-		f := domainField{path: path, kind: d["kind"].(string), opts: d}
-		switch v := values.(type) {
-		case string:
-			if v != "" {
-				f.ids = []string{v}
-			}
-		case []any:
-			for _, e := range v {
-				if id, ok := e.(string); ok {
-					f.ids = append(f.ids, id)
-				}
-			}
-		}
-		*out = append(*out, f)
-		return
-	}
-	props, _ := s["properties"].(map[string]any)
-	obj, _ := values.(map[string]any)
-	names := make([]string, 0, len(props))
-	for name := range props {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		child, _ := props[name].(map[string]any)
-		domainFields(child, obj[name], path+"."+name, out)
-	}
-	if extra, ok := s["additionalProperties"].(map[string]any); ok {
-		if obj != nil {
-			for name, v := range obj {
-				if props[name] == nil {
-					domainFields(extra, v, path+"."+name, out)
-				}
-			}
-		} else {
-			domainFields(extra, nil, path+".*", out)
-		}
-	}
-	if item, ok := s["items"].(map[string]any); ok {
-		if list, ok := values.([]any); ok {
-			for i, e := range list {
-				domainFields(item, e, path+"["+strconv.Itoa(i)+"]", out)
-			}
-		} else if values == nil {
-			domainFields(item, nil, path+"[]", out)
-		}
-	}
-}
-
 // CheckConfig checks, when a workflow is saved, that its pickers
 // point at workspace collections/relationships and organization taxonomy.
 func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, path string) error {
-	var fields []domainField
-	domainFields(s, nil, path, &fields)
-	for _, f := range fields {
-		at := f.path + ".x-papergo: "
-		if f.kind == "terms" || f.kind == "keywords" {
+	for _, f := range pickers.Read(s, nil, path) {
+		at := f.Path + ".x-papergo: "
+		if f.Kind == "terms" || f.Kind == "keywords" {
 			if err := t.RequireScope(ctx, subject, "taxonomy.read"); err != nil {
 				return err
 			}
 		}
-		if id, _ := f.opts["collection_id"].(string); id != "" {
+		if id, _ := f.Options["collection_id"].(string); id != "" {
 			ok, err := t.DAL.Resources().Exists(ctx, resources.Filter{IDs: []string{id}, WorkspaceID: workspaceID, Kinds: []refs.ResourceKind{refs.KindList, refs.KindLibrary}, State: resources.Live})
 			if err != nil {
 				return err
@@ -686,7 +624,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 				return dms.Invalid(at + "collection_id must be a list or library of the workspace")
 			}
 		}
-		if id, _ := f.opts["relationship_type_id"].(string); id != "" {
+		if id, _ := f.Options["relationship_type_id"].(string); id != "" {
 			ok, err := t.DAL.Taxonomy().IsRelationshipType(ctx, id)
 			if err != nil {
 				return err
@@ -695,7 +633,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 				return dms.Invalid(at + "relationship_type_id must be an organization relationship type")
 			}
 		}
-		group, _ := f.opts["group_id"].(string)
+		group, _ := f.Options["group_id"].(string)
 		if group != "" {
 			ok, err := t.DAL.Taxonomy().GroupExists(ctx, group)
 			if err != nil {
@@ -705,7 +643,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 				return dms.Invalid(at + "group_id must be an organization term group")
 			}
 		}
-		set, _ := f.opts["term_set_id"].(string)
+		set, _ := f.Options["term_set_id"].(string)
 		if set != "" {
 			ok, err := t.DAL.Taxonomy().SetExists(ctx, set)
 			if err != nil {
@@ -715,7 +653,7 @@ func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID strin
 				return dms.Invalid(at + "term_set_id must be an organization term set")
 			}
 		}
-		if list, ok := f.opts["term_ids"].([]any); ok {
+		if list, ok := f.Options["term_ids"].([]any); ok {
 			for _, v := range list {
 				if err := checkTerm(ctx, t, group, set, nil, v.(string)); err != nil {
 					return dms.Invalid(at + err.Error())
@@ -759,36 +697,34 @@ func checkTerm(ctx context.Context, t *dms.Service, group, set string, allowed [
 // approval is decided), that every picked ID exists and is allowed for
 // subject, the person who submits the form.
 func CheckValues(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, values map[string]any, path string) error {
-	var fields []domainField
-	domainFields(s, values, path, &fields)
-	for _, f := range fields {
+	for _, f := range pickers.Read(s, values, path) {
 		seen := map[string]bool{}
-		for _, id := range f.ids {
+		for _, id := range f.IDs {
 			if seen[id] {
-				return dms.Invalid(f.path + " has duplicate selections")
+				return dms.Invalid(f.Path + " has duplicate selections")
 			}
 			seen[id] = true
 			if err := checkPick(ctx, t, subject, workspaceID, f, id); err != nil {
-				return dms.Invalid(fmt.Sprintf("%s: %v", f.path, err))
+				return dms.Invalid(fmt.Sprintf("%s: %v", f.Path, err))
 			}
 		}
 	}
 	return nil
 }
 
-func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string, f domainField, id string) error {
-	if f.kind == "terms" || f.kind == "keywords" {
+func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string, f pickers.Picker, id string) error {
+	if f.Kind == "terms" || f.Kind == "keywords" {
 		if err := t.RequireScope(ctx, subject, "taxonomy.read"); err != nil {
 			return err
 		}
 	}
-	switch f.kind {
+	switch f.Kind {
 	case "item", "relationship":
 		r, err := t.Authorize(ctx, subject, id, "read")
 		if err != nil || string(r.Kind) != "item" || r.WorkspaceID != workspaceID {
 			return fmt.Errorf("item %s is not a readable item of the workspace", id)
 		}
-		if c, _ := f.opts["collection_id"].(string); c != "" && (r.ContainerID == nil || *r.ContainerID != c) {
+		if c, _ := f.Options["collection_id"].(string); c != "" && (r.ContainerID == nil || *r.ContainerID != c) {
 			return fmt.Errorf("item %s is not in the allowed collection", id)
 		}
 	case "collection":
@@ -808,7 +744,7 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		if err != nil {
 			return err
 		}
-		if c, _ := f.opts["collection_id"].(string); c != "" {
+		if c, _ := f.Options["collection_id"].(string); c != "" {
 			collections = slices.DeleteFunc(collections, func(other string) bool { return other != c })
 		}
 		ok := len(collections) > 0
@@ -822,8 +758,8 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 			return fmt.Errorf("content type %s is not used in the allowed collections", id)
 		}
 	case "terms":
-		group, _ := f.opts["group_id"].(string)
-		if f.opts["select"] == "sets" {
+		group, _ := f.Options["group_id"].(string)
+		if f.Options["select"] == "sets" {
 			set, err := t.TermSet(ctx, subject, id)
 			if err != nil {
 				return err
@@ -833,8 +769,8 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 			}
 			return nil
 		}
-		set, _ := f.opts["term_set_id"].(string)
-		allowed, _ := f.opts["term_ids"].([]any)
+		set, _ := f.Options["term_set_id"].(string)
+		allowed, _ := f.Options["term_ids"].([]any)
 		return checkTerm(ctx, t, group, set, allowed, id)
 	case "keywords":
 		tm, err := t.DAL.Taxonomy().Term(ctx, id)
@@ -851,7 +787,7 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 			return fmt.Errorf("keyword %s is deprecated", id)
 		}
 	case "people":
-		access, _ := f.opts["access"].(string)
+		access, _ := f.Options["access"].(string)
 		if access == "" {
 			access = "read"
 		}

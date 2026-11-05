@@ -78,6 +78,8 @@ permissions, schemas, lookups, taxonomy values, view filters, smart folders,
 workflow configuration and app parameters, including UUID references embedded
 in expressions.
 Ordinary item text, person subjects and exact numeric values retain their values.
+An app's parameters are remapped only where its parameters form picks data, and
+its code is compiled again from its source; see [apps](apps.md#copying-a-workspace).
 
 Catalog content types are matched by key, which is unique in a catalog, and
 their fields by field key; list types are copied with their collections and

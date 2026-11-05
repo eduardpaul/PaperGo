@@ -313,7 +313,8 @@ Omit `workspace_id` to export the whole organization. The operation result conta
 referenced during that period and are then collected.
 
 A workspace package includes its shared schema, taxonomy and group dependencies,
-collections, templates, views, shared smart folders, workflows and permissions.
+collections, templates, views, shared smart folders, workflows, apps and
+permissions.
 With content enabled it also includes items, folders, retained revisions,
 publication snapshots, history and all file versions. It excludes unrelated
 workspaces, personal Home and personal smart folders, organization settings,

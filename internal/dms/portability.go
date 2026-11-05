@@ -585,6 +585,9 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	if err = validatePackageGroups(p); err != nil {
 		return result, err
 	}
+	if err = compilePackageApps(ctx, &p); err != nil {
+		return result, err
+	}
 	result.Objects = len(p.Objects)
 	// Use the actual core constraints for the plan and application. A savepoint
 	// rolls back a dry run, including identities, indexes and live notifications.

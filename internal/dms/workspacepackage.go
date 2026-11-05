@@ -553,6 +553,16 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 			if err = preserveWorkspaceValues(table, row, mapped, graph, ids); err != nil {
 				return p, warnings, err
 			}
+			if table == "apps" {
+				if mapped["parameters"], err = remapAppParameters(graph.appForms[sourceID], row["parameters"], ids); err != nil {
+					return p, warnings, err
+				}
+			}
+			if table == "app_versions" {
+				if err = remapPackageAppVersion(ctx, row, mapped, ids); err != nil {
+					return p, warnings, err
+				}
+			}
 			if table == "relationships" && mapped["directed"] != true && fmt.Sprint(mapped["source_id"]) > fmt.Sprint(mapped["target_id"]) {
 				mapped["source_id"], mapped["target_id"] = mapped["target_id"], mapped["source_id"]
 			}
@@ -784,7 +794,7 @@ func validateWorkspaceReferences(p corePackage) error {
 	for table, data := range p.Tables {
 		for _, row := range packageMaps(data) {
 			for column, value := range row {
-				if table == "integration_revision_data" && column == "data" {
+				if table == "integration_revision_data" && column == "data" || table == "apps" && column == "parameters" {
 					continue
 				}
 				if text, ok := value.(string); ok && (strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[")) {
@@ -804,10 +814,11 @@ func validateWorkspaceReferences(p corePackage) error {
 			}
 		}
 	}
-	return nil
+	return validateAppParameters(p, known)
 }
 
 type workspaceValueGraph struct {
+	appForms        map[string]map[string]any
 	fieldTypes      map[string]string
 	resourceSchemas map[string]string
 	revisions       map[string]map[string]any
@@ -836,7 +847,9 @@ func workspaceValueGraphFor(rows map[string][]map[string]any) (workspaceValueGra
 		}
 		graph.schemas[fmt.Sprint(row["id"])] = schema
 	}
-	return graph, nil
+	var err error
+	graph.appForms, err = packageAppForms(rows)
+	return graph, err
 }
 
 // The trigger index is derived from published definitions with automatic use on. Schedule
@@ -1020,7 +1033,14 @@ func validateWorkspaceValues(p corePackage) error {
 func workspaceRowReferences(table string, row map[string]any, graph workspaceValueGraph, visit func(string)) {
 	fieldTypes := graph.filterTypes(row["container_id"])
 	for column, value := range row {
-		if column == "external_id" {
+		if column == "external_id" || table == "app_versions" && (column == "bundle" || column == "bundle_hash") {
+			continue
+		}
+		if table == "app_versions" && column == "source" {
+			// UUIDs in an app's source are references, as in expressions.
+			for _, id := range packageUUID.FindAllString(fmt.Sprint(value), -1) {
+				visit(id)
+			}
 			continue
 		}
 		if column == "id" || strings.HasSuffix(column, "_id") || strings.HasSuffix(column, "_by") {
@@ -1036,6 +1056,10 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 		}
 		var node any
 		if json.Unmarshal([]byte(text), &node) != nil {
+			continue
+		}
+		if table == "apps" && column == "parameters" {
+			appParameterIDs(graph.appForms[fmt.Sprint(row["id"])], node, func(_, _, id string) { visit(id) })
 			continue
 		}
 		if (column == "values" && table == "resources") || (column == "payload" && (table == "item_revisions" || table == "item_surfaces")) || (column == "snapshot" && table == "publications") {

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/directory"
 	"papergo/internal/dal/revisions"
@@ -154,21 +153,8 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// An app's parameters name a list, and it keeps every version.
-	dashboard, err := s.DAL.Apps().Create(ctx, appstore.CreateInput{WorkspaceID: ws.ID, Key: "dashboard", Name: "Dashboard", State: appstore.StatePublished, CreatedBy: "alice", Parameters: map[string]any{"list": invoices.ID, "days": json.Number("30")},
-		Content: appstore.Content{Source: "export default 1", Bundle: "bundle 1", BundleHash: strings.Repeat("1", 64), ParametersSchema: json.RawMessage(`{"type":"object"}`)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err = s.DAL.Apps().Revise(ctx, dashboard.ID, dashboard.Version, "alice", &appstore.Content{Source: "export default 2", Bundle: "bundle 2", BundleHash: strings.Repeat("2", 64), ParametersSchema: json.RawMessage(`{"type":"object"}`)}, appstore.Changes{}); err != nil {
-		t.Fatal(err)
-	}
 	other := create(t, s, "", "workspace", "Unrelated secret", nil)
 	create(t, s, other.ID, "list", "Unrelated records", nil)
-	if _, err = s.DAL.Apps().Create(ctx, appstore.CreateInput{WorkspaceID: other.ID, Key: "secret", Name: "Unrelated secret app", CreatedBy: "alice",
-		Content: appstore.Content{Source: "export default 1", Bundle: "bundle", BundleHash: strings.Repeat("3", 64), ParametersSchema: json.RawMessage(`{}`)}}); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = s.CreateCatalogField(ctx, "alice", CreateField{Key: "unused", Label: "Unrelated secret field", Type: "text"}); err != nil {
 		t.Fatal(err)
 	}
@@ -262,21 +248,6 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 			scheduled, err := target.DAL.Workflows().Triggers(ctx, workflows.TriggerFilter{WorkflowID: copiedFlow.ID, Type: "schedule"})
 			if err != nil || len(scheduled) != 1 || scheduled[0].NextAt == nil || !scheduled[0].NextAt.After(time.Now().UTC()) {
 				t.Fatal("schedule cursor not rebuilt", scheduled, err)
-			}
-			apps, err := target.DAL.Apps().List(ctx, appstore.Filter{WorkspaceIDs: []string{result.WorkspaceID}})
-			if err != nil || len(apps) != 1 {
-				t.Fatal("apps not copied", apps, err)
-			}
-			copiedApp := apps[0]
-			if copiedApp.ID == dashboard.ID || copiedApp.Key != "dashboard" || copiedApp.State != appstore.StatePublished || copiedApp.CurrentVersion != 2 || copiedApp.CreatedBy != "alice" {
-				t.Fatal("app not copied", copiedApp)
-			}
-			if copiedApp.Parameters["list"] != copiedInvoices || fmt.Sprint(copiedApp.Parameters["days"]) != "30" {
-				t.Fatal("app parameters not remapped", copiedApp.Parameters)
-			}
-			appVersions, err := target.DAL.Apps().Versions(ctx, copiedApp.ID)
-			if err != nil || len(appVersions) != 2 || appVersions[0].Number != 2 || appVersions[0].Source != "export default 2" || appVersions[0].Bundle != "bundle 2" || appVersions[1].Source != "export default 1" {
-				t.Fatal("app versions not copied", appVersions, err)
 			}
 			count, err := countResources(target, resources.Filter{WorkspaceID: result.WorkspaceID, Kinds: []refs.ResourceKind{refs.KindItem}})
 			if err != nil || (include && count != 3) || (!include && count != 0) {
@@ -386,31 +357,6 @@ func TestWorkspacePackageRejectsOutsideDependenciesAndPersonalHome(t *testing.T)
 	}
 	if _, err = s.StartExport(ctx, "organization-admin", ExportOptions{WorkspaceID: home.WorkspaceID}); err == nil {
 		t.Fatal("personal Home exported as shared workspace")
-	}
-}
-
-// An app whose parameters name another workspace's list would point at an
-// unrelated list after import, so the export refuses it.
-func TestWorkspacePackageRejectsAppParametersOutside(t *testing.T) {
-	s, ws, _ := fixture(t)
-	ctx := t.Context()
-	store, err := storage.NewLocal(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	remote := create(t, s, "", "workspace", "Remote", nil)
-	external := create(t, s, remote.ID, "list", "External catalog", nil)
-	if _, err = s.DAL.Apps().Create(ctx, appstore.CreateInput{WorkspaceID: ws.ID, Key: "outside", Name: "Outside", CreatedBy: "alice", Parameters: map[string]any{"list": external.ID},
-		Content: appstore.Content{Source: "export default 1", Bundle: "bundle", BundleHash: strings.Repeat("1", 64), ParametersSchema: json.RawMessage(`{}`)}}); err != nil {
-		t.Fatal(err)
-	}
-	include := false
-	err = s.Write(ctx, func(tx *Service) error {
-		_, err := tx.exportCorePackage(ctx, store, ExportOptions{WorkspaceID: ws.ID, IncludeData: &include})
-		return err
-	})
-	if err == nil || !strings.Contains(err.Error(), "excluded resource External catalog") {
-		t.Fatal("outside app parameter accepted", err)
 	}
 }
 

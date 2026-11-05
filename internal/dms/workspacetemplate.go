@@ -59,6 +59,9 @@ func (s *Service) bindWorkspaceTemplate(ctx context.Context, p *corePackage, sub
 		}
 		p.Tables[table] = data
 	}
+	if err = bindAppPeople(p, source, subject); err != nil {
+		return err
+	}
 	p.TemplateSubject = ""
 	return validateWorkspacePackage(*p)
 }

@@ -113,7 +113,10 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 
 ## Copying a workspace
 
-A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, state and parameters, and every version with its source, compiled code and parameters form. The lists, content types and items the parameters name become those of the copy. A parameter that names a list or item outside the workspace, or an item a configuration-only package leaves out, fails the export with the name of what it references.
+A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, state and parameters, and every version with its source.
+- **Parameters.** The values of the parameters form's pickers are references: the lists, items, content types and terms they select become those of the copy, and people keep their accounts. Other values are the app's own and travel as they are, even when they hold an ID.
+- **Outside references.** A picker that selects a list or item outside the workspace, or an item a configuration-only package leaves out, fails the export with the name of what it selects. An import refuses a package whose pickers select anything it does not carry.
+- **Code.** Importing compiles every version again from its source, so an app never runs code that came in the package. IDs of the copied workspace in a source, such as a picker limited to one list, become the copy's before it is compiled. A source that no longer compiles fails the import.
 
 ## API
 

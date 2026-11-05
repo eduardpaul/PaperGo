@@ -102,26 +102,34 @@ func importSampleHTTP(t *testing.T, handler http.Handler, s *dms.Service, subjec
 	return result
 }
 
-// sampleWorkflowSource reads a sample workflow: its settings, with the
-// placeholders of its parameters bound, and the script they name.
-func sampleWorkflowSource(t *testing.T, file string, bindings ...string) workflow.Save {
+// readSample reads a sample's settings file into settings, with the
+// placeholders of its parameters bound, and returns the source file that
+// script names, beside it.
+func readSample(t *testing.T, file string, settings any, script func() string, bindings ...string) string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("../../samples", file))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), settings); err != nil {
+		t.Fatal(file, err)
+	}
+	source, err := os.ReadFile(filepath.Join("../../samples", filepath.Dir(file), script()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(source)
+}
+
+// sampleWorkflowSource reads a sample workflow: its settings, with the
+// placeholders of its parameters bound, and the script they name.
+func sampleWorkflowSource(t *testing.T, file string, bindings ...string) workflow.Save {
+	t.Helper()
 	var sample struct {
 		workflow.Save
 		Script string `json:"script"`
 	}
-	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), &sample); err != nil {
-		t.Fatal(err)
-	}
-	source, err := os.ReadFile(filepath.Join("../../samples", filepath.Dir(file), sample.Script))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sample.Save.Source = string(source)
+	sample.Save.Source = readSample(t, file, &sample, func() string { return sample.Script }, bindings...)
 	return sample.Save
 }
 
@@ -170,16 +178,8 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 			}
 		}
 	case "Diesel levels", "Diesel measuring reminder", "Diesel refill", "Load diesel sample data":
-		types := map[string]string{}
-		listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Diesel"])
-		if err != nil || len(listTypes) != 4 {
-			t.Fatal(listTypes, err)
-		}
-		for _, lt := range listTypes {
-			types[lt.Key] = *lt.ParentID
-		}
 		file := map[string]string{"Diesel levels": "diesel/diesel-levels.json", "Diesel measuring reminder": "diesel/diesel-measure-reminder.json", "Diesel refill": "diesel/diesel-refill.json", "Load diesel sample data": "diesel/diesel-sample-data.json"}[w.Name]
-		source = sampleWorkflowSource(t, file, dieselBindings(ids["Diesel"], types)...)
+		source = sampleWorkflowSource(t, file, dieselBindings(ids["Diesel"], dieselTypes(t, s, ids["Diesel"]))...)
 	case "Index receipts":
 		source = sampleWorkflowSource(t, "workflows/index-receipts.json", "$LIBRARY", ids["Receipt summaries"])
 	case "Index contracts":
@@ -216,32 +216,39 @@ type SampleApp struct {
 
 // SaveSampleApp creates a sample's app in a workspace as
 // organization-admin, or with an id replaces that app at version, through
-// the apps service, which compiles it and checks its parameters. The apps
-// module imports this package, so its test in package httpapi_test sets it.
-var SaveSampleApp func(t *testing.T, s *dms.Service, workspace, id string, version int, app SampleApp)
+// the apps service, which compiles it and checks its parameters. It returns
+// the parameters the service keeps, defaults filled in. The apps module
+// imports this package, so its test in package httpapi_test sets it.
+var SaveSampleApp func(t *testing.T, s *dms.Service, workspace, id string, version int, app SampleApp) map[string]any
 
 // sampleAppSource reads a sample app's settings and the source they name.
 func sampleAppSource(t *testing.T, file string, bindings ...string) SampleApp {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("../../samples", file))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var sample SampleApp
-	if err := json.Unmarshal([]byte(strings.NewReplacer(bindings...).Replace(string(raw))), &sample); err != nil {
-		t.Fatal(err)
-	}
-	source, err := os.ReadFile(filepath.Join("../../samples", filepath.Dir(file), sample.Source))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sample.Source = string(source)
+	sample.Source = readSample(t, file, &sample, func() string { return sample.Source }, bindings...)
 	return sample
 }
 
+// dieselTypes returns the catalog types the Diesel list accepts, by key.
+func dieselTypes(t *testing.T, s *dms.Service, list string) map[string]string {
+	t.Helper()
+	listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", list)
+	if err != nil || len(listTypes) != 4 {
+		t.Fatal("the Diesel list's types", listTypes, err)
+	}
+	types := map[string]string{}
+	for _, lt := range listTypes {
+		if lt.ParentID == nil {
+			t.Fatal("the Diesel list's type has no catalog type", lt.Key)
+		}
+		types[lt.Key] = *lt.ParentID
+	}
+	return types
+}
+
 // checkImportedSampleApps checks that an imported sample carries its apps
-// as their sources say, with their parameters bound to the copy, and that
-// each can be saved again as the importer.
+// as their settings and sources say, with exactly their parameters bound to
+// the copy, and code that saving the same source again keeps.
 func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, files []string) {
 	t.Helper()
 	apps, err := s.DAL.Apps().List(t.Context(), appstore.Filter{WorkspaceIDs: []string{workspace}})
@@ -255,33 +262,37 @@ func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, fil
 	if err != nil {
 		t.Fatal(err)
 	}
-	listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", diesel.ID)
-	if err != nil {
-		t.Fatal(err)
+	bindings := dieselBindings(diesel.ID, dieselTypes(t, s, diesel.ID))
+	byKey := map[string]appstore.App{}
+	for _, a := range apps {
+		byKey[a.Key] = a
 	}
-	types := map[string]string{}
-	for _, lt := range listTypes {
-		types[lt.Key] = *lt.ParentID
-	}
-	for i, a := range apps {
-		want := sampleAppSource(t, files[i], dieselBindings(diesel.ID, types)...)
+	for _, file := range files {
+		want := sampleAppSource(t, file, bindings...)
+		a, ok := byKey[want.Key]
+		if !ok {
+			t.Fatal("sample app missing; rebuild the sample packages", want.Key)
+		}
 		version, err := s.DAL.Apps().Version(t.Context(), a.ID, int64(a.CurrentVersion))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if a.Key != want.Key || a.Name != want.Name || a.Description != want.Description || a.State != want.State || version.Source != want.Source || version.Bundle == "" {
-			t.Fatal("sample ZIP differs from its app source; rebuild the sample packages", a.Name)
-		}
-		for key, value := range want.Parameters {
-			if !bytes.Equal(mustJSON(t, a.Parameters[key]), mustJSON(t, value)) {
-				t.Fatal("sample app parameter not bound to the copy", key, a.Parameters[key], value)
-			}
+		if a.Name != want.Name || a.Description != want.Description || a.State != want.State || version.Source != want.Source {
+			t.Fatal("sample ZIP differs from its app source; rebuild the sample packages", a.Key)
 		}
 		if a.CreatedBy != "organization-admin" || a.UpdatedBy != "organization-admin" || version.CreatedBy != "organization-admin" {
 			t.Fatal("template retained the app's source author", a, version.CreatedBy)
 		}
-		want.Parameters = a.Parameters
-		SaveSampleApp(t, s, workspace, a.ID, a.Version, want)
+		// Saving the sample's own settings as the importer keeps the app as
+		// imported: the same parameters, none more, and the same code.
+		saved := SaveSampleApp(t, s, workspace, a.ID, a.Version, want)
+		if !bytes.Equal(mustJSON(t, saved), mustJSON(t, a.Parameters)) {
+			t.Fatal("imported app parameters differ from the sample's", string(mustJSON(t, a.Parameters)), string(mustJSON(t, saved)))
+		}
+		again, err := s.DAL.Apps().Find(t.Context(), a.ID)
+		if err != nil || again.CurrentVersion != a.CurrentVersion {
+			t.Fatal("imported app code is not its source's", again.CurrentVersion, err)
+		}
 	}
 }
 

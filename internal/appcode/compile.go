@@ -1,8 +1,8 @@
-// Package apps is the apps feature: React screens that belong to a
-// workspace, written as one TSX file the server compiles, with parameters
-// chosen through a form and immutable versions. An app runs in a sandboxed
-// frame of the web app and acts as the person viewing it.
-package apps
+// Package appcode compiles an app's TSX source into the code its runtime
+// runs, and reads the parameters form the code declares. Saving an app and
+// importing a workspace package both compile through it, so stored code
+// always comes from its stored source.
+package appcode
 
 import (
 	"context"
