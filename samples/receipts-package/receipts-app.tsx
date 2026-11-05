@@ -25,6 +25,7 @@ import {
   useApp,
   useNarrow,
   useQuery,
+  type Format,
   type Item,
 } from "@papergo/app";
 
@@ -56,18 +57,20 @@ const words = {
     statusNew: "Reading", statusRead: "Read", statusReview: "Needs review",
     month: "This month", year: "This year", ever: "All time", spent: "Spent", receiptsCount: "{n} receipts", oneReceipt: "1 receipt", alsoIn: "Also {amounts}",
     byCategory: "Spending by category", category: "Category", share: "{p} %", nothingSpent: "Nothing read in this period yet",
+    noReceipts: "No receipts yet", fileName: "Receipt",
     categories: {} as Record<string, string>,
   },
   es: {
     take: "Hacer una foto", choose: "Elegir fotos", uploads: "Subidas", latest: "Últimos tiques",
-    optimizing: "Optimizando…", uploading: "Subiendo…", uploaded: "Subido, esperando a leerse", failed: "Error: {reason}", unreadable: "Esta foto no se puede abrir aquí; hazla otra vez o elige un JPEG",
+    optimizing: "Optimizando…", uploading: "Subiendo…", uploaded: "Subido, pendiente de lectura", failed: "Error: {reason}", unreadable: "No se puede abrir esta foto aquí; hazla de nuevo o elige un JPEG",
     shrunk: "{before} → {after}", waiting: "Por leer", read: "Leídos", review: "Por revisar", reviewHint: "El modelo no pudo leerlos. Abre uno para corregirlo, o haz una foto mejor.",
-    batchHint: "Los tiques se leen por lotes: sus líneas pueden tardar hasta el lote de la noche.",
+    batchHint: "Los tiques se leen por lotes: sus líneas pueden tardar hasta el lote nocturno.",
     receipt: "Tique", date: "Fecha", total: "Total", status: "Estado", lines: "Líneas", description: "Descripción", quantity: "Cant.", unitPrice: "Precio", amount: "Importe",
-    open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y sus tipos Receipt y Receipt line en Ajustes del espacio → Apps.",
+    open: "Abrir en PaperGo", close: "Cerrar", noLines: "Aún sin líneas", all: "Todos los tiques", setUp: "Elige la biblioteca Receipts y sus tipos Receipt y Receipt line en Configuración del espacio de trabajo → Aplicaciones.",
     statusNew: "Leyendo", statusRead: "Leído", statusReview: "Por revisar",
     month: "Este mes", year: "Este año", ever: "Siempre", spent: "Gastado", receiptsCount: "{n} tiques", oneReceipt: "1 tique", alsoIn: "Además {amounts}",
     byCategory: "Gasto por categoría", category: "Categoría", share: "{p} %", nothingSpent: "Aún no hay nada leído en este periodo",
+    noReceipts: "Aún no hay tiques", fileName: "Tique",
     categories: {
       "Fruit and vegetables": "Fruta y verdura", "Meat and fish": "Carne y pescado", "Dairy and eggs": "Lácteos y huevos", Bakery: "Panadería",
       Pantry: "Despensa", Frozen: "Congelados", Drinks: "Bebidas", "Snacks and sweets": "Aperitivos y dulces", Household: "Hogar",
@@ -89,8 +92,9 @@ function since(period: Period, now = new Date()): string | undefined {
   return undefined;
 }
 
-function size(bytes: number): string {
-  return bytes < 1 << 20 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1 << 20)).toFixed(1)} MB`;
+// size is a file size in the viewer's number format: 340 KB, 1,7 MB.
+function size(f: Format, bytes: number): string {
+  return bytes < 1 << 20 ? `${f.number(Math.max(1, Math.round(bytes / 1024)), 0)} KB` : `${f.number(bytes / (1 << 20), 1)} MB`;
 }
 
 // optimize turns a photo upright and shrinks it to the photo the model
@@ -132,13 +136,14 @@ async function multipart(name: string, photo: Blob): Promise<{ body: ArrayBuffer
 }
 
 // receiptName names a receipt after when it was taken, in the viewer's
-// clock, as a file: Receipt 2026-11-05 14.32.10.jpg. The workflow gives it
-// the PDF's extension once it keeps it as one.
-function receiptName(at: Date, copy: number): string {
+// clock and language, as a file: Receipt 2026-11-05 14.32.10.jpg, or
+// Tique … in Spanish. The workflow gives it the PDF's extension once it
+// keeps it as one.
+function receiptName(prefix: string, at: Date, copy: number): string {
   const two = (n: number) => String(n).padStart(2, "0");
   const day = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
   const time = `${two(at.getHours())}.${two(at.getMinutes())}.${two(at.getSeconds())}`;
-  return `Receipt ${day} ${time}${copy > 1 ? ` (${copy})` : ""}.jpg`;
+  return `${prefix} ${day} ${time}${copy > 1 ? ` (${copy})` : ""}.jpg`;
 }
 
 interface Upload {
@@ -214,7 +219,7 @@ function Desk({ w }: { w: Words }) {
     const at = new Date();
     // Two photos taken in the same second get numbered names.
     for (let copy = 1; ; copy++) {
-      const name = receiptName(at, copy);
+      const name = receiptName(w.fileName, at, copy);
       const { body, type } = await multipart(name, photo);
       try {
         const created = await ctx.request<{ item: { id: string } }>("POST", `/v1/resources/${p.library}/documents`, { body, headers: { "content-type": type } });
@@ -267,7 +272,7 @@ function Desk({ w }: { w: Words }) {
               itemId: u.itemId,
               name: u.name,
               state: u.state === "failed" ? say(w.failed, { reason: u.error ?? "" }) : { optimizing: w.optimizing, uploading: w.uploading, uploaded: w.uploaded }[u.state],
-              size: u.after === undefined ? size(u.before) : say(w.shrunk, { before: size(u.before), after: size(u.after) }),
+              size: u.after === undefined ? size(f, u.before) : say(w.shrunk, { before: size(f, u.before), after: size(f, u.after) }),
             }))}
             onRowClick={(row) => row.itemId && ctx.open({ itemId: String(row.itemId) })}
           />
@@ -328,6 +333,7 @@ function Desk({ w }: { w: Words }) {
         <Table
           columns={[{ key: "receipt", label: w.receipt }, { key: "date", label: w.date, optional: true }, { key: "total", label: w.total, align: "right" }, { key: "status", label: w.status }]}
           rows={rows}
+          empty={w.noReceipts}
           onRowClick={(row) => setOpened(latest.data.find((r) => r.id === row.id))}
         />
       </Card>
