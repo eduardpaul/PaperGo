@@ -89,13 +89,14 @@ async function optimize(file: File): Promise<Blob> {
 }
 
 // multipart is the body of a document upload: the item's metadata and the
-// photo. The app sends bytes, not a form, through its request bridge.
+// photo, both under the receipt's name. The app sends bytes, not a form,
+// through its request bridge.
 async function multipart(name: string, photo: Blob): Promise<{ body: ArrayBuffer; type: string }> {
   const boundary = `papergo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const text = new TextEncoder();
   const head = text.encode(
     `--${boundary}\r\nContent-Disposition: form-data; name="metadata"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name })}\r\n` +
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="receipt.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: image/jpeg\r\n\r\n`,
   );
   const tail = text.encode(`\r\n--${boundary}--\r\n`);
   const bytes = new Uint8Array(await photo.arrayBuffer());
@@ -214,7 +215,8 @@ function Desk({ w }: { w: Words }) {
       {uploads.length > 0 && (
         <Card title={w.uploads}>
           <Table
-            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status }, { key: "size", label: "", align: "right", optional: true }]}
+            // The size it was shrunk to shows below the state, on a phone too.
+            columns={[{ key: "name", label: w.receipt }, { key: "state", label: w.status, render: (row) => <>{row.state}<div className="pg-stat-hint">{row.size}</div></> }]}
             rows={uploads.map((u) => ({
               id: u.key,
               itemId: u.itemId,
