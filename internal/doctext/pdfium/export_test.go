@@ -40,7 +40,8 @@ func Loaded(r *Reader) bool {
 	}
 }
 
-// UnloadAfter makes readers unload PDFium after d idle, until the test ends.
+// UnloadAfter makes readers made from now on unload PDFium after d idle, until
+// the test ends.
 func UnloadAfter(t testing.TB, d time.Duration) {
 	before := idleUnload
 	idleUnload = d

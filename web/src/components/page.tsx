@@ -37,7 +37,7 @@ export function PageHeader({
           {description && <p className="mt-0.5 text-[13px] text-muted">{description}</p>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       {children}
     </header>
   );

@@ -1,12 +1,16 @@
 // The app runtime's formats read and write numbers and dates in the
-// viewer's preferences, and its context sends requests through the bridge,
-// the generated client's included, and reads their answers.
+// viewer's preferences, its kit speaks the viewer's language, and its
+// context sends requests through the bridge, the generated client's
+// included, and reads their answers.
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server.browser";
 
 import { Bridge, type AppMessage, type PageMessage } from "../../src/app/bridge.js";
-import { appContext, RequestError, type Init } from "../../src/app/context.js";
+import { appContext, RequestError, RuntimeContext, type Init } from "../../src/app/context.js";
 import { formatter, wallClock } from "../../src/app/format.js";
 import { aggregateRequest, cannotMatch, concerns, queryRequest, readPages } from "../../src/app/hooks.js";
-import { flipSign, ticks } from "../../src/app/kit.js";
+import { BarChart, flipSign, kitWords, Modal, NumberField, Table, ticks } from "../../src/app/kit.js";
 import { json } from "../../src/values.js";
 
 declare const process: { exit(code: number): never };
@@ -188,5 +192,29 @@ expect("an item of the list the page had not seen", of({ id: "a", collectionId: 
 expect("a new item of another type", of({ id: "a", collectionId: "l1", contentTypeId: "reading", created: true }), false);
 expect("an item removed from another list", of({ id: "a", collectionId: "l2", removed: true }), false);
 
+// The kit's own words follow the viewer's language: Spanish for any es
+// language, English otherwise and outside an app.
+expect("Spanish words", kitWords("es-MX").close, "Cerrar");
+expect("English words", [kitWords("en").close, kitWords("fr").empty, kitWords(undefined).noData], ["Close", "Nothing yet", "No data yet"]);
+const kit = (language: string) => {
+  const viewer = appContext<{ list: string }>({ ...init, user: { ...init.user, preferences: { ...init.user.preferences, language } } }, bridge);
+  return renderToStaticMarkup(
+    createElement(RuntimeContext.Provider, { value: { ctx: viewer, bridge } as never }, [
+      createElement(Modal, { key: "m", open: true, title: "Lines", onClose: () => {} }),
+      createElement(Table, { key: "t", columns: [], rows: [] }),
+      createElement(Table, { key: "own", columns: [], rows: [], empty: "No receipts" }),
+      createElement(BarChart, { key: "b", data: [] }),
+      createElement(NumberField, { key: "n", label: "Outdoor", value: "3", onChange: () => {}, signed: true }),
+    ]),
+  );
+};
+const spanish = kit("es");
+for (const said of ['aria-label="Cerrar"', "Aún no hay nada", "No receipts", "Aún no hay datos", 'aria-label="Cambiar el signo"']) expect(`Spanish kit says ${said}`, spanish.includes(said), true);
+const english = kit("en");
+for (const said of ['aria-label="Close"', "Nothing yet", "No data yet", 'aria-label="Change the sign"']) expect(`English kit says ${said}`, english.includes(said), true);
+expect("no English in the Spanish kit", /Close|Nothing yet|No data yet/.test(spanish), false);
+
 if (failed) process.exit(1);
-console.log("the app runtime reads formats and sends requests through the page");
+console.log("the app runtime reads formats, speaks the viewer's language and sends requests through the page");
+// React's renderer keeps a message channel open; the test is done.
+process.exit(0);

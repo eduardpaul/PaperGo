@@ -76,6 +76,9 @@ type Reader struct {
 	starts int
 	users  int
 	idle   *time.Timer
+	// unloadAfter is idleUnload when the reader was made: it is read while
+	// unloading, in the background, so it never changes.
+	unloadAfter time.Duration
 	// slots holds one entry per open PDF, up to maxOpen; waiting counts
 	// the opens waiting for one.
 	slots   chan struct{}
@@ -110,13 +113,16 @@ func (s *start) unloads() bool {
 // one tries again, so a lasting failure does not compile on every request.
 var retryAfter = time.Minute
 
-// idleUnload is how long PDFium stays loaded after its last PDF closes.
+// idleUnload is how long PDFium stays loaded after its last PDF closes, for
+// readers made from now on.
 var idleUnload = time.Minute
 
 // newPool starts PDFium's pool; tests replace it.
 var newPool = startPool
 
-func New(o Options) *Reader { return &Reader{o: o, slots: make(chan struct{}, maxOpen)} }
+func New(o Options) *Reader {
+	return &Reader{o: o, unloadAfter: idleUnload, slots: make(chan struct{}, maxOpen)}
+}
 
 func (*Reader) Name() string { return "pdfium-8111-wasm" }
 
@@ -216,7 +222,7 @@ func (r *Reader) unloadLater(s *start) {
 	if r.idle != nil {
 		r.idle.Stop()
 	}
-	r.idle = time.AfterFunc(idleUnload, func() {
+	r.idle = time.AfterFunc(r.unloadAfter, func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		if r.run == s && r.users == 0 {

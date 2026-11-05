@@ -1,11 +1,11 @@
 package aiops
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -20,8 +20,8 @@ import (
 // queue, by its admission policy. A group is sent as one provider batch,
 // whose members park until Poll finds the batch finished and ends them
 // with its answers. A request the provider failed returns to the queue and
-// is sent again, within its attempts; a request whose answer does not
-// match its schema fails.
+// is sent again, within its attempts; a request the model refused or could
+// not finish, or whose answer does not match its schema, fails.
 
 const (
 	flightNamespace = "ai.batch.flight"
@@ -29,8 +29,6 @@ const (
 	// unconfirmed is how long a submission the provider never confirmed is
 	// looked for before its members are sent again.
 	unconfirmed = time.Hour
-	// maxBatchBytes bounds a provider batch's input file.
-	maxBatchBytes = 100 << 20
 )
 
 // Flight states.
@@ -105,11 +103,11 @@ func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operation
 	if err := putFlight(ctx, records, tag, f); err != nil {
 		return err
 	}
-	lines, err := a.jsonl(ctx, keys, requests)
+	batchRequests, err := a.batchRequests(ctx, keys, requests)
 	if err != nil {
 		return a.abandon(ctx, tag, err)
 	}
-	fileID, err := a.Batch.Upload(ctx, lines)
+	input, err := a.Batch.Prepare(ctx, batchRequests)
 	if err != nil {
 		return a.abandon(ctx, tag, dms.Retry(err, pollEvery))
 	}
@@ -125,7 +123,7 @@ func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operation
 	}); err != nil {
 		return err
 	}
-	f.BatchID, err = a.Batch.Create(ctx, fileID, tag)
+	f.BatchID, err = a.Batch.Create(ctx, input, tag)
 	switch {
 	case errors.Is(err, ai.ErrUncertain):
 		return nil
@@ -154,8 +152,10 @@ func submissionTag(b ai.Batcher, ops []*operations.Operation) string {
 	return ai.CacheKey(b.Connection(), append([]string{b.Key()}, parts...)...)
 }
 
-func (a *Assistant) jsonl(ctx context.Context, keys []string, requests map[string]completion) ([]byte, error) {
-	var buf bytes.Buffer
+// batchRequests are the completions of a batch, by request key, with
+// their input text and images read.
+func (a *Assistant) batchRequests(ctx context.Context, keys []string, requests map[string]completion) ([]ai.BatchRequest, error) {
+	out := make([]ai.BatchRequest, 0, len(keys))
 	for _, key := range keys {
 		c := requests[key]
 		input, err := a.input(ctx, c)
@@ -166,20 +166,9 @@ func (a *Assistant) jsonl(ctx context.Context, keys []string, requests map[strin
 		if err != nil {
 			return nil, err
 		}
-		line, err := json.Marshal(map[string]any{
-			"custom_id": key, "method": "POST", "url": "/v1/chat/completions",
-			"body": ai.CompletionBody(c.Model, ai.Completion{Instructions: c.Prompt, Input: input, Schema: c.Schema, Images: images}),
-		})
-		if err != nil {
-			return nil, err
-		}
-		if buf.Len()+len(line)+1 > maxBatchBytes {
-			return nil, errors.New("the batch input exceeds 100 MiB; lower the worker's batch size")
-		}
-		buf.Write(line)
-		buf.WriteByte('\n')
+		out = append(out, ai.BatchRequest{Key: key, Completion: ai.Completion{Instructions: c.Prompt, Input: input, Schema: c.Schema, Images: images}})
 	}
-	return buf.Bytes(), nil
+	return out, nil
 }
 
 func putFlight(ctx context.Context, records *activitystore.Store, tag string, f flight) error {
@@ -238,7 +227,16 @@ func (a *Assistant) Poll(ctx context.Context, now time.Time) error {
 
 func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Time) error {
 	if f.Status == flightUncertain {
-		id, found, err := a.Batch.FindByTag(ctx, tag)
+		keys, err := a.memberKeys(ctx, f)
+		if err != nil {
+			return err
+		}
+		id, found, err := a.Batch.Find(ctx, ai.BatchSubmission{Tag: tag, Keys: keys, Since: f.Since})
+		if errors.Is(err, ai.ErrUndetermined) {
+			// A batch that could be this one is still running.
+			f.NextPoll = now.Add(pollEvery)
+			return putFlight(ctx, a.Records, tag, f)
+		}
 		if err != nil {
 			return err
 		}
@@ -252,7 +250,7 @@ func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Tim
 		f.Status, f.BatchID = flightSubmitted, id
 	}
 	batch, err := a.Batch.Get(ctx, f.BatchID)
-	if err != nil || !batch.Terminal() {
+	if err != nil || !batch.Ended {
 		f.NextPoll = now.Add(pollEvery)
 		return errors.Join(err, putFlight(ctx, a.Records, tag, f))
 	}
@@ -290,7 +288,7 @@ func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Tim
 		status, message := operations.StatusSucceeded, ""
 		var result json.RawMessage
 		switch {
-		case !ok || l.err != nil && !errors.Is(l.err, errSchema):
+		case !ok || l.err != nil && !errors.Is(l.err, errSchema) && !errors.Is(l.err, ai.ErrNoAnswer):
 			retry = append(retry, id)
 			continue
 		case l.err != nil:
@@ -322,6 +320,28 @@ func (a *Assistant) release(ctx context.Context, tag string, f flight, ids []str
 	})
 }
 
+// memberKeys are the request keys of a flight's members, as its batch
+// holds them: one for requests that share a key.
+func (a *Assistant) memberKeys(ctx context.Context, f flight) ([]string, error) {
+	var keys []string
+	for _, id := range f.Members {
+		op, err := a.member(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if op == nil {
+			continue
+		}
+		var c completion
+		if err = json.Unmarshal(op.Payload, &c); err != nil {
+			return nil, err
+		}
+		keys = append(keys, c.Key)
+	}
+	sort.Strings(keys)
+	return slices.Compact(keys), nil
+}
+
 // member returns a flight member, or nil when it is gone.
 func (a *Assistant) member(ctx context.Context, id string) (*operations.Operation, error) {
 	ops, err := a.svc.DAL.Operations().List(ctx, operations.Filter{IDs: []string{id}})
@@ -351,60 +371,31 @@ type line struct {
 // lines reads a finished batch's answers by request key, caching those
 // that match their request.
 func (a *Assistant) lines(ctx context.Context, batch ai.Batch, requests map[string]completion) (map[string]line, error) {
+	structured := map[string]bool{}
+	for key, c := range requests {
+		structured[key] = c.Schema != nil
+	}
+	results, err := a.Batch.Results(ctx, batch, structured)
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]line{}
-	for _, file := range []string{batch.OutputFileID, batch.ErrorFileID} {
-		if file == "" {
+	for _, r := range results {
+		c, ok := requests[r.Key]
+		if !ok {
 			continue
 		}
-		raw, err := a.Batch.Download(ctx, file)
-		if err != nil {
-			return nil, err
+		if prev, ok := out[r.Key]; ok && prev.err == nil {
+			continue
 		}
-		for _, row := range bytes.Split(raw, []byte("\n")) {
-			key, l := a.parseLine(ctx, bytes.TrimSpace(row), requests)
-			if key == "" {
-				continue
-			}
-			if prev, ok := out[key]; ok && prev.err == nil {
-				continue
-			}
-			out[key] = l
+		if r.Err != nil {
+			out[r.Key] = line{err: r.Err}
+			continue
 		}
+		cached, err := a.acceptAnswer(ctx, c, r.Answer)
+		out[r.Key] = line{answer: cached, err: err}
 	}
 	return out, nil
-}
-
-func (a *Assistant) parseLine(ctx context.Context, row []byte, requests map[string]completion) (string, line) {
-	var parsed struct {
-		CustomID string `json:"custom_id"`
-		Response struct {
-			StatusCode int             `json:"status_code"`
-			Body       json.RawMessage `json:"body"`
-		} `json:"response"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if len(row) == 0 || json.Unmarshal(row, &parsed) != nil || parsed.CustomID == "" {
-		return "", line{}
-	}
-	if parsed.Response.StatusCode != 200 {
-		message := "the provider rejected the request"
-		if parsed.Error != nil && parsed.Error.Message != "" {
-			message = parsed.Error.Message
-		}
-		return parsed.CustomID, line{err: errors.New(shortText(message, 300))}
-	}
-	c, ok := requests[parsed.CustomID]
-	if !ok {
-		return "", line{}
-	}
-	answer, err := ai.ParseCompletion(parsed.Response.Body, c.Schema != nil)
-	if err != nil {
-		return parsed.CustomID, line{err: err}
-	}
-	cached, err := a.acceptAnswer(ctx, c, answer)
-	return parsed.CustomID, line{answer: cached, err: err}
 }
 
 // fail ends a claimed operation with message.

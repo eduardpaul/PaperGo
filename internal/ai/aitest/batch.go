@@ -80,6 +80,7 @@ func (s *BatchServer) RejectNextCreate() {
 // SetReceiptMode chooses the answer for a request whose schema has store and
 // lines. "" and "ok" return a receipt. "reject" returns an object the schema
 // refuses. "bad-amount" matches the schema with a line amount past scale 2.
+// "local-amounts" copies a Spanish fuel receipt's amounts as they are printed.
 // Other structured requests still return {"total":1.25}.
 func (s *BatchServer) SetReceiptMode(mode string) {
 	s.mu.Lock()
@@ -352,9 +353,11 @@ func (s *BatchServer) receiptTextLocked() string {
 	case "reject":
 		return `{"store":1}`
 	case "bad-amount":
-		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","quantity":"2","unit_price":"4.00","amount":"1.999"}]}`
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4.00","amount":"1.999"}]}`
+	case "local-amounts":
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"eur","total":"1.012,50 €","lines":[{"description":"Diesel","category":"Other","quantity":"40,120","unit_price":"1,459","amount":"58,53"},{"description":"Refund","category":"Other","quantity":"1","unit_price":"4,5","amount":"4,50-"}]}`
 	default:
-		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","quantity":"2","unit_price":"4.00","amount":"8.00"},{"description":"Bread","quantity":"1","unit_price":"4.50","amount":"4.50"}]}`
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4.00","amount":"8.00"},{"description":"Bread","category":"Bakery","quantity":"1","unit_price":"4.50","amount":"4.50"}]}`
 	}
 }
 

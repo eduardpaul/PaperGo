@@ -68,7 +68,7 @@ type receipts struct {
 	ai       *aiops.Assistant
 	batch    *aitest.BatchServer
 	library  string
-	lines    string
+	lineType string
 	workflow string
 }
 
@@ -96,7 +96,8 @@ func installReceipts(t *testing.T) *receipts {
 	}
 	wf := &workflow.Service{DMS: s}
 	api := &httpapi.API{DMS: s, Workflows: wf, Storage: blobs, Logger: log, Auth: auth.Development{Token: token, Subject: admin}, MaxUpload: 32 << 20,
-		Modules: []httpapi.Module{assistant.Module()}}
+		// Read receipts are kept as PDFs, which need OCR.
+		Modules: []httpapi.Module{assistant.Module(), files(s, blobs)}}
 	runs := &Runner{DMS: s, API: api, Log: log}
 	if err = runs.Register(s); err != nil {
 		t.Fatal(err)
@@ -152,19 +153,33 @@ func installReceipts(t *testing.T) *receipts {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range collections {
-		switch c.Name {
-		case "Receipts":
-			r.library = c.ID
-		case "Receipt lines":
-			r.lines = c.ID
+	// One library holds the receipts and their lines.
+	if len(collections) != 1 || collections[0].Name != "Receipts" {
+		t.Fatalf("collections: %+v", collections)
+	}
+	r.library = collections[0].ID
+	types, err := s.CollectionContentTypes(ctx, admin, r.library)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lt := range types {
+		if lt.Key == "receipt_line" {
+			r.lineType = *lt.ParentID
 		}
 	}
 	flows, err := wf.List(ctx, admin, result.WorkspaceID)
-	if err != nil || len(flows) != 1 || flows[0].Name != "Read receipts" || !flows[0].AutomaticEnabled {
+	if err != nil || len(flows) != 2 {
 		t.Fatalf("workflows: %+v %v", flows, err)
 	}
-	r.workflow = flows[0].ID
+	for _, flow := range flows {
+		// The desk finds the workflow by this key.
+		if flow.Key == "read-receipts" && flow.AutomaticEnabled {
+			r.workflow = flow.ID
+		}
+	}
+	if r.workflow == "" {
+		t.Fatalf("workflows: %+v", flows)
+	}
 	return r
 }
 
@@ -191,11 +206,17 @@ func (r *receipts) call(t *testing.T, method, path, contentType string, body []b
 // upload uploads a photo to the library and returns its item.
 func (r *receipts) upload(t *testing.T, name string, data []byte) string {
 	t.Helper()
+	return r.uploadFile(t, name, "image/png", data)
+}
+
+// uploadFile uploads a file of a media type to the library and returns its item.
+func (r *receipts) uploadFile(t *testing.T, name, mediaType string, data []byte) string {
+	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{"name": "file", "filename": name}))
-	header.Set("Content-Type", "image/png")
+	header.Set("Content-Type", mediaType)
 	part, err := writer.CreatePart(header)
 	if err != nil {
 		t.Fatal(err)
@@ -315,7 +336,11 @@ func (r *receipts) flush(t *testing.T) {
 }
 
 type receiptItem struct {
-	Name    string         `json:"name"`
+	Name string `json:"name"`
+	File struct {
+		ContentType string `json:"content_type"`
+		Filename    string `json:"filename"`
+	} `json:"file"`
 	Version int            `json:"version"`
 	Values  map[string]any `json:"values"`
 }
@@ -327,23 +352,45 @@ func (r *receipts) item(t *testing.T, id string) receiptItem {
 	return item
 }
 
-// lineValues returns the lines linked to a receipt, by description, as
-// quantity, unit price and amount.
-func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
+// links returns the links from a receipt to its lines.
+func (r *receipts) links(t *testing.T, id string) []receiptLink {
 	t.Helper()
 	q := url.Values{"direction": {"outgoing"}, "type": {"contains receipt line"}, "$top": {"50"}}
 	var page struct {
-		Value []struct {
-			Related struct {
-				Values map[string]any `json:"values"`
-			} `json:"related_item"`
-		} `json:"value"`
+		Value []receiptLink `json:"value"`
 	}
 	r.call(t, "GET", "/v1/items/"+id+"/relationships?"+q.Encode(), "", nil, 200, &page)
+	return page.Value
+}
+
+type receiptLink struct {
+	ID       string `json:"id"`
+	TargetID string `json:"target_id"`
+	Related  struct {
+		Name     string         `json:"name"`
+		ParentID string         `json:"parent_id"`
+		Values   map[string]any `json:"values"`
+	} `json:"related_item"`
+}
+
+// lineValues returns the lines linked to a receipt, by description, as
+// category, quantity, unit price, amount, and its receipt's currency and
+// date. Every line is in Receipt lines/<receipt ID>/ of the library.
+func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
+	t.Helper()
 	out := map[string]string{}
-	for _, link := range page.Value {
+	for _, link := range r.links(t, id) {
+		var folder, root struct {
+			Name     string `json:"name"`
+			ParentID string `json:"parent_id"`
+		}
+		r.call(t, "GET", "/v1/resources/"+link.Related.ParentID, "", nil, 200, &folder)
+		r.call(t, "GET", "/v1/resources/"+folder.ParentID, "", nil, 200, &root)
+		if folder.Name != id || root.Name != "Receipt lines" || root.ParentID != r.library {
+			t.Fatalf("line %q is in %q of %q", link.Related.Name, folder.Name, root.Name)
+		}
 		v := link.Related.Values
-		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v", v["quantity"], v["unit_price"], v["amount"])
+		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v %v %v %v", v["category"], v["quantity"], v["unit_price"], v["amount"], v["currency"], v["purchase_date"])
 	}
 	return out
 }
@@ -357,18 +404,51 @@ func (r *receipts) expectRead(t *testing.T, id string) {
 		}
 	}
 	lines := r.lineValues(t, id)
-	if len(lines) != 2 || lines["Plums"] != "2.000 4.00 8.00" || lines["Bread"] != "1.000 4.50 4.50" {
+	if len(lines) != 2 || lines["Plums"] != "Fruit and vegetables 2.0000 4.0000 8.00 EUR 2026-10-15" || lines["Bread"] != "Bakery 1.0000 4.5000 4.50 EUR 2026-10-15" {
 		t.Fatalf("lines: %+v", lines)
 	}
 }
 
+// lineCount counts the items of the line type anywhere in the library.
 func (r *receipts) lineCount(t *testing.T) int {
 	t.Helper()
-	var page struct {
-		Value []json.RawMessage `json:"value"`
+	body, err := json.Marshal(map[string]any{"query": map[string]any{"content_type_id": r.lineType}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	r.call(t, "GET", "/v1/resources/"+r.lines+"/children?kind=item&$top=100", "", nil, 200, &page)
-	return len(page.Value)
+	var page struct {
+		Value []struct {
+			Kind string `json:"kind"`
+		} `json:"value"`
+	}
+	r.call(t, "POST", "/v1/resources/"+r.library+"/query?$top=100", "application/json", body, 200, &page)
+	n := 0
+	for _, item := range page.Value {
+		if item.Kind == "item" {
+			n++
+		}
+	}
+	return n
+}
+
+// spending sums the amounts of the library's read lines of a currency, as the
+// desk's spending by category does, waiting for them to reach want.
+func (r *receipts) spending(t *testing.T, currency, want string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"query":{"content_type_id":%q,"filter":{"and":[{"field":"status","op":"eq","value":"Read"},{"field":"currency","op":"eq","value":%q}]}},"aggregates":[{"op":"sum","field":"amount","as":"spent"}]}`, r.lineType, currency)
+	var last string
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		var page struct {
+			Value []struct {
+				Values map[string]any `json:"values"`
+			} `json:"value"`
+		}
+		r.call(t, "POST", "/v1/resources/"+r.library+"/query/aggregates", "application/json", []byte(body), 200, &page)
+		if last = fmt.Sprint(page.Value[0].Values["spent"]); last == want {
+			return
+		}
+	}
+	t.Fatalf("spending in %s is %s, want %s", currency, last, want)
 }
 
 // The receipts package reads uploaded photos: each run reads the photo,
@@ -393,18 +473,21 @@ func TestReceiptsPackage(t *testing.T) {
 	r.runOf(t, small, runstore.StatusCompleted)
 	r.expectRead(t, large)
 	r.expectRead(t, small)
-	var versions struct {
-		Value []dms.FileVersion `json:"value"`
-	}
-	r.call(t, "GET", "/v1/items/"+large+"/content/versions", "", nil, 200, &versions)
-	if len(versions.Value) != 1 || versions.Value[0].ContentType != "image/png" {
-		t.Fatalf("the photo was replaced: %+v", versions.Value)
+	// Their lines count once they follow their read receipts.
+	r.spending(t, "EUR", "25.00")
+	// Once read, the photo became the receipt's PDF, and the receipt is
+	// named after it.
+	if item := r.item(t, large); item.Name != "market.pdf" || item.File.ContentType != "application/pdf" || item.File.Filename != "market.pdf" {
+		t.Fatalf("the receipt's file: %+v", item)
 	}
 	if n := r.lineCount(t); n != 4 {
 		t.Fatalf("%d lines, want 4", n)
 	}
 
-	// A repeated run replaces the receipt's lines with the cached answer.
+	// A repeated run replaces the receipt's lines with the cached answer,
+	// including a line left without its link.
+	unlinked := r.links(t, small)[0]
+	r.call(t, "DELETE", "/v1/items/"+small+"/relationships/"+unlinked.ID, "", nil, 204, nil)
 	ids, err := (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{small}})
 	if err != nil {
 		t.Fatal(err)
@@ -418,8 +501,30 @@ func TestReceiptsPackage(t *testing.T) {
 		t.Fatalf("%d lines and %d batches after the repeat", n, r.batch.Creates())
 	}
 
-	// A newer file replaces the run still waiting for its answer.
-	newer := r.upload(t, "newer.png", receiptPhoto(t, 1100, 740))
+	// Lines share the library: a run started on one reads nothing.
+	line := r.links(t, small)[0].TargetID
+	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{line}}); err != nil {
+		t.Fatal(err)
+	}
+	if skipped := r.runOf(t, line, runstore.StatusCompleted); string(skipped.Result) != `{"status":"Not a receipt"}` {
+		t.Fatalf("a run on a line: %s", skipped.Result)
+	}
+	if n := r.lineCount(t); n != 4 || r.batch.Creates() != 1 {
+		t.Fatalf("%d lines and %d batches after a run on a line", n, r.batch.Creates())
+	}
+
+	// A newer file replaces the run still waiting for its answer. It takes
+	// the name a renamed receipt had: lines are filed by receipt, not name.
+	rename := httptest.NewRequest("PATCH", "/v1/resources/"+large, strings.NewReader(`{"name":"market-old.pdf"}`))
+	rename.Header.Set("Authorization", "Bearer "+token)
+	rename.Header.Set("Content-Type", "application/json")
+	rename.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, large).Version))
+	renamed := httptest.NewRecorder()
+	r.handler.ServeHTTP(renamed, rename)
+	if renamed.Code != 200 {
+		t.Fatalf("rename: %d %s", renamed.Code, renamed.Body)
+	}
+	newer := r.upload(t, "market.png", receiptPhoto(t, 1100, 740))
 	r.queued(t, 1)
 	parked := r.runOf(t, newer, runstore.StatusWaiting)
 	item := r.item(t, newer)
@@ -441,6 +546,38 @@ func TestReceiptsPackage(t *testing.T) {
 	r.flush(t)
 	r.runOf(t, newer, runstore.StatusCompleted)
 	r.expectRead(t, newer)
+	if item := r.item(t, newer); item.Name != "market.pdf" || item.File.ContentType != "application/pdf" {
+		t.Fatalf("the newer receipt's file: %+v", item)
+	}
+	r.expectRead(t, large)
+	// The receipts view lists the receipts, not the folders of their lines.
+	var views struct {
+		Value []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"value"`
+	}
+	r.call(t, "GET", "/v1/resources/"+r.library+"/views", "", nil, 200, &views)
+	for _, v := range views.Value {
+		if v.Name != "Receipts" {
+			continue
+		}
+		var page struct {
+			Value []struct {
+				Kind string `json:"kind"`
+			} `json:"value"`
+		}
+		r.call(t, "POST", "/v1/views/"+v.ID+"/query", "application/json", []byte(`{}`), 200, &page)
+		items := 0
+		for _, row := range page.Value {
+			if row.Kind == "item" {
+				items++
+			}
+		}
+		if items != 3 || len(page.Value) != 3 {
+			t.Fatalf("receipts view: %+v", page.Value)
+		}
+	}
 
 	// An answer the provider refuses leaves the receipt for review.
 	r.batch.SetReceiptMode("reject")
@@ -448,7 +585,87 @@ func TestReceiptsPackage(t *testing.T) {
 	r.queued(t, 1)
 	r.flush(t)
 	reviewed := r.runOf(t, rejected, runstore.StatusCompleted)
-	if status := r.item(t, rejected).Values["status"]; status != "Needs review" || len(r.lineValues(t, rejected)) != 0 {
-		t.Fatalf("a refused answer: %v %s", status, dump(r, t, []workflow.Run{reviewed}))
+	// The photo stays, to be read again.
+	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.Values["problem"] != "Not readable" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
+		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
+
+	// Lines follow their receipt: another status or currency takes them out of
+	// the spending, deleting it deletes them, and restoring it brings them back.
+	patch := func(id, values string) {
+		t.Helper()
+		req := httptest.NewRequest("PATCH", "/v1/resources/"+id, strings.NewReader(`{"values":`+values+`}`))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, id).Version))
+		rec := httptest.NewRecorder()
+		r.handler.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Fatalf("patch: %d %s", rec.Code, rec.Body)
+		}
+	}
+	r.spending(t, "EUR", "37.50")
+	patch(newer, `{"status":"Needs review"}`)
+	r.spending(t, "EUR", "25.00")
+	patch(newer, `{"status":"Read","currency":"USD"}`)
+	r.spending(t, "USD", "12.50")
+	r.spending(t, "EUR", "25.00")
+	patch(newer, `{"currency":"EUR"}`)
+	r.spending(t, "EUR", "37.50")
+	remove := httptest.NewRequest("DELETE", "/v1/resources/"+newer, nil)
+	remove.Header.Set("Authorization", "Bearer "+token)
+	remove.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, newer).Version))
+	removed := httptest.NewRecorder()
+	r.handler.ServeHTTP(removed, remove)
+	if removed.Code != 204 {
+		t.Fatalf("delete: %d %s", removed.Code, removed.Body)
+	}
+	r.spending(t, "EUR", "25.00")
+	r.call(t, "POST", "/v1/resources/"+r.library+"/recycle-bin/"+newer+"/restore", "", nil, 200, nil)
+	r.spending(t, "EUR", "37.50")
+	r.expectRead(t, newer)
+
+	// A file the model cannot read does not wait to be read forever.
+	heic := r.uploadFile(t, "photo.heic", "image/heic", []byte("not a photo the model reads"))
+	unread := r.runOf(t, heic, runstore.StatusCompleted)
+	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["status"] != "Needs review" || item.Values["problem"] != "Not a photo" {
+		t.Fatalf("a HEIC file: %s %+v", unread.Result, item)
+	}
+
+	// Amounts copied as the receipt prints them are read as what they mean.
+	r.batch.SetReceiptMode("local-amounts")
+	local := r.upload(t, "fuel.png", receiptPhoto(t, 880, 590))
+	r.queued(t, 1)
+	r.flush(t)
+	r.runOf(t, local, runstore.StatusCompleted)
+	if item := r.item(t, local); item.Values["status"] != "Read" || item.Values["total"] != "1012.50" || item.Values["currency"] != "EUR" {
+		t.Fatalf("local amounts: %+v", item)
+	}
+	if lines := r.lineValues(t, local); lines["Diesel"] != "Other 40.1200 1.4590 58.53 EUR 2026-10-15" || lines["Refund"] != "Other 1.0000 4.5000 -4.50 EUR 2026-10-15" {
+		t.Fatalf("local amounts' lines: %+v", lines)
+	}
+
+	// An amount that cannot be stored exactly stores nothing and sends the
+	// receipt to review, though the answer matched the schema and is cached.
+	r.batch.SetReceiptMode("bad-amount")
+	bad := r.upload(t, "bad.png", receiptPhoto(t, 870, 580))
+	r.queued(t, 1)
+	r.flush(t)
+	first := r.runOf(t, bad, runstore.StatusCompleted)
+	if item := r.item(t, bad); item.Values["status"] != "Needs review" || item.Values["store"] != nil || len(r.lineValues(t, bad)) != 0 {
+		t.Fatalf("a bad amount: %+v %s", item, dump(r, t, []workflow.Run{first}))
+	}
+	// Reading it again asks the model again, whose new answer files it.
+	r.batch.SetReceiptMode("ok")
+	if _, err = (&workflow.Service{DMS: r.s}).StartRuns(t.Context(), admin, r.workflow, workflow.Start{ItemIDs: []string{bad}}); err != nil {
+		t.Fatal(err)
+	}
+	r.queued(t, 1)
+	// While it is read it waits to be read again, without its problem.
+	if item := r.item(t, bad); item.Values["status"] != "New" || item.Values["problem"] != nil {
+		t.Fatalf("a receipt read again: %+v", item)
+	}
+	r.flush(t)
+	r.runOf(t, bad, runstore.StatusCompleted, first.ID)
+	r.expectRead(t, bad)
 }

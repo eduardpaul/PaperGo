@@ -688,8 +688,8 @@ export function CollectionContentTypes({ collection, canManage }: { collection: 
       <QueryFeedback query={setMenu} />
       <ul className="divide-y">
         {types.data?.map((type) => (
-          <li key={type.id} className="flex items-center gap-2 py-2">
-            <span className="flex-1 text-[13px] font-medium">
+          <li key={type.id} className="flex flex-wrap items-center gap-2 py-2">
+            <span className="min-w-40 flex-1 text-[13px] font-medium">
               {type.name} {type.is_default && <Badge>{t('contentTypes.default')}</Badge>}
               {type.in_new_menu === false && <span className="ms-2 text-xs text-muted">{t('contentTypes.notInNewMenu')}</span>}
               {(!!type.field_ids?.length || !!type.hidden_field_ids?.length || !!type.rules?.length) && (

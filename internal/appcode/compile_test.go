@@ -151,3 +151,21 @@ func TestTheDieselSampleCompiles(t *testing.T) {
 		t.Fatalf("parameters: %s %v", c.ParametersSchema, err)
 	}
 }
+
+// The receipts sample's desk compiles and declares its parameters.
+func TestTheReceiptsSampleCompiles(t *testing.T) {
+	source, err := os.ReadFile("../../samples/receipts-package/receipts-app.tsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := Compile(context.Background(), string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Required []string `json:"required"`
+	}
+	if err = json.Unmarshal(c.ParametersSchema, &schema); err != nil || strings.Join(schema.Required, ",") != "library,receipt,line" {
+		t.Fatalf("parameters: %s %v", c.ParametersSchema, err)
+	}
+}

@@ -36,7 +36,7 @@ func TestBatchLookupReadsBeyondFiveHundredAndRejectsIncompleteListings(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			id, found, err := client.FindByTag(context.Background(), "wanted")
+			id, found, err := client.Find(context.Background(), ai.BatchSubmission{Tag: "wanted"})
 			if incomplete {
 				if found || !errors.Is(err, ai.ErrUncertain) {
 					t.Fatalf("incomplete listing reported absence: %q %v %v", id, found, err)
@@ -69,26 +69,26 @@ func TestBatchProtocolAndAzureBase(t *testing.T) {
 		t.Fatalf("batch key %s connection %s, chat %s", same.Key(), same.Connection(), chat.Key())
 	}
 	ctx := context.Background()
-	fileID, err := client.Upload(ctx, []byte("{\"custom_id\":\"abc\"}\n"))
+	input, err := client.Prepare(ctx, []ai.BatchRequest{{Key: "abc", Completion: ai.Completion{Instructions: "Answer.", Input: "the question"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	tag := strings.Repeat("ab", 32)
-	batchID, err := client.Create(ctx, fileID, tag)
+	batchID, err := client.Create(ctx, input, tag)
 	if err != nil || batchID == "" {
 		t.Fatal(err)
 	}
-	found, ok, err := client.FindByTag(ctx, tag)
+	found, ok, err := client.Find(ctx, ai.BatchSubmission{Tag: tag, Keys: []string{"abc"}})
 	if err != nil || !ok || found != batchID {
 		t.Fatalf("find: %s %v %v", found, ok, err)
 	}
 	batch, err := client.Get(ctx, batchID)
-	if err != nil || !batch.Terminal() || batch.OutputFileID == "" {
+	if err != nil || !batch.Ended || batch.OutputFileID == "" {
 		t.Fatalf("batch: %+v %v", batch, err)
 	}
-	body, err := client.Download(ctx, batch.OutputFileID)
-	if err != nil || !bytesContains(body, "answer:") {
-		t.Fatalf("download: %s %v", body, err)
+	results, err := client.Results(ctx, batch, map[string]bool{"abc": false})
+	if err != nil || len(results) != 1 || results[0].Key != "abc" || results[0].Err != nil || results[0].Answer.Text != "answer:the question" {
+		t.Fatalf("results: %+v %v", results, err)
 	}
 	var sawFile, sawBatch bool
 	for _, call := range server.Calls() {
@@ -126,31 +126,31 @@ func TestAmbiguousBatchCreateIsNotRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	fileID, err := client.Upload(ctx, []byte("{\"custom_id\":\"abc\"}\n"))
+	input, err := client.Prepare(ctx, []ai.BatchRequest{{Key: "abc", Completion: ai.Completion{Input: "x"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	server.FailCreates(1, true)
 	tag := strings.Repeat("cd", 32)
-	if _, err = client.Create(ctx, fileID, tag); !errors.Is(err, ai.ErrUncertain) {
+	if _, err = client.Create(ctx, input, tag); !errors.Is(err, ai.ErrUncertain) {
 		t.Fatalf("create: %v", err)
 	}
 	if server.Creates() != 1 {
 		t.Fatalf("creates %d", server.Creates())
 	}
-	found, ok, err := client.FindByTag(ctx, tag)
+	found, ok, err := client.Find(ctx, ai.BatchSubmission{Tag: tag})
 	if err != nil || !ok || found == "" {
 		t.Fatalf("landed batch not found: %s %v %v", found, ok, err)
 	}
 	server.FailCreates(1, false)
-	if _, err = client.Create(ctx, fileID, "other"); !errors.Is(err, ai.ErrUncertain) {
+	if _, err = client.Create(ctx, input, "other"); !errors.Is(err, ai.ErrUncertain) {
 		t.Fatalf("missed create: %v", err)
 	}
-	if _, ok, err = client.FindByTag(ctx, "missing"); err != nil || ok {
+	if _, ok, err = client.Find(ctx, ai.BatchSubmission{Tag: "missing"}); err != nil || ok {
 		t.Fatalf("missing tag: %v %v", ok, err)
 	}
 	server.RejectNextCreate()
-	_, err = client.Create(ctx, fileID, "rejected")
+	_, err = client.Create(ctx, input, "rejected")
 	var provider *ai.Error
 	if !errors.As(err, &provider) || errors.Is(err, ai.ErrUncertain) || provider.Status != 400 {
 		t.Fatalf("definite failure: %v", err)

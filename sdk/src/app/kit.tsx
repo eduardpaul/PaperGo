@@ -5,6 +5,33 @@ import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode
 import { RuntimeContext } from "./context.js";
 import { wallClock, type WallClock, type WallTime } from "./format.js";
 
+/** The kit's own words: English, and Spanish for any es language, as PaperGo's web app speaks. */
+export interface KitWords {
+  /** A dialog's close button, as screen readers say it. */
+  close: string;
+  /** What an empty table says unless the app says otherwise. */
+  empty: string;
+  /** What an empty chart says. */
+  noData: string;
+  /** A signed number field's sign button, as screen readers say it. */
+  sign: string;
+}
+
+const words: Record<"en" | "es", KitWords> = {
+  en: { close: "Close", empty: "Nothing yet", noData: "No data yet", sign: "Change the sign" },
+  es: { close: "Cerrar", empty: "Aún no hay nada", noData: "Aún no hay datos", sign: "Cambiar el signo" },
+};
+
+/** The kit's words in language, a viewer's language preference such as es or es-MX. */
+export function kitWords(language: string | undefined): KitWords {
+  return (language ?? "").toLowerCase().split(/[-_]/)[0] === "es" ? words.es : words.en;
+}
+
+// The kit's words in the viewer's language; English outside an app.
+function useKitWords(): KitWords {
+  return kitWords(useContext(RuntimeContext)?.ctx.user.preferences.language);
+}
+
 /** Phones and narrow windows: at most this wide, the kit lays out for touch. */
 export const narrowWidth = 640;
 
@@ -150,6 +177,7 @@ export function Toolbar({ children }: { children?: ReactNode }) {
 
 /** A dialog over the app; Escape and the backdrop close it. */
 export function Modal({ open, title, onClose, children, actions }: { open: boolean; title: ReactNode; onClose: () => void; children?: ReactNode; actions?: ReactNode }) {
+  const said = useKitWords();
   // Escape closes it wherever the focus is, as the button that opened it
   // keeps the focus.
   const close = useRef(onClose);
@@ -166,7 +194,7 @@ export function Modal({ open, title, onClose, children, actions }: { open: boole
       <div className="pg-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="pg-modal-head">
           <h2 style={{ margin: 0 }}>{title}</h2>
-          <button type="button" className="pg-close" aria-label="Close" onClick={onClose}>
+          <button type="button" className="pg-close" aria-label={said.close} onClick={onClose}>
             ×
           </button>
         </div>
@@ -245,13 +273,14 @@ function Field({ label, error, children }: { label: ReactNode; error?: ReactNode
  * sign without a number.
  */
 export function NumberField({ label, value, onChange, unit, error, required, hint, autoFocus, signed }: FieldProps & { unit?: ReactNode; hint?: ReactNode; autoFocus?: boolean; signed?: boolean }) {
+  const said = useKitWords();
   return (
     <Field label={label} error={error}>
       {(id) => (
         <>
           <div className="pg-field-row">
             {signed && (
-              <button type="button" className="pg-button pg-sign" aria-label="±" disabled={!/\d/.test(value)} onClick={() => onChange(flipSign(value))}>
+              <button type="button" className="pg-button pg-sign" aria-label={said.sign} disabled={!/\d/.test(value)} onClick={() => onChange(flipSign(value))}>
                 ±
               </button>
             )}
@@ -355,8 +384,9 @@ export interface Column<R> {
   render?: (row: R) => ReactNode;
 }
 
-export function Table<R extends Record<string, unknown>>({ columns, rows, onRowClick, empty = "Nothing yet" }: { columns: Column<R>[]; rows: R[]; onRowClick?: (row: R) => void; empty?: ReactNode }) {
-  if (rows.length === 0) return <div className="pg-empty">{empty}</div>;
+export function Table<R extends Record<string, unknown>>({ columns, rows, onRowClick, empty }: { columns: Column<R>[]; rows: R[]; onRowClick?: (row: R) => void; empty?: ReactNode }) {
+  const said = useKitWords();
+  if (rows.length === 0) return <div className="pg-empty">{empty ?? said.empty}</div>;
   const cell = (c: Column<R>) => [c.align === "right" ? "pg-right" : "", c.optional ? "pg-optional" : ""].filter(Boolean).join(" ") || undefined;
   return (
     <div className="pg-table-wrap">
@@ -435,8 +465,9 @@ export interface Band {
 export function LineChart({ series, markers = [], bands = [], references = [], xTicks, height = 220, formatX = (x) => new Date(x).toLocaleDateString(), formatTick = formatX, formatY = (y) => String(Math.round(y)), yMin, yMax }: { series: Series[]; markers?: { x: number | Date; label?: string }[]; bands?: Band[]; references?: { y: number; label?: string }[]; xTicks?: (number | Date)[]; height?: number; formatX?: (x: number) => string; formatTick?: (x: number) => string; formatY?: (y: number) => string; yMin?: number; yMax?: number }) {
   const [box, width] = useWidth<HTMLDivElement>(640);
   const [readout, setReadout] = useState<string>();
+  const said = useKitWords();
   const points = series.flatMap((s) => s.points.map((p) => ({ x: +p.x, y: p.y })));
-  if (points.length === 0) return <div className="pg-empty">No data yet</div>;
+  if (points.length === 0) return <div className="pg-empty">{said.noData}</div>;
   const xs = points.map((p) => p.x).concat(markers.map((m) => +m.x));
   const ys = points.map((p) => p.y);
   const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
@@ -560,7 +591,8 @@ export function Gauge({ value, max = 100, label, hint, text, warn = 0.3, danger 
 export function BarChart({ data, height = 200, formatY = (y) => String(Math.round(y)) }: { data: { label: string; value: number }[]; height?: number; formatY?: (y: number) => string }) {
   const [box, width] = useWidth<HTMLDivElement>(640);
   const [readout, setReadout] = useState<string>();
-  if (data.length === 0) return <div className="pg-empty">No data yet</div>;
+  const said = useKitWords();
+  if (data.length === 0) return <div className="pg-empty">{said.noData}</div>;
   const max = Math.max(0, ...data.map((d) => d.value));
   const y1 = max === 0 ? 1 : max;
   const band = (width - pad.left - pad.right) / data.length;
