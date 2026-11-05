@@ -25,7 +25,7 @@ The importer becomes the workflow's author and the workspace's owner. Runs use t
 
 ## The desk
 
-The desk speaks English and Spanish: it follows the viewer's language preference, Spanish for any `es` language and English otherwise, including the product categories. Field names, choices and the parameters form stay as the package names them.
+The desk speaks English and Spanish: it follows the viewer's language preference, Spanish for any `es` language and English otherwise. It shows the product categories in that language too, though the line's **Category** field stores them as the package names them, in English, as it does its other choices. PaperGo's own screens show the fields, their choices and the app's parameters form as the package names them.
 
 - **Uploads:** each photo in turn, with its size before and after it was shrunk, until it is uploaded and waits to be read. Tapping one opens it in PaperGo.
 - **Period:** this month, this year or all time, by purchase date.
