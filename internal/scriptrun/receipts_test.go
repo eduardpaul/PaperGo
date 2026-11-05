@@ -205,11 +205,17 @@ func (r *receipts) call(t *testing.T, method, path, contentType string, body []b
 // upload uploads a photo to the library and returns its item.
 func (r *receipts) upload(t *testing.T, name string, data []byte) string {
 	t.Helper()
+	return r.uploadFile(t, name, "image/png", data)
+}
+
+// uploadFile uploads a file of a media type to the library and returns its item.
+func (r *receipts) uploadFile(t *testing.T, name, mediaType string, data []byte) string {
+	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{"name": "file", "filename": name}))
-	header.Set("Content-Type", "image/png")
+	header.Set("Content-Type", mediaType)
 	part, err := writer.CreatePart(header)
 	if err != nil {
 		t.Fatal(err)
@@ -617,6 +623,13 @@ func TestReceiptsPackage(t *testing.T) {
 	r.call(t, "POST", "/v1/resources/"+r.library+"/recycle-bin/"+newer+"/restore", "", nil, 200, nil)
 	r.spending(t, "EUR", "37.50")
 	r.expectRead(t, newer)
+
+	// A file the model cannot read does not wait to be read forever.
+	heic := r.uploadFile(t, "photo.heic", "image/heic", []byte("not a photo the model reads"))
+	unread := r.runOf(t, heic, runstore.StatusCompleted)
+	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["status"] != "Needs review" {
+		t.Fatalf("a HEIC file: %s %+v", unread.Result, item)
+	}
 
 	// Amounts copied as the receipt prints them are read as what they mean.
 	r.batch.SetReceiptMode("local-amounts")

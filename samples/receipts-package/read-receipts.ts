@@ -162,9 +162,10 @@ function lineName(n: number, description: string): string {
 
 export default workflow<unknown, unknown, Params>({
   triggers: (p) => [
-    // Only receipts: a file saved over a line starts no run.
-    { type: "file.added", collection_id: p.library, content_type_id: p.receipt_type, media_types: photos, sources },
-    { type: "file.updated", collection_id: p.library, content_type_id: p.receipt_type, media_types: photos, sources },
+    // Only receipts: a file saved over a line starts no run. Every kind of
+    // file does, so that one the model cannot read does not wait forever.
+    { type: "file.added", collection_id: p.library, content_type_id: p.receipt_type, sources },
+    { type: "file.updated", collection_id: p.library, content_type_id: p.receipt_type, sources },
     { type: "manual", collection_id: p.library, selection: "per_item" },
   ],
   // A newer file for the same item replaces the run that is still going.
@@ -180,10 +181,17 @@ export default workflow<unknown, unknown, Params>({
     const listType = (catalogType: string) => types.find((t) => t.parentId === catalogType)?.id;
     if (item.contentTypeId !== listType(ctx.params.receipt_type)) return { status: "Not a receipt" };
     const versions = (await api.v1.items.byId(id).content.versions.get())?.value ?? [];
-    const photo = versions
+    // A file just saved that is no photo is not read in place of an older
+    // photo: it is what the receipt holds now.
+    const saved = ctx.run.event.type.startsWith("file.") ? String(ctx.run.event.data.content_type) : undefined;
+    const photo = saved && !photos.includes(saved) ? undefined : versions
       .filter((v) => photos.includes(v.contentType ?? "") && v.availability !== "reclaimed")
       .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.version! - a.version!)[0];
-    if (!photo) return { status: "No photo" };
+    if (!photo) {
+      // One that never had a photo is not waiting to be read: it is for a person.
+      if (item.values?.additionalData?.status === "New") await update(api, id, item.version!, { status: "Needs review" });
+      return { status: "No photo" };
+    }
     let version = item.version!;
     try {
       // The model reads the photo as it was uploaded: the app shrinks it on
