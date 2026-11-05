@@ -17,7 +17,7 @@
   ],
   "content_types": [
     {"key": "receipt", "name": "Receipt", "fields": ["store", "purchase_date", "currency", "total", "status"]},
-    {"key": "receipt_line", "name": "Receipt line", "fields": ["description", "category", "quantity", "unit_price", "amount", "currency", "purchase_date"]}
+    {"key": "receipt_line", "name": "Receipt line", "fields": ["description", "category", "quantity", "unit_price", "amount", "currency", "purchase_date", "status"]}
   ],
   "collections": [
     {
@@ -42,7 +42,7 @@
         {
           "name": "Lines",
           "layout": "table",
-          "columns": ["$name", "description", "category", "quantity", "unit_price", "amount", "currency", "purchase_date"],
+          "columns": ["$name", "description", "category", "quantity", "unit_price", "amount", "currency", "purchase_date", "status"],
           "query": {"content_type_id": "$receipt_line"}
         }
       ]

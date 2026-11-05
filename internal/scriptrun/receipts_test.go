@@ -168,10 +168,17 @@ func installReceipts(t *testing.T) *receipts {
 		}
 	}
 	flows, err := wf.List(ctx, admin, result.WorkspaceID)
-	if err != nil || len(flows) != 1 || flows[0].Name != "Read receipts" || !flows[0].AutomaticEnabled {
+	if err != nil || len(flows) != 2 {
 		t.Fatalf("workflows: %+v %v", flows, err)
 	}
-	r.workflow = flows[0].ID
+	for _, flow := range flows {
+		if flow.Name == "Read receipts" && flow.AutomaticEnabled {
+			r.workflow = flow.ID
+		}
+	}
+	if r.workflow == "" {
+		t.Fatalf("workflows: %+v", flows)
+	}
 	return r
 }
 
@@ -417,6 +424,26 @@ func (r *receipts) lineCount(t *testing.T) int {
 	return n
 }
 
+// spending sums the amounts of the library's read lines of a currency, as the
+// desk's spending by category does, waiting for them to reach want.
+func (r *receipts) spending(t *testing.T, currency, want string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"query":{"content_type_id":%q,"filter":{"and":[{"field":"status","op":"eq","value":"Read"},{"field":"currency","op":"eq","value":%q}]}},"aggregates":[{"op":"sum","field":"amount","as":"spent"}]}`, r.lineType, currency)
+	var last string
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		var page struct {
+			Value []struct {
+				Values map[string]any `json:"values"`
+			} `json:"value"`
+		}
+		r.call(t, "POST", "/v1/resources/"+r.library+"/query/aggregates", "application/json", []byte(body), 200, &page)
+		if last = fmt.Sprint(page.Value[0].Values["spent"]); last == want {
+			return
+		}
+	}
+	t.Fatalf("spending in %s is %s, want %s", currency, last, want)
+}
+
 // The receipts package reads uploaded photos: each run reads the photo,
 // waits for its batch answer and files the lines; a newer file replaces a
 // waiting run, a repeated run replaces the lines, and a refused answer
@@ -439,6 +466,8 @@ func TestReceiptsPackage(t *testing.T) {
 	r.runOf(t, small, runstore.StatusCompleted)
 	r.expectRead(t, large)
 	r.expectRead(t, small)
+	// Their lines count once they follow their read receipts.
+	r.spending(t, "EUR", "25.00")
 	// Once read, the photo became the receipt's PDF, and the receipt is
 	// named after it.
 	if item := r.item(t, large); item.Name != "market.pdf" || item.File.ContentType != "application/pdf" || item.File.Filename != "market.pdf" {
@@ -553,6 +582,41 @@ func TestReceiptsPackage(t *testing.T) {
 	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
 		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
+
+	// Lines follow their receipt: another status or currency takes them out of
+	// the spending, deleting it deletes them, and restoring it brings them back.
+	patch := func(id, values string) {
+		t.Helper()
+		req := httptest.NewRequest("PATCH", "/v1/resources/"+id, strings.NewReader(`{"values":`+values+`}`))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, id).Version))
+		rec := httptest.NewRecorder()
+		r.handler.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Fatalf("patch: %d %s", rec.Code, rec.Body)
+		}
+	}
+	r.spending(t, "EUR", "37.50")
+	patch(newer, `{"status":"Needs review"}`)
+	r.spending(t, "EUR", "25.00")
+	patch(newer, `{"status":"Read","currency":"USD"}`)
+	r.spending(t, "USD", "12.50")
+	r.spending(t, "EUR", "25.00")
+	patch(newer, `{"currency":"EUR"}`)
+	r.spending(t, "EUR", "37.50")
+	remove := httptest.NewRequest("DELETE", "/v1/resources/"+newer, nil)
+	remove.Header.Set("Authorization", "Bearer "+token)
+	remove.Header.Set("If-Match", fmt.Sprintf(`"%d"`, r.item(t, newer).Version))
+	removed := httptest.NewRecorder()
+	r.handler.ServeHTTP(removed, remove)
+	if removed.Code != 204 {
+		t.Fatalf("delete: %d %s", removed.Code, removed.Body)
+	}
+	r.spending(t, "EUR", "25.00")
+	r.call(t, "POST", "/v1/resources/"+r.library+"/recycle-bin/"+newer+"/restore", "", nil, 200, nil)
+	r.spending(t, "EUR", "37.50")
+	r.expectRead(t, newer)
 
 	// Amounts copied as the receipt prints them are read as what they mean.
 	r.batch.SetReceiptMode("local-amounts")

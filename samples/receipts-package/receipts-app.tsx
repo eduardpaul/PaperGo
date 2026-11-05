@@ -240,7 +240,7 @@ function Desk({ w }: { w: Words }) {
 
   // What read receipts of the period cost, by currency; the categories are
   // those of the currency most receipts were paid in. Lines carry their
-  // receipt's currency and date for this.
+  // receipt's status, currency and date for this.
   const [period, setPeriod] = useState<Period>("month");
   const zone = ctx.user.preferences.time_zone;
   const from = since(zone, period);
@@ -254,7 +254,7 @@ function Desk({ w }: { w: Words }) {
   const currency = main ? String(main.keys[0]?.value ?? "") : "";
   const byCategory = useAggregates(
     currency ? p.library : undefined,
-    { query: { contentTypeId: p.line, filter: { and: [{ field: "currency", op: "eq", value: currency }, ...inPeriod] } }, groups: [{ field: "category" }], aggregates: [{ op: "sum", field: "amount", as: "spent" }], sort: [{ field: "spent", direction: "desc" }] },
+    { query: { contentTypeId: p.line, filter: { and: [{ field: "status", op: "eq", value: "Read" }, { field: "currency", op: "eq", value: currency }, ...inPeriod] } }, groups: [{ field: "category" }], aggregates: [{ op: "sum", field: "amount", as: "spent" }], sort: [{ field: "spent", direction: "desc" }] },
     { live: true },
   );
   const categoryTotal = byCategory.data.reduce((sum, g) => sum + Number(g.values.spent ?? 0), 0);

@@ -156,7 +156,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	}
 	var source workflow.Save
 	switch w.Name {
-	case "Read receipts":
+	case "Read receipts", "Sync receipt lines":
 		// One library holds the receipts and their lines, receipts by default.
 		listTypes, err := s.CollectionContentTypes(t.Context(), "organization-admin", ids["Receipts"])
 		if err != nil || len(listTypes) != 2 {
@@ -170,7 +170,8 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 			t.Fatal("receipts library types", listTypes)
 		}
 		// The workflow names the catalog type; the library accepts it.
-		source = sampleWorkflowSource(t, "receipts-package/read-receipts.json", "$LIBRARY", ids["Receipts"], "$RECEIPT_TYPE", *types["receipt"].ParentID, "$LINE_TYPE", *types["receipt_line"].ParentID)
+		file := map[string]string{"Read receipts": "receipts-package/read-receipts.json", "Sync receipt lines": "receipts-package/sync-receipt-lines.json"}[w.Name]
+		source = sampleWorkflowSource(t, file, "$LIBRARY", ids["Receipts"], "$RECEIPT_TYPE", *types["receipt"].ParentID, "$LINE_TYPE", *types["receipt_line"].ParentID)
 		views, err := s.Views(t.Context(), "organization-admin", ids["Receipts"], "", 100)
 		if err != nil {
 			t.Fatal(err)
@@ -480,6 +481,7 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
 		bindings := []string{"$LIBRARY", collections["Receipts"], "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"]}
 		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", bindings...)
+		sampleWorkflow(t, wf, workspace, "receipts-package/sync-receipt-lines.json", bindings...)
 		for _, file := range receiptsApps {
 			SaveSampleApp(t, s, workspace, "", 0, sampleAppSource(t, file, bindings...))
 		}
@@ -592,7 +594,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 		Workflows        int
 		Apps             []string
 		AppBindings      func(*testing.T, *dms.Service, string) []string
-	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 1, receiptsApps, receiptsAppBindings}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps, dieselAppBindings}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil, nil}} {
+	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 2, receiptsApps, receiptsAppBindings}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps, dieselAppBindings}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil, nil}} {
 		t.Run(sample.Name, func(t *testing.T) {
 			path := filepath.Join("../../samples", sample.Path)
 			if *updateSamplePackages {

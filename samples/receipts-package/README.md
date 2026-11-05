@@ -1,6 +1,6 @@
 # Receipts package
 
-A library of receipts and the products on them, a workflow that reads each receipt photo and keeps the receipt as a PDF, and an [app](../../docs/apps.md), the **Receipts desk**, for taking those photos with a phone. Install the workspace by importing the included package. PaperGo has no receipt routes, tables, or upload-time processing: the workflow is an ordinary TypeScript script, [`read-receipts.ts`](read-receipts.ts), and the app an ordinary React screen, [`receipts-app.tsx`](receipts-app.tsx); you can open and change both in their editors.
+A library of receipts and the products on them, a workflow that reads each receipt photo and keeps the receipt as a PDF, another that keeps the lines in step with their receipt, and an [app](../../docs/apps.md), the **Receipts desk**, for taking those photos with a phone. Install the workspace by importing the included package. PaperGo has no receipt routes, tables, or upload-time processing: the workflows are ordinary TypeScript scripts, [`read-receipts.ts`](read-receipts.ts) and [`sync-receipt-lines.ts`](sync-receipt-lines.ts), and the app an ordinary React screen, [`receipts-app.tsx`](receipts-app.tsx); you can open and change them in their editors.
 
 ## From photo to lines
 
@@ -12,17 +12,19 @@ A refused answer, an amount or date that cannot be read exactly, a line that can
 
 **Lines** live in the same library, in a folder per receipt: `Receipt lines/<receipt ID>/`, numbered with their description (`1. Bread`). The folder follows the receipt, not its name or place, so renaming, moving or deleting a receipt never blocks another. A repeated run deletes the receipt's linked lines and every line left in its folder, including one an interrupted run did not link. A file saved over a line starts no run. Over WebDAV, lines appear as empty files under **Receipt lines**, apart from the receipts.
 
+**Lines follow their receipt.** The **Sync receipt lines** workflow copies a receipt's status, currency and purchase date to its lines whenever they change, so correcting a receipt's date moves its lines to the same period, and a line counts in spending only while its receipt is **Read**. Deleting a receipt deletes the folder of its lines to the recycle bin, and restoring it brings them back.
+
 ## Install
 
 1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**. This creates the **Receipts desk** workspace with:
    - the empty **Receipts** library, which accepts both content types (**Receipt** for uploads by default, and **Receipt line**), with their fields, saved views (Receipts, Needs review and Lines) and relationship policy;
-   - the **Read receipts** workflow, its parameters pointing at the imported library and its two content types;
+   - the **Read receipts** and **Sync receipt lines** workflows, their parameters pointing at the imported library and its two content types;
    - the **Receipts desk** app, published, with its parameters set to the same library and types. It appears in the sidebar under the library, and in **Apps**. On a phone, its **Take a photo** and **Choose photos** buttons sit at the bottom of the screen.
 
    No script, token, ID editing or pre-existing workspace is needed. To install another independent copy, enter a different workspace name when importing. Import does not call the model.
 2. **OCR and the batch model.** Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
 
-The importer becomes the author of the workflow and the app, and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` with `read-receipts.json`, and `receipts-app.tsx` with `receipts-app.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflow end to end, and the [app compile test](../../internal/appcode/compile_test.go) compiles the app.
+The importer becomes the author of the workflows and the app, and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` with `read-receipts.json`, `sync-receipt-lines.ts` with `sync-receipt-lines.json`, and `receipts-app.tsx` with `receipts-app.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflows end to end, and the [app compile test](../../internal/appcode/compile_test.go) compiles the app.
 
 ## The desk
 
@@ -31,10 +33,10 @@ The desk speaks English and Spanish: it follows the viewer's language preference
 - **Uploads:** each photo in turn, with its size before and after it was shrunk, until it is uploaded and waits to be read. Tapping one opens it in PaperGo.
 - **Period:** this month, this year or all time, by purchase date.
 - **Figures:** what the period's read receipts cost, in the currency most of them were paid in, with how many there were and the totals in other currencies; and how many receipts wait to be read, are read and need review.
-- **Spending by category:** what the period's lines in that currency cost per category, largest first, with a bar for each category's share.
+- **Spending by category:** what the lines of the period's read receipts in that currency cost per category, largest first, with a bar for each category's share. It sums the lines, so a receipt whose total differs from them, such as by a discount the model did not list as a line, differs from **Spent** by as much.
 - **Latest receipts:** the 20 most recent, with their store, date, total and status. Tapping one shows its lines in the order of the receipt, each with its category, quantity, unit price and amount, and opens it in PaperGo.
 
-The figures are worked out by the server ([aggregates](../../docs/application-foundation.md)) and follow new and read receipts live. Lines of a receipt marked **Needs review** after some of its lines were filed count until it is read again.
+The figures are worked out by the server ([aggregates](../../docs/application-foundation.md)) and follow new and read receipts live.
 
 ## Batch execution
 
