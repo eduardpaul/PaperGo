@@ -19,6 +19,8 @@ try {
       bundle: true,
       format: "esm",
       platform: "node",
+      // As the build compiles the kit's TSX.
+      jsx: "automatic",
       alias: {
         "@opentelemetry/api": join(sdk, "src", "otel.ts"),
         "@std-uritemplate/std-uritemplate": join(sdk, "src", "stduritemplate.ts"),
