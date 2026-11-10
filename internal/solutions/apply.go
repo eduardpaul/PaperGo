@@ -445,6 +445,11 @@ func (r *run) settle() {
 	values, err := forms.Values(resolved, given, "settings")
 	if err != nil {
 		r.refuse("settings", r.sol.Manifest.Key, "%s", err)
+		// The rest of the plan is shown with the values in use, so that it
+		// lists no change a refused value would not make.
+		if r.previous != nil {
+			r.settings = r.previous.Settings
+		}
 		return
 	}
 	r.settings, r.result.Settings, r.given = values, values, given

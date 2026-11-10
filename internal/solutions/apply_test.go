@@ -569,7 +569,10 @@ func TestApplySettingsAndPause(t *testing.T) {
 	if !again.Paused || !p.installation("tank").Paused {
 		t.Fatalf("an apply resumed a paused installation: %+v", again)
 	}
-	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity_l": "a lot"}}), "REFUSED settings tank")
+	refused := p.apply(tank(), Options{Settings: map[string]any{"capacity_l": "a lot"}})
+	if has(t, refused, "REFUSED settings tank"); len(refused.Changes) != 0 {
+		t.Fatalf("a refused setting is shown with changes it would not make:\n%s", said(refused))
+	}
 	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity": 900}}), `REFUSED settings tank: the solution has no setting "capacity"; it has capacity_l, time_zone`)
 }
 
