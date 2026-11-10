@@ -94,6 +94,20 @@ func TestCommandsTalkToAServer(t *testing.T) {
 	if out, err = run("apply", dir, "--bind", "readings=garage"); err == nil || !strings.Contains(err.Error(), `there is no list or library "garage"; there are: Depósito`) {
 		t.Fatalf("an unknown list: %v\n%s", err, out)
 	}
+	// Pull writes the installation's files; remove uninstalls it.
+	out2 := t.TempDir()
+	if out, err = run("pull", "tank", "--out", out2); err != nil || !strings.Contains(out, "tank 1.0.0: 5 file(s) written") {
+		t.Fatalf("pull: %v\n%s", err, out)
+	}
+	if out, err = run("plan", out2); err != nil || !strings.Contains(out, "plan: 0 change(s)") {
+		t.Fatalf("what was pulled is what is installed: %v\n%s", err, out)
+	}
+	if out, err = run("remove", "tank"); err != nil || !strings.Contains(out, "delete  workflow tank-levels") || !strings.Contains(out, "removed; its lists, content types and fields stay") {
+		t.Fatalf("remove: %v\n%s", err, out)
+	}
+	if out, err = run("list"); err != nil || !strings.Contains(out, "no solution is installed") {
+		t.Fatalf("list after remove: %v\n%s", err, out)
+	}
 	var said bytes.Buffer
 	if err = Run(t.Context(), []string{"list", "--url", server.URL, "--token", "wrong-wrong-wrong-wrong-wrong-wrong", "--workspace", "Casa"}, &said); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("a wrong token: %v", err)

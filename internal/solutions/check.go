@@ -235,6 +235,9 @@ func (c *checker) collections() {
 			if len(col.ContentTypes) == 0 {
 				c.add(file, at+".content_types", "names the content types the collection accepts; a collection of another solution names what it expects instead")
 			}
+			if col.WebDAVEnabled && col.Kind != "library" {
+				c.add(file, at+".webdav_enabled", "is a library's setting; a list has none")
+			}
 			if len(col.Extends) > 0 {
 				c.add(file, at+".extends", "is for a collection of another solution; add the fields to the solution's own types")
 			}

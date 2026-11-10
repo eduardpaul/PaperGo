@@ -4,7 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"time"
 )
@@ -20,6 +22,35 @@ func (s Solution) FileName() string { return s.Manifest.Key + "-" + s.Manifest.V
 // and app's settings with the source they name. Other files of the folder
 // are left out. The same solution packs to the same bytes.
 func Pack(s Solution) ([]byte, error) {
+	files, err := s.files()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out bytes.Buffer
+	z := zip.NewWriter(&out)
+	for _, name := range names {
+		w, err := z.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: packedAt})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(files[name]); err != nil {
+			return nil, err
+		}
+	}
+	if err := z.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+// files are the files of a solution: the manifest, and each workflow's
+// and app's settings with the source they name.
+func (s Solution) files() (map[string][]byte, error) {
 	files := map[string][]byte{}
 	manifest, err := indented(s.Manifest)
 	if err != nil {
@@ -42,26 +73,26 @@ func Pack(s Solution) ([]byte, error) {
 		files[a.File] = settings
 		files[path.Join(path.Dir(a.File), a.SourceFile)] = []byte(a.Source)
 	}
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
+	return files, nil
+}
+
+// Write writes a solution's files into a folder, replacing those it has
+// and leaving its other files. It returns how many it wrote.
+func Write(s Solution, folder string) (int, error) {
+	files, err := s.files()
+	if err != nil {
+		return 0, err
 	}
-	sort.Strings(names)
-	var out bytes.Buffer
-	z := zip.NewWriter(&out)
-	for _, name := range names {
-		w, err := z.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: packedAt})
-		if err != nil {
-			return nil, err
+	for name, content := range files {
+		target := filepath.Join(folder, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return 0, err
 		}
-		if _, err := w.Write(files[name]); err != nil {
-			return nil, err
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return 0, err
 		}
 	}
-	if err := z.Close(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
+	return len(files), nil
 }
 
 func indented(v any) ([]byte, error) {

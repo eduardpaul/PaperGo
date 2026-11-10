@@ -4,7 +4,7 @@ A **solution** is the definitions of lists, workflows and apps that belong toget
 
 A solution is **applied** to a workspace that exists: PaperGo creates what the solution declares and the workspace lacks, updates what the solution changed since it was last applied, and leaves everything else, stored items first of all. Applying the same solution again changes nothing. A workspace holds any number of solutions, and two can work on the same list.
 
-`papergo solution` checks, packs, plans and applies solutions. Removing a solution, the web screens and languages are [planned](plans/solutions.md).
+`papergo solution` checks, packs, plans, applies, pulls and removes solutions. The web screens and languages are [planned](plans/solutions.md).
 
 ## The folder
 
@@ -122,6 +122,8 @@ papergo solution plan ./diesel            # what applying would change; changes 
 papergo solution apply ./diesel           # apply it
 papergo solution list                     # the solutions installed
 papergo solution status diesel            # whether one still has what it needs
+papergo solution pull diesel --out ./diesel   # write the installation's files, as it is now
+papergo solution remove diesel            # uninstall it; its lists and their items stay
 ```
 
 The commands take a folder or a packed ZIP, check it as `pack` does, and talk to the server's REST API with a [personal access token](identity.md). The workspace is named by its name or ID.
@@ -149,7 +151,7 @@ applied: 4 change(s)
 | a field of the solution leaving its content type | its stored values would have no field |
 | a `papergo` range this PaperGo is outside of | the solution was written for another version |
 
-A solution's version that no longer declares a workflow, an app or a view leaves it in place and says so.
+A solution's version that no longer declares a workflow, an app or a view leaves it in place, marks it retired and says so once. `--prune` deletes those; a collection, a content type or a field is never deleted by a solution.
 
 **Edits made in PaperGo stay.** The installation keeps, for each object, what the solution said it was and how it then was. On the next apply:
 
@@ -171,6 +173,12 @@ A collection of another solution (`use`) is found through that solution's instal
 **Paused.** `--paused` installs the solution with its workflows' automatic starts off, for trying a version in another workspace; `--resume` turns them on as the solution says.
 
 **Who may.** Planning and applying need manage access to the workspace and the `solution.manage` scope, which administrators have. Each change is also checked as if made by hand, as the person applying: catalog fields and content types need their scopes, apps need `app.manage`. That person becomes the author the solution's workflows run as.
+
+## Pulling and removing
+
+**Pull** writes an installation as files again, as it is now: names, labels, views, parameters and sources read from the workspace, with the IDs as references and a parameter that still holds a setting's value as `$setting:<name>`. What someone edited in the browser reaches the folder this way, and applying the pulled folder changes nothing; what was reported as kept is then what the solution says. Files of the folder that are not the solution's stay.
+
+**Remove** uninstalls a solution: its workflows, apps and views are deleted, the retired ones too, and its collections, content types and fields stay with every item they hold. It is refused while another installed solution uses one of its collections. Applying the solution again later finds its fields and content types, and makes a new collection unless one is bound.
 
 ## Status
 
@@ -196,8 +204,10 @@ receipts 1.0.0 needs attention:
 | GET | `/v1/workspaces/{id}/solutions` | The solutions installed |
 | GET | `/v1/workspaces/{id}/solutions/{key}` | One installation: version, settings, bindings, the manifest applied, and the object of each key |
 | GET | `/v1/workspaces/{id}/solutions/{key}/status` | Whether it has what it needs |
+| GET | `/v1/workspaces/{id}/solutions/{key}/package` | Pull: the installation as a packed solution |
+| DELETE | `/v1/workspaces/{id}/solutions/{key}` | Remove it |
 
-Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
+Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused`, `prune` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
 
 A workspace's installations are kept with the workspace and go with it.
 

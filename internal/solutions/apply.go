@@ -38,6 +38,9 @@ type Options struct {
 	// Decisions settle conflicts: for "<kind>:<key>", keep what was edited
 	// in PaperGo or replace it with the solution's.
 	Decisions map[string]string `json:"decisions,omitempty"`
+	// Prune deletes the workflows, apps and views the solution's version no
+	// longer declares. Collections, content types and fields always stay.
+	Prune bool `json:"prune,omitempty"`
 }
 
 // Decisions for an object that was edited in PaperGo and that the solution
@@ -203,16 +206,35 @@ func (r *run) reconcile() error {
 			return err
 		}
 	}
-	// What an earlier version installed and this one no longer declares stays.
+	// What an earlier version installed and this one no longer declares
+	// stays, marked, until it is pruned or the solution is removed.
 	if r.previous != nil {
 		for _, o := range r.previous.Objects {
-			if r.next.object(o.Kind, o.Key) == nil {
-				r.next.Objects = append(r.next.Objects, o)
+			if r.next.object(o.Kind, o.Key) != nil {
+				continue
+			}
+			if r.opts.Prune && prunable(o.Kind) {
+				if err := discard(r.ctx, r.t, r.subject, o); err != nil {
+					return failed(o.Kind, o.Key, err)
+				}
+				r.change("delete", o.Kind, o.Key, "no longer part of the solution")
+				continue
+			}
+			if !o.Retired {
 				r.warn("%s %s is no longer part of the solution; it was kept", strings.ReplaceAll(o.Kind, "_", " "), o.Key)
 			}
+			o.Retired = true
+			r.next.Objects = append(r.next.Objects, o)
 		}
 	}
 	r.next.Settings, r.next.Manifest = r.settings, m
+	r.next.Components = map[string]Component{}
+	for _, w := range r.sol.Workflows {
+		r.next.Components[KindWorkflow+":"+w.Key] = Component{File: w.File, Source: w.Script, Parameters: w.Parameters, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled}
+	}
+	for _, a := range r.sol.Apps {
+		r.next.Components[KindApp+":"+a.Key] = Component{File: a.File, Source: a.SourceFile, Parameters: a.Parameters}
+	}
 	r.installed.Installations[m.Key] = r.next
 	if err := writeInstalled(r.ctx, r.t, r.workspaceID, r.subject, r.installed); err != nil {
 		return err
@@ -315,7 +337,10 @@ func (r *run) decide(kind, key string, want, live any, exists bool) (action int,
 		}
 		return doSkip, ""
 	}
-	if lives == before.Live || lives == wants {
+	if lives == wants {
+		return doSkip, "" // already as the solution now says, as after a pull
+	}
+	if lives == before.Live {
 		return doUpdate, ""
 	}
 	switch r.opts.Decisions[name] {
@@ -582,18 +607,28 @@ func (r *run) collections() error {
 		} else if err := r.foreign(slot, c); err != nil {
 			return err
 		}
-		want := map[string]any{"name": slot.Name, "webdav_enabled": slot.WebDAVEnabled}
-		lives := map[string]any{"name": c.Name, "webdav_enabled": c.WebdavEnabled}
+		// WebDAV is a library's setting; a list has none.
+		state := func(name string, webdav bool) map[string]any {
+			if slot.Kind == "library" {
+				return map[string]any{"name": name, "webdav_enabled": webdav}
+			}
+			return map[string]any{"name": name}
+		}
+		want, lives := state(slot.Name, slot.WebDAVEnabled), state(c.Name, c.WebdavEnabled)
 		kept := ""
 		if role == RoleOwns {
 			var action int
 			if action, kept = r.decide(KindCollection, slot.Key, want, lives, true); action == doUpdate {
-				updated, err := r.t.Update(r.ctx, r.subject, c.ID, c.Version, dms.UpdateResource{Name: &slot.Name, WebDAVEnabled: &slot.WebDAVEnabled})
+				in := dms.UpdateResource{Name: &slot.Name}
+				if slot.Kind == "library" {
+					in.WebDAVEnabled = &slot.WebDAVEnabled
+				}
+				updated, err := r.t.Update(r.ctx, r.subject, c.ID, c.Version, in)
 				if err != nil {
 					return failed(KindCollection, slot.Key, err)
 				}
 				r.change("update", KindCollection, slot.Key, differences(lives, want))
-				lives = map[string]any{"name": updated.Name, "webdav_enabled": updated.WebdavEnabled}
+				lives = state(updated.Name, updated.WebdavEnabled)
 			}
 			if slot.Search != nil {
 				if err := r.search(slot, c.ID); err != nil {

@@ -1,6 +1,6 @@
 # Solutions (plan)
 
-Status: steps 1 and 2 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 0 and 3 to 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
+Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 0 and 4 to 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
 
 ## Why
 
@@ -264,7 +264,7 @@ The order puts the smallest things that remove the most scripting first.
 
 **Step 2: plan, apply, the installation record and status** (done), for creation and additive change, in the API and the command line. Slots are created or bound. Tests: applying each sample twice changes nothing the second time; a retyped field, a removed choice and a removed field are refused; a new optional field leaves stored items as they were; both samples install into one workspace; a second solution uses and extends the first one's list, and the first cannot then drop a field the second expects.
 
-**Step 3: upgrade and removal.** Customized objects, conflicts, objects that left the solution, uninstall, pull, paused installation. Tests: the three-state table above, row by row.
+**Step 3: upgrade and removal** (done). Customized objects, conflicts, objects that left the solution, uninstall, pull, paused installation. Tests: the three-state table above, row by row.
 
 **Step 4: the web screens.** Install with slot pickers and the settings form, the plan as a diff, status and notices in apps.
 

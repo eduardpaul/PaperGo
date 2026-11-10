@@ -33,6 +33,8 @@ func (m module) Routes() []httpapi.Route {
 		{Method: http.MethodGet, Pattern: "/v1/workspaces/{id}/solutions", OperationID: "listSolutions", Handle: m.list},
 		{Method: http.MethodGet, Pattern: "/v1/workspaces/{id}/solutions/{key}", OperationID: "getSolution", Handle: m.get},
 		{Method: http.MethodGet, Pattern: "/v1/workspaces/{id}/solutions/{key}/status", OperationID: "getSolutionStatus", Handle: m.status},
+		{Method: http.MethodGet, Pattern: "/v1/workspaces/{id}/solutions/{key}/package", OperationID: "getSolutionPackage", Handle: m.pull},
+		{Method: http.MethodDelete, Pattern: "/v1/workspaces/{id}/solutions/{key}", OperationID: "removeSolution", Handle: m.remove},
 	}
 }
 
@@ -120,6 +122,33 @@ func (module) get(w http.ResponseWriter, r *http.Request, in httpapi.Request) er
 
 func (module) status(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
 	out, err := service(in).Status(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
+	if err != nil {
+		return err
+	}
+	httpapi.Respond(w, r, http.StatusOK, out)
+	return nil
+}
+
+// pull answers with the installation as a packed solution.
+func (module) pull(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	s, err := service(in).Pull(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
+	if err != nil {
+		return err
+	}
+	raw, err := Pack(s)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+s.FileName()+`"`)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
+	return nil
+}
+
+func (module) remove(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := service(in).Remove(context.WithoutCancel(r.Context()), in.Subject, r.PathValue("id"), r.PathValue("key"))
 	if err != nil {
 		return err
 	}

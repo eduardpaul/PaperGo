@@ -56,6 +56,19 @@ type Installation struct {
 	// Manifest is the solution's manifest as it was applied: what the
 	// installation is checked against afterwards.
 	Manifest Manifest `json:"manifest"`
+	// Components are the settings files of the workflows and apps as they
+	// were applied, by "<kind>:<key>": where each came from and the
+	// parameters it named, references included.
+	Components map[string]Component `json:"components,omitempty"`
+}
+
+// Component is the settings file of a workflow or an app as it was applied.
+type Component struct {
+	File             string         `json:"file"`
+	Source           string         `json:"source"`
+	Parameters       map[string]any `json:"parameters,omitempty"`
+	AutomaticEnabled *bool          `json:"automatic_enabled,omitempty"`
+	ManualEnabled    *bool          `json:"manual_enabled,omitempty"`
 }
 
 // Object is one object of an installation.
@@ -69,6 +82,9 @@ type Object struct {
 	// object whose hash is no longer Live was edited in PaperGo since.
 	Applied string `json:"applied,omitempty"`
 	Live    string `json:"live,omitempty"`
+	// Retired marks an object the solution's version no longer declares.
+	// It stays until it is pruned or the solution is removed.
+	Retired bool `json:"retired,omitempty"`
 }
 
 func (i *Installation) object(kind, key string) *Object {

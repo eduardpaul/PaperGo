@@ -25007,6 +25007,52 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "delete": {
+        "summary": "Remove a Solution",
+        "operationId": "removeSolution",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "Uninstalls a solution: deletes its workflows, apps and views, and forgets the installation. Its collections, content types and fields stay, with every item they hold. Refused (422) while another installed solution uses one of its collections. Needs manage access to the workspace and solution.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The solution's key."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "solution.manage"
+        ]
       }
     },
     "/v1/workspaces/{id}/solutions/{key}/status": {
@@ -25044,6 +25090,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SolutionStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/solutions/{key}/package": {
+      "get": {
+        "summary": "Pull a Solution",
+        "operationId": "getSolutionPackage",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "The installation as a packed solution, as it is now: the manifest and the workflows' and apps' settings and sources read from the workspace, with what people changed in PaperGo since it was applied, and IDs as references again. Applying it changes nothing. Sources are shown to those who may read them.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The solution's key."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A packed solution",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
@@ -36392,6 +36484,10 @@
               ]
             },
             "description": "For \"<kind>:<key>\": keep what was edited in PaperGo, or replace it with the solution's."
+          },
+          "prune": {
+            "type": "boolean",
+            "description": "Delete the workflows, apps and views the solution's version no longer declares. Collections, content types and fields always stay."
           }
         }
       },
@@ -36410,7 +36506,9 @@
               "update",
               "attach",
               "extend",
-              "bind"
+              "bind",
+              "delete",
+              "keep"
             ]
           },
           "kind": {
@@ -36589,6 +36687,10 @@
           "live": {
             "type": "string",
             "description": "The hash of the object as it then was."
+          },
+          "retired": {
+            "type": "boolean",
+            "description": "The solution's version no longer declares the object; it stays until pruned or the solution is removed."
           }
         }
       },
@@ -36643,6 +36745,10 @@
           "manifest": {
             "type": "object",
             "description": "The solution's manifest (solution.json) as it was applied."
+          },
+          "components": {
+            "type": "object",
+            "description": "The settings files of the workflows and apps as they were applied, by \"<kind>:<key>\"."
           }
         }
       },

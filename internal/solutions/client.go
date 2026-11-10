@@ -168,6 +168,7 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	flags.Var(&set, "set", "A setting of the solution, as name=value; repeat for more")
 	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID; repeat for more")
 	flags.Var(&decide, "decide", "What to do with an object edited in PaperGo that the solution changes too, as kind:key=keep or kind:key=replace")
+	prune := flags.Bool("prune", false, "Delete the workflows, apps and views this version no longer declares")
 	paused := flags.Bool("paused", false, "Keep the solution's workflows from starting on their own")
 	resume := flags.Bool("resume", false, "Let the workflows of a paused solution start again")
 	folder, rest := leading(args)
@@ -239,6 +240,7 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	if *paused || *resume {
 		o.Paused = paused
 	}
+	o.Prune = *prune
 	options, err := json.Marshal(o)
 	if err != nil {
 		return err
@@ -363,4 +365,91 @@ func statusCommand(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "  %s\n", p)
 	}
 	return fmt.Errorf("%d problem(s)", len(status.Problems))
+}
+
+// removeCommand uninstalls a solution from a workspace.
+func removeCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("remove", flag.ContinueOnError)
+	flags.SetOutput(out)
+	conn := connect(flags)
+	key, rest := leading(args)
+	if err := flags.Parse(rest); err != nil {
+		return err
+	}
+	if key == "" || flags.NArg() != 0 {
+		return errors.New(usage)
+	}
+	c, err := conn.client()
+	if err != nil {
+		return err
+	}
+	workspaceID, err := c.workspace(ctx, *conn.workspace)
+	if err != nil {
+		return err
+	}
+	var result Result
+	if _, err := c.do(ctx, http.MethodDelete, "/v1/workspaces/"+workspaceID+"/solutions/"+url.PathEscape(key), nil, "", &result); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s %s\n", result.Solution, result.Version)
+	for _, ch := range result.Changes {
+		fmt.Fprintf(out, "  %-7s %s %s\n", ch.Action, strings.ReplaceAll(ch.Kind, "_", " "), ch.Key)
+	}
+	fmt.Fprintln(out, "removed; its lists, content types and fields stay with what they hold")
+	return nil
+}
+
+// pullCommand writes an installation's files into a folder: the solution
+// as it is now in the workspace.
+func pullCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("pull", flag.ContinueOnError)
+	flags.SetOutput(out)
+	conn := connect(flags)
+	target := flags.String("out", "", "The folder to write the solution's files into; its other files stay")
+	key, rest := leading(args)
+	if err := flags.Parse(rest); err != nil {
+		return err
+	}
+	if key == "" || flags.NArg() != 0 || *target == "" {
+		return errors.New(usage)
+	}
+	c, err := conn.client()
+	if err != nil {
+		return err
+	}
+	workspaceID, err := c.workspace(ctx, *conn.workspace)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/v1/workspaces/"+workspaceID+"/solutions/"+url.PathEscape(key)+"/package", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, MaxPackageBytes+1))
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("pull %s: %d %s", key, res.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	files, err := OpenZIP(raw)
+	if err != nil {
+		return err
+	}
+	s, problems := Load(files)
+	if len(problems) > 0 {
+		return problems
+	}
+	written, err := Write(s, *target)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s %s: %d file(s) written to %s\n", s.Manifest.Key, s.Manifest.Version, written, *target)
+	return nil
 }
