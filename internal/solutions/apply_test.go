@@ -3,6 +3,7 @@ package solutions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -425,6 +426,35 @@ func TestApplySettingsAndPause(t *testing.T) {
 		t.Fatalf("an apply resumed a paused installation: %+v", again)
 	}
 	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity_l": "a lot"}}), "REFUSED settings tank")
+}
+
+// A setting nobody gave follows its default, read again at each apply; one
+// given by hand stays until it is returned to the default.
+func TestSettingsFollowTheirDefaults(t *testing.T) {
+	p := newPlace(t)
+	first := p.applied(tank(), Options{Settings: map[string]any{"capacity_l": 1000}})
+	if first.Settings["time_zone"] != "UTC" || strings.Join(first.SettingsGiven, ",") != "capacity_l" {
+		t.Fatalf("first: %+v given %v", first.Settings, first.SettingsGiven)
+	}
+	madrid := "Europe/Madrid"
+	if _, err := p.dms.Directory().PatchPreferences(p.ctx, admin, true, 0, map[string]*string{"time_zone": &madrid}); err != nil {
+		t.Fatal(err)
+	}
+	moved := p.applied(tank(), Options{})
+	has(t, moved, "update workflow tank-levels parameters")
+	if in := p.installation("tank"); in.Settings["time_zone"] != "Europe/Madrid" || in.Settings["capacity_l"] != float64(1000) || len(in.SettingsGiven) != 1 {
+		t.Fatalf("the default was not read again, or the given value was lost: %+v given %+v", in.Settings, in.SettingsGiven)
+	}
+	// A newer version's default reaches a setting nobody gave, and not one given.
+	next := edit("solution.json", `"default": 750`, `"default": 900`)
+	if r := p.applied(next, Options{}); fmt.Sprint(r.Settings["capacity_l"]) != "1000" {
+		t.Fatalf("a given value followed the default: %+v", r.Settings)
+	}
+	back := p.applied(next, Options{Settings: map[string]any{"capacity_l": nil}})
+	if fmt.Sprint(back.Settings["capacity_l"]) != "900" || len(back.SettingsGiven) != 0 {
+		t.Fatalf("null returns a setting to its default: %+v given %v", back.Settings, back.SettingsGiven)
+	}
+	has(t, back, "update app tank-dashboard parameters")
 }
 
 // Installing needs solution.manage and manage access to the workspace.

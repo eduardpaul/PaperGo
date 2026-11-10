@@ -28,8 +28,9 @@ const Scope = "solution.manage"
 
 // Options are what the person applying a solution chooses.
 type Options struct {
-	// Settings are values of the solution's settings form; those left out
-	// keep what the installation has, or the form's defaults.
+	// Settings are values of the solution's settings form. One left out
+	// keeps the value given before, or takes the form's default as it now
+	// is; null returns a setting to its default.
 	Settings map[string]any `json:"settings,omitempty"`
 	// Bindings choose an existing collection for a slot, by slot key.
 	Bindings map[string]string `json:"bindings,omitempty"`
@@ -128,6 +129,9 @@ type Result struct {
 	// the organization where it says so, and Settings the values used.
 	SettingsForm map[string]any `json:"settings_form,omitempty"`
 	Settings     map[string]any `json:"settings"`
+	// SettingsGiven names the settings whose value was given by hand; the
+	// others follow the form's defaults.
+	SettingsGiven []string `json:"settings_given"`
 	// Paused is whether the installation's workflows are kept from starting
 	// on their own once this is applied.
 	Paused bool `json:"paused"`
@@ -196,7 +200,7 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		ids: map[string]string{}, fieldIDs: map[string]string{}, typeIDs: map[string]string{},
 		preferences: map[string]string{"time_zone": preferences.TimeZone, "language": preferences.Language, "default_currency": preferences.DefaultCurrency,
 			"number_format": preferences.NumberFormat, "date_format": preferences.DateFormat, "time_format": preferences.TimeFormat},
-		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}, Languages: sol.Languages()}}
+		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}, SettingsGiven: []string{}, Languages: sol.Languages()}}
 	required, optional := s.lacks(sol.Manifest)
 	for _, name := range required {
 		r.refuse("solution", sol.Manifest.Key, "needs %s, which this PaperGo does not provide", name)
@@ -244,6 +248,8 @@ type run struct {
 	fieldIDs map[string]string
 	typeIDs  map[string]string
 	settings map[string]any
+	// given are the settings given by hand, now or in an earlier apply.
+	given map[string]any
 }
 
 func (r *run) change(action, kind, key, detail string) {
@@ -320,7 +326,7 @@ func (r *run) reconcile() error {
 	}
 	// The installation keeps the solution as its files say, with its
 	// locales: what it is checked against, and what a pull starts from.
-	r.next.Settings, r.next.Manifest, r.next.Locales = r.settings, r.base.Manifest, r.base.Locales
+	r.next.Settings, r.next.SettingsGiven, r.next.Manifest, r.next.Locales = r.settings, r.given, r.base.Manifest, r.base.Locales
 	r.next.Components = map[string]Component{}
 	for _, w := range r.base.Workflows {
 		r.next.Components[KindWorkflow+":"+w.Key] = Component{File: w.File, Source: w.Script, Name: w.Name, Description: w.Description, Parameters: w.Parameters, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled}
@@ -384,20 +390,25 @@ func (r *run) checkVersion() {
 	}
 }
 
-// settle works out the values of the solution's settings: what was given,
-// else what the installation has, else the form's defaults, with defaults
-// read from the organization's preferences.
+// settle works out the values of the solution's settings: what was given
+// by hand, now or in an earlier apply, and the form's defaults for the
+// rest. Defaults are read again each time, the organization's preferences
+// among them, so a setting nobody gave follows them.
 func (r *run) settle() {
 	r.settings = map[string]any{}
 	form := r.sol.Manifest.Settings
 	given := map[string]any{}
 	if r.previous != nil {
-		for k, v := range r.previous.Settings {
+		for k, v := range r.previous.SettingsGiven {
 			given[k] = v
 		}
 	}
 	for k, v := range r.opts.Settings {
-		given[k] = v
+		if v == nil {
+			delete(given, k) // back to the default
+		} else {
+			given[k] = v
+		}
 	}
 	if form == nil {
 		if len(r.opts.Settings) > 0 {
@@ -424,7 +435,8 @@ func (r *run) settle() {
 		r.refuse("settings", r.sol.Manifest.Key, "%s", err)
 		return
 	}
-	r.settings, r.result.Settings = values, values
+	r.settings, r.result.Settings, r.given = values, values, given
+	r.result.SettingsGiven = sortedKeys(given)
 }
 
 // Actions settling an object can take.

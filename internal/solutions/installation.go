@@ -44,8 +44,11 @@ type Installation struct {
 	Key     string `json:"key"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
-	// Settings are the values of the solution's settings form.
-	Settings map[string]any `json:"settings"`
+	// Settings are the values of the solution's settings form it was
+	// applied with, and SettingsGiven those of them given by hand: the rest
+	// came from the form's defaults, which the next apply reads again.
+	Settings      map[string]any `json:"settings"`
+	SettingsGiven map[string]any `json:"settings_given,omitempty"`
 	// Bindings are the slots bound by hand, to the collection chosen.
 	Bindings map[string]string `json:"bindings,omitempty"`
 	// Language is the language its display names were installed in, of

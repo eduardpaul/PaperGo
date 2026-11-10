@@ -34,6 +34,7 @@
     "first": "First installation",
     "from": "Installed: {{version}}",
     "settings": "Settings",
+    "useDefault": "Use the default",
     "collections": "Lists and libraries",
     "slotCreate": "Create \"{{name}}\"",
     "slotChoose": "Choose one…",

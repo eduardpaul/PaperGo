@@ -142,10 +142,9 @@ function Install({ workspaceId }: { workspaceId: string }) {
   const send = useMutation({
     mutationFn: (step: 'plan' | 'apply') => sendSolution(workspaceId, file!, step, optionsOf(choices)),
     onSuccess: async (next, step) => {
-      // The first review brings the values the solution would use, to change from there.
+      // The review brings what the solution would use; only what is changed here is sent.
       const settled: Choices = {
         ...choices,
-        settings: { ...next.settings, ...choices.settings },
         bindings: {
           ...Object.fromEntries(next.slots.filter((slot) => slot.state === 'bound').map((slot) => [slot.key, slot.collection_id ?? ''])),
           ...choices.bindings,
@@ -252,16 +251,30 @@ function Plan({
       {settings.length > 0 && (
         <div>
           <h4 className="text-xs font-medium text-muted uppercase">{t('plan.settings')}</h4>
-          {settings.map(([name, schema]) => (
-            <SettingRow key={name} id={`setting-${name}`} label={schema.title ?? name} hint={schema.description}>
-              <SettingInput
-                id={`setting-${name}`}
-                schema={schema}
-                value={choices.settings[name]}
-                onChange={(value) => change({ settings: { ...choices.settings, [name]: value } })}
-              />
-            </SettingRow>
-          ))}
+          {settings.map(([name, schema]) => {
+            // A setting not changed here, or returned to its default, shows the value the review used.
+            const chosen = name in choices.settings && choices.settings[name] !== null;
+            const given = choices.settings[name] !== null && (chosen || result.settings_given.includes(name));
+            return (
+              <SettingRow key={name} id={`setting-${name}`} label={schema.title ?? name} hint={schema.description}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <SettingInput
+                      id={`setting-${name}`}
+                      schema={schema}
+                      value={chosen ? choices.settings[name] : result.settings[name]}
+                      onChange={(value) => change({ settings: { ...choices.settings, [name]: value } })}
+                    />
+                  </div>
+                  {given && (
+                    <Button size="sm" variant="ghost" onClick={() => change({ settings: { ...choices.settings, [name]: null } })}>
+                      {t('plan.useDefault')}
+                    </Button>
+                  )}
+                </div>
+              </SettingRow>
+            );
+          })}
         </div>
       )}
 

@@ -7,7 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {}, paused: false, languages: [] };
+const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {}, settings_given: [], paused: false, languages: [] };
 
 it('sends the packed solution with the choices, and returns a refused apply as its result', async () => {
   setToken('token');
@@ -42,4 +42,10 @@ it('leaves a paused installation paused unless the box was changed', () => {
   expect(optionsOf(noChoices).paused).toBeUndefined();
   expect(JSON.parse(JSON.stringify(optionsOf(noChoices)))).not.toHaveProperty('paused');
   expect(optionsOf({ ...noChoices, paused: false }).paused).toBe(false);
+});
+
+it('sends only the settings changed here, and null for one returned to its default', () => {
+  expect(optionsOf(noChoices).settings).toEqual({});
+  const sent = JSON.parse(JSON.stringify(optionsOf({ ...noChoices, settings: { capacity_l: 900, time_zone: null, cleared: undefined } })));
+  expect(sent.settings).toEqual({ capacity_l: 900, time_zone: null });
 });

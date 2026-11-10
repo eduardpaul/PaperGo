@@ -60,6 +60,8 @@ export interface SolutionResult {
   slots: SolutionSlot[];
   settings_form?: { properties?: Record<string, SettingSchema> };
   settings: Record<string, unknown>;
+  /** The settings whose value was given by hand; the others follow the form's defaults. */
+  settings_given: string[];
   /** Whether the installation's workflows are kept from starting on their own once this is applied. */
   paused: boolean;
   /** The language of the display names used, of languages; absent for the solution's own text. */
@@ -78,6 +80,7 @@ export type Decision = 'keep' | 'replace';
 
 /** What the person applying a solution chooses. */
 export interface SolutionOptions {
+  /** A setting left out keeps what was given before, or follows its default; null returns it to the default. */
   settings?: Record<string, unknown>;
   bindings?: Record<string, string>;
   paused?: boolean;
@@ -89,6 +92,7 @@ export interface SolutionOptions {
 
 /** What the installer has chosen so far for the solution in the file. */
 export interface Choices {
+  /** The settings changed here; null returns one to the solution's default. */
   settings: Record<string, unknown>;
   bindings: Record<string, string>;
   decisions: Record<string, Decision>;

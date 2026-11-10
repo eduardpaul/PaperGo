@@ -14,7 +14,7 @@ const usage = `usage: papergo solution <command>
   pack <folder> [--out <file or folder>]       check a solution's folder and write its ZIP
   plan <folder or ZIP> --workspace <name>       show what applying it would change
   apply <folder or ZIP> --workspace <name>      apply it
-       [--set name=value] [--bind slot=list] [--decide kind:key=keep|replace] [--language es] [--prune] [--paused | --resume]
+       [--set name=value] [--unset name] [--bind slot=list] [--decide kind:key=keep|replace] [--language es] [--prune] [--paused | --resume]
   list --workspace <name>                       the solutions installed
   status <key> --workspace <name>               whether one has what it needs
   pull <key> --workspace <name> --out <folder>  write an installation's files, as it is now

@@ -187,7 +187,7 @@ A decision to keep is remembered: the object stays as edited until the solution 
 
 A choice added to a solution's field in PaperGo, and a field added to its content type, are not edits of what the solution says: they stay through every apply, and a [pull](#pulling-and-removing) brings them to the files.
 
-**Settings.** `--set name=value` gives a value of the solution's settings form; values given once are kept by the installation, and the rest take the form's defaults, read from the organization's preferences where the form says so. Parameters that name `$setting:<name>` get the values.
+**Settings.** `--set name=value` gives a value of the solution's settings form, and the installation keeps it. A setting nobody gave takes the form's default, read again at each apply: the organization's preference where the form says so, and a newer version's default. `--unset name` returns a setting to its default. Parameters that name `$setting:<name>` get the values.
 
 **Collections.** A collection the solution owns is created with its name, content types, views and search setting. `--bind slot=<list name or ID>` uses a list or library that exists instead: it keeps its name and settings, and gets the solution's content types and views. The binding is remembered.
 
@@ -203,7 +203,7 @@ A collection of another solution (`use`) is found through that solution's instal
 
 1. Choose a packed solution, the ZIP `papergo solution pack` writes.
 2. **Review changes.** The screen shows the plan and asks what the solution leaves open:
-   - its settings, with the values it would use;
+   - its settings, with the values it would use; one given by hand can be returned to the solution's default;
    - for each list or library it owns, whether to create it or use one the workspace has;
    - for each object edited in PaperGo that the solution changes too, whether to keep the edit or take the solution's;
    - the language of its names, when it has them in several;
@@ -246,7 +246,7 @@ receipts 1.0.0 needs attention:
 | GET | `/v1/workspaces/{id}/solutions/{key}/package` | Pull: the installation as a packed solution |
 | DELETE | `/v1/workspaces/{id}/solutions/{key}` | Remove it |
 
-Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused`, `prune`, `language` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
+Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings` (`null` returns one to its default), `bindings` (slot key to collection ID), `paused`, `prune`, `language` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
 
 A workspace's installations are kept with the workspace and go with it.
 

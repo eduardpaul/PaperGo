@@ -36461,7 +36461,7 @@
         "properties": {
           "settings": {
             "type": "object",
-            "description": "Values of the solution's settings form; those left out keep what the installation has, or the form's defaults."
+            "description": "Values of the solution's settings form. One left out keeps the value given before, or takes the form's default as it now is; null returns a setting to its default."
           },
           "bindings": {
             "type": "object",
@@ -36562,6 +36562,7 @@
           "warnings",
           "slots",
           "settings",
+          "settings_given",
           "paused",
           "languages"
         ],
@@ -36622,6 +36623,13 @@
           "settings": {
             "type": "object",
             "description": "The settings values used."
+          },
+          "settings_given": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The settings whose value was given by hand; the others follow the form's defaults."
           },
           "paused": {
             "type": "boolean",
@@ -36743,6 +36751,7 @@
           "name",
           "version",
           "settings",
+          "settings_given",
           "paused",
           "applied_by",
           "applied_at",
@@ -36760,7 +36769,12 @@
             "type": "string"
           },
           "settings": {
-            "type": "object"
+            "type": "object",
+            "description": "The values of the solution's settings form it was applied with."
+          },
+          "settings_given": {
+            "type": "object",
+            "description": "Those of the settings given by hand; the rest came from the form's defaults, which the next apply reads again."
           },
           "bindings": {
             "type": "object",

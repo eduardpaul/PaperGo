@@ -140,13 +140,14 @@ func (c *client) workspace(ctx context.Context, name string) (string, error) {
 	return c.find(ctx, "workspace", "/v1/workspaces", name)
 }
 
-// pairs collects repeated key=value flags.
-type pairs []string
+// repeated collects the values of a flag given more than once.
+type repeated []string
 
-func (p *pairs) String() string     { return strings.Join(*p, ",") }
-func (p *pairs) Set(v string) error { *p = append(*p, v); return nil }
+func (p *repeated) String() string     { return strings.Join(*p, ",") }
+func (p *repeated) Set(v string) error { *p = append(*p, v); return nil }
 
-func (p pairs) each(what string, fn func(key, value string) error) error {
+// each reads the values as key=value.
+func (p repeated) each(what string, fn func(key, value string) error) error {
 	for _, pair := range p {
 		key, value, ok := strings.Cut(pair, "=")
 		if !ok || key == "" {
@@ -164,8 +165,9 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(out)
 	conn := connect(flags)
-	var set, bind, decide pairs
+	var set, unset, bind, decide repeated
 	flags.Var(&set, "set", "A setting of the solution, as name=value; repeat for more")
+	flags.Var(&unset, "unset", "A setting to return to the solution's default, by name; repeat for more")
 	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID; repeat for more")
 	flags.Var(&decide, "decide", "What to do with an object edited in PaperGo that the solution changes too, as kind:key=keep or kind:key=replace")
 	prune := flags.Bool("prune", false, "Delete the workflows, apps and views this version no longer declares")
@@ -215,6 +217,12 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 		return nil
 	}); err != nil {
 		return err
+	}
+	for _, name := range unset {
+		if o.Settings == nil {
+			o.Settings = map[string]any{}
+		}
+		o.Settings[name] = nil
 	}
 	if err := bind.each("bind", func(slot, name string) error {
 		id, err := c.find(ctx, "list or library", "/v1/resources/"+workspaceID+"/children", name)
