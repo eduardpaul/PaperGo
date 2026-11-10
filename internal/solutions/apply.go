@@ -32,7 +32,8 @@ type Options struct {
 	// keeps the value given before, or takes the form's default as it now
 	// is; null returns a setting to its default.
 	Settings map[string]any `json:"settings,omitempty"`
-	// Bindings choose an existing collection for a slot, by slot key.
+	// Bindings choose an existing collection for a slot, by slot key. A
+	// slot left out keeps its binding; an empty ID unbinds it.
 	Bindings map[string]string `json:"bindings,omitempty"`
 	// Paused keeps the solution's workflows from starting on their own.
 	Paused *bool `json:"paused,omitempty"`
@@ -814,6 +815,9 @@ func (r *run) collections() error {
 			continue // refused
 		}
 		r.ids[RefCollection+slot.Key] = c.ID
+		if before != nil && before.ID != c.ID {
+			r.warn("%s now stands for another collection: what the solution gave the one before, its content types and views, stays there", slot.Key)
+		}
 		if slot.Owned() {
 			if c, err = r.attach(slot, c); err != nil {
 				return err
@@ -854,8 +858,8 @@ func (r *run) extensionsAndViews() error {
 // installation owns it. A nil collection was refused.
 func (r *run) target(slot Collection) (*resources.Resource, string, error) {
 	// A collection chosen by hand: the solution keeps its name and settings.
-	bound := r.opts.Bindings[slot.Key]
-	if bound == "" && r.previous != nil {
+	bound, chosen := r.opts.Bindings[slot.Key]
+	if !chosen && r.previous != nil {
 		bound = r.previous.Bindings[slot.Key]
 	}
 	if bound != "" {
@@ -907,7 +911,9 @@ func (r *run) target(slot Collection) (*resources.Resource, string, error) {
 		}
 		return c, RoleUses, nil
 	}
-	if o := r.previous.object(KindCollection, slot.Key); o != nil {
+	// The collection an earlier apply created; one that was bound and no
+	// longer is was never the solution's.
+	if o := r.previous.object(KindCollection, slot.Key); o != nil && o.Role == RoleOwns {
 		if c, err := r.t.Get(r.ctx, r.subject, o.ID); err == nil {
 			return c, RoleOwns, nil
 		}

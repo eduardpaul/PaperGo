@@ -49,3 +49,7 @@ it('sends only the settings changed here, and null for one returned to its defau
   const sent = JSON.parse(JSON.stringify(optionsOf({ ...noChoices, settings: { capacity_l: 900, time_zone: null, cleared: undefined } })));
   expect(sent.settings).toEqual({ capacity_l: 900, time_zone: null });
 });
+
+it('sends an emptied choice of list, which unbinds the slot', () => {
+  expect(optionsOf({ ...noChoices, bindings: { tank: '', receipts: 'c1' } }).bindings).toEqual({ tank: '', receipts: 'c1' });
+});

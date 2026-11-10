@@ -500,6 +500,19 @@ func TestApplyBindsAnExistingCollection(t *testing.T) {
 	if again := p.applied(tank(), Options{}); len(again.Changes) != 0 {
 		t.Fatalf("applying again:\n%s", said(again))
 	}
+	// Unbound, the solution makes its own list, and the bound one stays as it is.
+	unbound := p.applied(tank(), Options{Bindings: map[string]string{"readings": ""}})
+	has(t, unbound, "create collection readings list Tank")
+	in := p.installation("tank")
+	if o := in.object(KindCollection, "readings"); len(in.Bindings) != 0 || o.ID == mine.ID || o.Role != RoleOwns || unbound.Slots[0].State != SlotCreate {
+		t.Fatalf("the slot is still bound: %+v %+v", in.Bindings, unbound.Slots)
+	}
+	if !strings.Contains(strings.Join(unbound.Warnings, "\n"), "readings now stands for another collection") {
+		t.Fatalf("warnings: %v", unbound.Warnings)
+	}
+	if again := p.applied(tank(), Options{}); len(again.Changes) != 0 || again.Slots[0].State != SlotInstalled {
+		t.Fatalf("applying after unbinding:\n%s\n%+v", said(again), again.Slots)
+	}
 }
 
 // A view someone made is not the solution's for having its name: the

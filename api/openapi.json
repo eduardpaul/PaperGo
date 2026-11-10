@@ -36468,7 +36468,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "An existing list or library for a slot, by the slot's key."
+            "description": "An existing list or library for a slot, by the slot's key. A slot left out keeps its binding; an empty ID unbinds it."
           },
           "paused": {
             "type": "boolean",

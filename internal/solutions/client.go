@@ -168,7 +168,7 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	var set, unset, bind, decide repeated
 	flags.Var(&set, "set", "A setting of the solution, as name=value; repeat for more")
 	flags.Var(&unset, "unset", "A setting to return to the solution's default, by name; repeat for more")
-	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID; repeat for more")
+	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID, or slot= to unbind it; repeat for more")
 	flags.Var(&decide, "decide", "What to do with an object edited in PaperGo that the solution changes too, as kind:key=keep or kind:key=replace")
 	prune := flags.Bool("prune", false, "Delete the workflows, apps and views this version no longer declares")
 	language := flags.String("language", "", "The language of the display names to install, of those the solution has; none for its own text")
@@ -222,10 +222,14 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 		o.Settings[name] = nil
 	}
 	if err := bind.each("bind", func(slot, name string) error {
-		id, err := c.find(ctx, "list or library", "/v1/resources/"+workspaceID+"/children", name)
 		if o.Bindings == nil {
 			o.Bindings = map[string]string{}
 		}
+		if name == "" {
+			o.Bindings[slot] = "" // unbind
+			return nil
+		}
+		id, err := c.find(ctx, "list or library", "/v1/resources/"+workspaceID+"/children", name)
 		o.Bindings[slot] = id
 		return err
 	}); err != nil {

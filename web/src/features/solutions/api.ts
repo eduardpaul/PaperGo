@@ -82,6 +82,7 @@ export type Decision = 'keep' | 'replace';
 export interface SolutionOptions {
   /** A setting left out keeps what was given before, or follows its default; null returns it to the default. */
   settings?: Record<string, unknown>;
+  /** A slot left out keeps its binding; an empty ID unbinds it. */
   bindings?: Record<string, string>;
   paused?: boolean;
   prune?: boolean;
@@ -94,6 +95,7 @@ export interface SolutionOptions {
 export interface Choices {
   /** The settings changed here; null returns one to the solution's default. */
   settings: Record<string, unknown>;
+  /** The list or library chosen for a slot, by slot key; an empty ID unbinds a slot that was bound. */
   bindings: Record<string, string>;
   decisions: Record<string, Decision>;
   /** Absent leaves the installation paused or running, as it is. */
@@ -107,10 +109,9 @@ export const noChoices: Choices = { settings: {}, bindings: {}, decisions: {}, p
 
 /** The options a plan or an apply is sent with: only what was chosen, so that the rest stays as the installation has it. */
 export function optionsOf(choices: Choices): SolutionOptions {
-  const bindings = Object.fromEntries(Object.entries(choices.bindings).filter(([, id]) => id));
   return {
     settings: choices.settings,
-    bindings,
+    bindings: choices.bindings,
     decisions: choices.decisions,
     paused: choices.paused,
     prune: choices.prune || undefined,

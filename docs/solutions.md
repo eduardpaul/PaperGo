@@ -189,7 +189,7 @@ A choice added to a solution's field in PaperGo, and a field added to its conten
 
 **Settings.** `--set name=value` gives a value of the solution's settings form, and the installation keeps it. A text setting takes the value as written; a number, a yes or no, a list or an object is written as JSON (`--set capacity_l=1000`, `--set days='["mon","thu"]'`). A setting nobody gave takes the form's default, read again at each apply: the organization's preference where the form says so, and a newer version's default. `--unset name` returns a setting to its default. Parameters that name `$setting:<name>` get the values.
 
-**Collections.** A collection the solution owns is created with its name, content types, views and search setting. Its name, a library's WebDAV setting and its search setting are the solution's like everything else: changed in PaperGo, they stay. `--bind slot=<list name or ID>` uses a list or library that exists instead: it keeps its name and settings, and gets the solution's content types and views. The binding is remembered.
+**Collections.** A collection the solution owns is created with its name, content types, views and search setting. Its name, a library's WebDAV setting and its search setting are the solution's like everything else: changed in PaperGo, they stay. `--bind slot=<list name or ID>` uses a list or library that exists instead: it keeps its name and settings, and gets the solution's content types and views. The binding is remembered; `--bind slot=` ends it, and the solution then makes its own collection. What it gave the list before, its content types and views, stays there.
 
 A collection of another solution (`use`) is found through that solution's installation in the same workspace, which must be there, in the `version` range. What the slot `expects` is checked and never changed. What it `extends` is added to the list's own copy of the content type, so the catalog type, and every other list of that type, stays as its owner made it.
 
@@ -246,7 +246,7 @@ receipts 1.0.0 needs attention:
 | GET | `/v1/workspaces/{id}/solutions/{key}/package` | Pull: the installation as a packed solution |
 | DELETE | `/v1/workspaces/{id}/solutions/{key}` | Remove it |
 
-Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings` (`null` returns one to its default), `bindings` (slot key to collection ID), `paused`, `prune`, `language` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
+Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings` (`null` returns one to its default), `bindings` (slot key to collection ID; an empty ID unbinds), `paused`, `prune`, `language` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
 
 A workspace's installations are kept with the workspace and go with it.
 
