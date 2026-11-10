@@ -22,6 +22,7 @@ import (
 	"papergo/internal/integration"
 	"papergo/internal/officefiles"
 	"papergo/internal/scriptrun"
+	"papergo/internal/solutions"
 	"papergo/internal/storage"
 	"papergo/internal/textfiles"
 	"papergo/internal/webdav"
@@ -47,8 +48,18 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "solution" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		err := solutions.Run(ctx, os.Args[2:], os.Stdout)
+		stop()
+		if err != nil && !errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: papergo [--version | admin <command>]; the server reads its configuration from config.yaml and environment variables")
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version | admin <command> | solution <command>]; the server reads its configuration from config.yaml and environment variables")
 		os.Exit(1)
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))

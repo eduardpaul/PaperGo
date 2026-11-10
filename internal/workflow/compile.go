@@ -58,3 +58,12 @@ func compile(ctx context.Context, source string, params map[string]any) (Definit
 func Artifact(v workflows.Version) script.Artifact {
 	return script.Artifact{Code: v.Bundle, Hash: v.BundleHash}
 }
+
+// Check compiles a workflow script as saving it would and returns the
+// definition its export declares with params: everything about a script that
+// needs no database. Solutions check their workflows with it before anything
+// is installed.
+func Check(ctx context.Context, source string, params map[string]any) (Definition, error) {
+	def, _, err := compile(ctx, source, params)
+	return def, err
+}

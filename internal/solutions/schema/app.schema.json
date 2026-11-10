@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperGo solution app",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "name",
+    "source"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,89}$",
+      "description": "Starts with the solution's key and a hyphen, such as diesel-dashboard."
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "description": "The app's TSX file, beside this one."
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Name what the solution declares as $collection:<key>, $type:<key> and $setting:<name>."
+    },
+    "state": {
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ]
+    }
+  }
+}
