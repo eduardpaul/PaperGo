@@ -36562,6 +36562,7 @@
           "warnings",
           "slots",
           "settings",
+          "paused",
           "languages"
         ],
         "properties": {
@@ -36621,6 +36622,10 @@
           "settings": {
             "type": "object",
             "description": "The settings values used."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "Whether the installation's workflows are kept from starting on their own once this is applied."
           },
           "language": {
             "type": "string",

@@ -128,6 +128,9 @@ type Result struct {
 	// the organization where it says so, and Settings the values used.
 	SettingsForm map[string]any `json:"settings_form,omitempty"`
 	Settings     map[string]any `json:"settings"`
+	// Paused is whether the installation's workflows are kept from starting
+	// on their own once this is applied.
+	Paused bool `json:"paused"`
 	// Language is the language of the display names used, of Languages,
 	// those the solution has; empty for the solution's own text.
 	Language  string   `json:"language,omitempty"`
@@ -286,6 +289,7 @@ func (r *run) reconcile() error {
 	if r.opts.Paused != nil {
 		r.next.Paused = *r.opts.Paused
 	}
+	r.result.Paused = r.next.Paused
 	r.checkVersion()
 	r.settle()
 	for _, step := range []func() error{r.fields, r.relationshipTypes, r.contentTypes, r.collections, r.workflows, r.apps} {

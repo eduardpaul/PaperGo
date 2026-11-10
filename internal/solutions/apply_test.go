@@ -416,8 +416,13 @@ func TestApplySettingsAndPause(t *testing.T) {
 	if !in.Paused || w.AutomaticEnabled || w.Parameters["time_zone"] != "Europe/Madrid" {
 		t.Fatalf("paused %v, automatic %v, parameters %+v", in.Paused, w.AutomaticEnabled, w.Parameters)
 	}
-	if again := p.applied(tank(), Options{}); len(again.Changes) != 0 || p.installation("tank").Settings["time_zone"] != "Europe/Madrid" {
+	again := p.applied(tank(), Options{})
+	if len(again.Changes) != 0 || p.installation("tank").Settings["time_zone"] != "Europe/Madrid" {
 		t.Fatalf("settings were not kept:\n%s", said(again))
+	}
+	// An apply that does not say stays paused, and says so.
+	if !again.Paused || !p.installation("tank").Paused {
+		t.Fatalf("an apply resumed a paused installation: %+v", again)
 	}
 	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity_l": "a lot"}}), "REFUSED settings tank")
 }

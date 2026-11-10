@@ -13,14 +13,16 @@ import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { useAccess } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 import {
+  noChoices,
+  optionsOf,
   packagePath,
   sendSolution,
   solutionKeys,
   solutionStatusQuery,
   solutionsQuery,
+  type Choices,
   type Decision,
   type SettingSchema,
-  type SolutionOptions,
   type SolutionResult,
   type SolutionSlot,
   type SolutionSummary,
@@ -29,31 +31,6 @@ import { useTranslation } from '@/i18n';
 import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/solutions')({ component: SolutionsPage });
-
-/** What the installer has chosen so far for the solution in the file. */
-interface Choices {
-  settings: Record<string, unknown>;
-  bindings: Record<string, string>;
-  decisions: Record<string, Decision>;
-  paused: boolean;
-  prune: boolean;
-  /** Empty keeps the installation's language, or takes the organization's on a first installation. */
-  language: string;
-}
-
-const noChoices: Choices = { settings: {}, bindings: {}, decisions: {}, paused: false, prune: false, language: '' };
-
-function optionsOf(choices: Choices): SolutionOptions {
-  const bindings = Object.fromEntries(Object.entries(choices.bindings).filter(([, id]) => id));
-  return {
-    settings: choices.settings,
-    bindings,
-    decisions: choices.decisions,
-    paused: choices.paused,
-    prune: choices.prune || undefined,
-    language: choices.language || undefined,
-  };
-}
 
 function SolutionsPage() {
   const { workspaceId } = Route.useParams();
@@ -379,7 +356,7 @@ function Plan({
       )}
 
       <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={choices.paused} onChange={(event) => change({ paused: event.target.checked })} /> {t('plan.paused')}
+        <Checkbox checked={choices.paused ?? result.paused} onChange={(event) => change({ paused: event.target.checked })} /> {t('plan.paused')}
       </label>
       <label className="flex items-center gap-2 text-sm">
         <Checkbox checked={choices.prune} onChange={(event) => change({ prune: event.target.checked })} /> {t('plan.prune')}

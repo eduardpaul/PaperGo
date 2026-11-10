@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { setToken } from '@/api/http';
-import { sendSolution } from './api';
+import { noChoices, optionsOf, sendSolution } from './api';
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {}, languages: [] };
+const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {}, paused: false, languages: [] };
 
 it('sends the packed solution with the choices, and returns a refused apply as its result', async () => {
   setToken('token');
@@ -36,4 +36,10 @@ it('throws what is not a refusal: a solution with problems, or no right to insta
     new Response(JSON.stringify({ code: 'conflict', detail: 'something else' }), { status: 409 }),
   );
   await expect(sendSolution('w1', new Blob(['zip']), 'apply', {})).rejects.toThrow('something else');
+});
+
+it('leaves a paused installation paused unless the box was changed', () => {
+  expect(optionsOf(noChoices).paused).toBeUndefined();
+  expect(JSON.parse(JSON.stringify(optionsOf(noChoices)))).not.toHaveProperty('paused');
+  expect(optionsOf({ ...noChoices, paused: false }).paused).toBe(false);
 });

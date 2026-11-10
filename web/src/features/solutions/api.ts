@@ -60,6 +60,8 @@ export interface SolutionResult {
   slots: SolutionSlot[];
   settings_form?: { properties?: Record<string, SettingSchema> };
   settings: Record<string, unknown>;
+  /** Whether the installation's workflows are kept from starting on their own once this is applied. */
+  paused: boolean;
   /** The language of the display names used, of languages; absent for the solution's own text. */
   language?: string;
   languages: string[];
@@ -83,6 +85,33 @@ export interface SolutionOptions {
   decisions?: Record<string, Decision>;
   /** A language the solution has names in, or "none" for its own text. */
   language?: string;
+}
+
+/** What the installer has chosen so far for the solution in the file. */
+export interface Choices {
+  settings: Record<string, unknown>;
+  bindings: Record<string, string>;
+  decisions: Record<string, Decision>;
+  /** Absent leaves the installation paused or running, as it is. */
+  paused?: boolean;
+  prune: boolean;
+  /** Empty keeps the installation's language, or takes the organization's on a first installation. */
+  language: string;
+}
+
+export const noChoices: Choices = { settings: {}, bindings: {}, decisions: {}, prune: false, language: '' };
+
+/** The options a plan or an apply is sent with: only what was chosen, so that the rest stays as the installation has it. */
+export function optionsOf(choices: Choices): SolutionOptions {
+  const bindings = Object.fromEntries(Object.entries(choices.bindings).filter(([, id]) => id));
+  return {
+    settings: choices.settings,
+    bindings,
+    decisions: choices.decisions,
+    paused: choices.paused,
+    prune: choices.prune || undefined,
+    language: choices.language || undefined,
+  };
 }
 
 export const solutionKeys = {
