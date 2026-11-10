@@ -81,7 +81,7 @@ func (s *BatchServer) RejectNextCreate() {
 // lines. "" and "ok" return a receipt. "reject" returns an object the schema
 // refuses. "bad-amount" matches the schema with a line amount past scale 2.
 // "local-amounts" copies a Spanish fuel receipt's amounts as they are
-// printed, with their units. "two-numbers" writes a line's quantity and
+// printed, with their units and a hyphen that is no minus sign. "two-numbers" writes a line's quantity and
 // price into its amount, as "2 x 4,00".
 // Other structured requests still return {"total":1.25}.
 func (s *BatchServer) SetReceiptMode(mode string) {
@@ -357,7 +357,7 @@ func (s *BatchServer) receiptTextLocked() string {
 	case "bad-amount":
 		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"12.50","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4.00","amount":"1.999"}]}`
 	case "local-amounts":
-		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"eur","total":"1.012,50 €","lines":[{"description":"Diesel","category":"Other","quantity":"40,120 l","unit_price":"1,459 €/l","amount":"58,53"},{"description":"Refund","category":"Other","quantity":"1","unit_price":"4,5","amount":"4,50-"}]}`
+		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"eur","total":"1.012,50 € - IVA incl.","lines":[{"description":"Diesel","category":"Other","quantity":"40,120 l","unit_price":"1,459 €/l","amount":"58,53"},{"description":"Refund","category":"Other","quantity":"1","unit_price":"4,5","amount":"4,50-"}]}`
 	case "two-numbers":
 		return `{"store":"North Market","purchase_date":"2026-10-15","currency":"EUR","total":"8,00","lines":[{"description":"Plums","category":"Fruit and vegetables","quantity":"2","unit_price":"4,00","amount":"2 x 4,00"}]}`
 	default:

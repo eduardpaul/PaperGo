@@ -2,7 +2,7 @@
   "key": "receipts",
   "name": "Receipts desk",
   "description": "Photos of purchase receipts and the lines read from them.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "requires": {
     "ai.batch": true,
     "ocr": false

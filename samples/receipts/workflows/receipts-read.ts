@@ -167,8 +167,14 @@ function decimal(text: string, scale: number): string {
   const whole = (point ? digits.slice(0, last) : digits).replace(/[.,]/g, "").replace(/^0+(?=\d)/, "") || "0";
   const fraction = (point ? digits.slice(last + 1) : "").replace(/0+$/, "");
   if (fraction.length > scale) throw new Error(`"${text}" has more than ${scale} decimals`);
-  // A minus before or after the number, as in -4,50, € -4,50 or 4,50-.
-  const negative = /[-\u2212]/.test(text.replace(numbers[0], " "));
+  // A minus next to the number, or with only a currency between, as in -4,50,
+  // € -4,50, -€4,50 or 4,50 €-. A hyphen elsewhere, as in Coca-Cola 1,50 or
+  // 12,50 EUR - IVA incl., is not a sign; nor is one before zero.
+  const at = text.indexOf(numbers[0]);
+  const negative =
+    (/[-\u2212]\s*(?:[€$£¥]|[A-Z]{3})?\s*$/.test(text.slice(0, at)) ||
+      /^\s*(?:[€$£¥]|[A-Z]{3})?\s*[-\u2212]\s*$/.test(text.slice(at + numbers[0].length))) &&
+    (whole !== "0" || fraction !== "");
   return `${negative ? "-" : ""}${whole}${fraction && `.${fraction}`}`;
 }
 
