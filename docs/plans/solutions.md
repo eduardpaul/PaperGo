@@ -1,6 +1,15 @@
 # Solutions (plan)
 
-Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Step 0's quick wins are done except unique field keys and parameter `PATCH`, as its section says. Step 4, the screen in Workspace settings, is done, and so is step 6 as far as names go: a solution's `locales/<language>.json`. Labels for the values of a choice field wait for their socket in the core. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
+Status: implemented on `feature/solutions`, as [Solutions](../solutions.md) describes: the folder format and `papergo solution pack`; planning and applying in one transaction, with the installation, its status, pull, remove and prune; settings, required capabilities and languages; the API, the command line and the screen in Workspace settings; and the Diesel and Receipts samples as solution folders. [Workspace apps](workspace-apps.md) named solutions as its next step; this plan keeps why and how, the decisions taken, and what is left.
+
+Built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables; plan and apply answer at once instead of starting an operation, since applying is a short transaction; and the routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`).
+
+Left open, each a decision in the core rather than work on solutions:
+
+- **Labels for choice values.** A choice field stores bare values that workflows and apps match on, so a solution's languages cover names and labels, not the choices themselves.
+- **Unique catalog field keys.** See step 0.
+- **`PATCH` for workflow and app parameters**, and `412`/`428` answers that carry the current ETag.
+- **Migrations**, dependencies beyond a used collection, a catalog of solutions, slots in another workspace, and several installations of one solution in a workspace: the "Later" list.
 
 ## Why
 
