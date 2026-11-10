@@ -167,8 +167,8 @@ applied: 4 change(s)
 | Refused | Why |
 | --- | --- |
 | a field's type, scale or multiplicity changing | values of the old type are stored |
-| a choice leaving a choice field | stored items may hold it |
-| a field of the solution leaving its content type | its stored values would have no field |
+| a choice the solution gave a field leaving it | stored items may hold it |
+| a field the solution gave its content type leaving it | its stored values would have no field |
 | a `papergo` range this PaperGo is outside of | the solution was written for another version |
 | a capability the solution `requires` as `true` that this PaperGo does not provide | it cannot work here |
 
@@ -183,7 +183,9 @@ A solution's version that no longer declares a workflow, an app or a view leaves
 | edited since | no | untouched, and listed as kept |
 | edited since | yes | refused until `--decide <kind>:<key>=keep` or `=replace` |
 
-A decision to keep is remembered: the object stays as edited until the solution changes it again. What keeps stored values usable is not open to this: a field the solution adds to its content type is added even to a type someone renamed.
+A decision to keep is remembered: the object stays as edited until the solution changes it again. What keeps stored values usable is not open to this: a field the solution adds to its content type, or a choice it adds to its field, is added even to one someone edited.
+
+A choice added to a solution's field in PaperGo, and a field added to its content type, are not edits of what the solution says: they stay through every apply, and a [pull](#pulling-and-removing) brings them to the files.
 
 **Settings.** `--set name=value` gives a value of the solution's settings form; values given once are kept by the installation, and the rest take the form's defaults, read from the organization's preferences where the form says so. Parameters that name `$setting:<name>` get the values.
 

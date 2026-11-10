@@ -219,6 +219,56 @@ func TestApplyRefusesWhatBreaksData(t *testing.T) {
 	}
 }
 
+// A choice or a field added in PaperGo is no change of the solution's: it
+// stays through every later apply, and a pull brings it to the files.
+func TestApplyKeepsWhatWasAddedInPaperGo(t *testing.T) {
+	p := newPlace(t)
+	p.applied(tank(), Options{})
+	fields, err := p.dms.CatalogFields(p.ctx, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fields {
+		if f.Key == "tank_flag" {
+			if _, err := p.dms.UpdateCatalogField(p.ctx, admin, f.ID, f.Version, dms.UpdateField{Choices: &[]string{"ok", "urgent", "check"}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	extra, err := p.dms.CreateCatalogField(p.ctx, admin, dms.CreateField{Key: "tank_extra", Label: "Extra", Type: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	types, _ := p.dms.CatalogContentTypes(p.ctx, admin)
+	for _, typ := range types {
+		if typ.Key == "tank_reading" {
+			if _, err := p.dms.UpdateContentType(p.ctx, admin, typ.ID, typ.Version, dms.ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldIds: append(typ.FieldIds, extra.ID)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if same := p.applied(tank(), Options{}); len(same.Changes) != 0 || len(same.Customized) != 0 {
+		t.Fatalf("an added choice and field are left alone:\n%s\n%v", said(same), same.Customized)
+	}
+	next := edit("solution.json", `["ok", "check"]`, `["ok", "check", "reviewed"]`)
+	has(t, p.applied(next, Options{}), "update field tank_flag choices")
+	fields, _ = p.dms.CatalogFields(p.ctx, admin)
+	for _, f := range fields {
+		if f.Key == "tank_flag" && strings.Join(f.Choices, ",") != "ok,check,reviewed,urgent" {
+			t.Fatalf("choices: %v", f.Choices)
+		}
+	}
+	types, _ = p.dms.CatalogContentTypes(p.ctx, admin)
+	for _, typ := range types {
+		if typ.Key == "tank_reading" && !contains(typ.FieldIds, extra.ID) {
+			t.Fatalf("the added field left the type: %v", typ.FieldIds)
+		}
+	}
+	// A choice the solution itself drops is still refused.
+	has(t, p.apply(edit("solution.json", `["ok", "check"]`, `["ok", "reviewed"]`), Options{}), "REFUSED field tank_flag: would lose the choices check")
+}
+
 // What was edited in PaperGo stays, and is asked about when the solution
 // changes the same thing.
 func TestApplyKeepsWhatWasEdited(t *testing.T) {

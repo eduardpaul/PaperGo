@@ -539,29 +539,47 @@ func (r *run) fields() error {
 			continue
 		}
 		r.fieldIDs[f.Key] = live.ID
-		lives := fieldState(live.Label, live.Required, live.Indexed, live.Choices, live.Type, live.Options)
+		// The field's state is the solution's part of it: its choices, of
+		// those the field has.
+		lives := fieldState(live.Label, live.Required, live.Indexed, present(f.Choices, live.Choices), live.Type, live.Options)
 		if live.Type != f.Type || live.Scale != f.Scale || live.Options.Multiple != f.Options.Multiple {
 			r.refuse(KindField, f.Key, "is a %s field (scale %d) and the solution says %s (scale %d): a field's type cannot change once it holds values", live.Type, live.Scale, f.Type, f.Scale)
 			r.note(KindField, f.Key, live.ID, RoleOwns, want, lives, "")
 			continue
 		}
-		if gone := missing(live.Choices, f.Choices); len(gone) > 0 {
+		// A choice the solution had and no longer lists would leave stored
+		// values without one. Choices added in PaperGo stay where they are.
+		var gone, others []string
+		for _, choice := range missing(live.Choices, f.Choices) {
+			if contains(r.previous.choices(f.Key), choice) {
+				gone = append(gone, choice)
+			} else {
+				others = append(others, choice)
+			}
+		}
+		if len(gone) > 0 {
 			r.refuse(KindField, f.Key, "would lose the choices %s, which stored items may hold", strings.Join(gone, ", "))
 			r.note(KindField, f.Key, live.ID, RoleOwns, want, lives, "")
 			continue
 		}
 		action, kept := r.decide(KindField, f.Key, want, lives, true)
-		if action == doUpdate {
-			in := dms.UpdateField{Options: &options, Label: &f.Label, Required: &f.Required, Indexed: &f.Indexed}
-			if f.Type == catalog.FieldChoice {
-				in.Choices = &f.Choices
+		choices := append(append([]string{}, f.Choices...), others...)
+		in := dms.UpdateField{Options: &options, Label: &f.Label, Required: &f.Required, Indexed: &f.Indexed}
+		if f.Type == catalog.FieldChoice {
+			in.Choices = &choices
+			// A choice the field lacks is added whatever was edited: it is the contract.
+			if action == doSkip && len(present(f.Choices, live.Choices)) < len(f.Choices) {
+				action, in = doUpdate, dms.UpdateField{Choices: &choices}
 			}
+		}
+		if action == doUpdate {
 			updated, err := r.t.UpdateCatalogField(r.ctx, r.subject, live.ID, live.Version, in)
 			if err != nil {
 				return failed(KindField, f.Key, err)
 			}
-			r.change("update", KindField, f.Key, differences(lives, want))
-			lives = fieldState(updated.Label, updated.Required, updated.Indexed, updated.Choices, updated.Type, updated.Options)
+			after := fieldState(updated.Label, updated.Required, updated.Indexed, present(f.Choices, updated.Choices), updated.Type, updated.Options)
+			r.change("update", KindField, f.Key, differences(lives, after))
+			lives = after
 		}
 		r.note(KindField, f.Key, live.ID, RoleOwns, want, lives, kept)
 	}
@@ -618,7 +636,6 @@ func (r *run) contentTypes() error {
 	for _, f := range fields {
 		keyOf[f.ID] = f.Key
 	}
-	own := r.sol.Manifest.Key + "_"
 	for _, t := range r.sol.Manifest.ContentTypes {
 		ids, ready := make([]string, 0, len(t.Fields)), true
 		for _, key := range t.Fields {
@@ -641,15 +658,15 @@ func (r *run) contentTypes() error {
 			continue
 		}
 		r.ids[RefType+t.Key] = live.ID
-		// Fields of the type that are the solution's and that it no longer
-		// lists would leave stored values without a field. Fields others
-		// added stay where they are.
-		var gone, others, present []string
+		// A field the solution had on the type and no longer lists would
+		// leave stored values without a field. Fields added in PaperGo,
+		// the solution's own among them, stay where they are.
+		var gone, others, has []string
 		for _, id := range live.FieldIds {
 			key := keyOf[id]
 			switch {
 			case contains(t.Fields, key):
-			case strings.HasPrefix(key, own):
+			case contains(r.previous.typeFields(t.Key), key):
 				gone = append(gone, key)
 			default:
 				others = append(others, id)
@@ -657,10 +674,10 @@ func (r *run) contentTypes() error {
 		}
 		for _, key := range t.Fields {
 			if contains(live.FieldIds, r.fieldIDs[key]) {
-				present = append(present, key)
+				has = append(has, key)
 			}
 		}
-		lives := map[string]any{"name": live.Name, "fields": present}
+		lives := map[string]any{"name": live.Name, "fields": has}
 		if len(gone) > 0 {
 			r.refuse(KindContentType, t.Key, "would lose the fields %s, whose stored values would have no field", strings.Join(gone, ", "))
 			r.note(KindContentType, t.Key, live.ID, RoleOwns, want, lives, "")
@@ -668,7 +685,7 @@ func (r *run) contentTypes() error {
 		}
 		action, kept := r.decide(KindContentType, t.Key, want, lives, true)
 		// A field the type lacks is added whatever was edited: it is the contract.
-		if action == doSkip && len(present) < len(t.Fields) {
+		if action == doSkip && len(has) < len(t.Fields) {
 			action = doUpdate
 		}
 		if action == doUpdate {
@@ -1261,6 +1278,17 @@ func orEmpty(m map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return m
+}
+
+// present returns the entries of want that have holds, in want's order.
+func present(want, have []string) []string {
+	var out []string
+	for _, e := range want {
+		if contains(have, e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // missing returns the entries of have that want lacks.

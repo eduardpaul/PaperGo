@@ -106,6 +106,33 @@ func (i *Installation) object(kind, key string) *Object {
 	return nil
 }
 
+// choices are the choices the solution gave a field when it was applied.
+func (i *Installation) choices(field string) []string {
+	if i == nil {
+		return nil
+	}
+	for _, f := range i.Manifest.Fields {
+		if f.Key == field {
+			return f.Choices
+		}
+	}
+	return nil
+}
+
+// typeFields are the fields the solution gave a content type when it was
+// applied.
+func (i *Installation) typeFields(contentType string) []string {
+	if i == nil {
+		return nil
+	}
+	for _, t := range i.Manifest.ContentTypes {
+		if t.Key == contentType {
+			return t.Fields
+		}
+	}
+	return nil
+}
+
 // installed is what a workspace keeps of its solutions, by key.
 type installed struct {
 	Installations map[string]Installation `json:"installations"`
