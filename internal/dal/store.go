@@ -62,6 +62,8 @@ type Store struct {
 	tx      *sql.Tx
 	txExec  bob.Executor
 	dialect Dialect
+	// scopes keeps permission scope decisions between content queries.
+	scopes *content.ScopeCache
 }
 
 // queries is every domain contract a driver implements.
@@ -146,7 +148,7 @@ func (s *Store) Catalog() *catalog.Repo {
 // Content runs content queries, inside the store's transaction when WithTx
 // was used.
 func (s *Store) Content() *content.Repo {
-	return content.NewRepo(s.exec(), s.sqlDialect())
+	return content.NewRepo(s.exec(), s.sqlDialect(), s.scopes)
 }
 
 // Portable returns the package row repository, bound to the store's
@@ -273,6 +275,7 @@ func NewStore(sqlDB *sql.DB) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
+		scopes:  content.NewScopeCache(content.MaxScopes),
 	}
 }
 
@@ -282,7 +285,17 @@ func NewStoreWithDialect(sqlDB *sql.DB, dialect Dialect) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
+		scopes:  content.NewScopeCache(content.MaxScopes),
 	}
+}
+
+// WithScopeLimit returns a Store that decides up to limit ACL scopes of a
+// collection one by one and checks the rows of collections with more, keeping
+// its decisions apart from s's.
+func (s *Store) WithScopeLimit(limit int) *Store {
+	out := *s
+	out.scopes = content.NewScopeCache(limit)
+	return &out
 }
 
 // WithTx returns a Store bound to an existing *sql.Tx transaction.
@@ -298,6 +311,7 @@ func (s *Store) WithTx(tx *sql.Tx) *Store {
 		tx:      tx,
 		txExec:  bob.NewTx(tx),
 		dialect: s.dialect,
+		scopes:  s.scopes,
 	}
 }
 

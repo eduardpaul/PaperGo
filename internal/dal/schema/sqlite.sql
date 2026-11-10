@@ -552,6 +552,24 @@ CREATE TABLE grants (
 CREATE UNIQUE INDEX grant_resource_id_principal_type_principal_id_action ON grants(resource_id, principal_type, principal_id, action);
 CREATE INDEX grant_principal_type_principal_id_resource_id ON grants(principal_type, principal_id, resource_id);
 
+-- Access revisions name the state of everything a permission decision reads
+-- besides content. access_revisions holds the organization's: the directory's
+-- user status, groups, memberships, roles and assignments.
+-- workspace_access_revisions holds each workspace's: its grants and the
+-- permission scopes of its resources. The DAL replaces a token in the
+-- transaction of every change to what it names, so a decision kept under a
+-- collection's two tokens holds for as long as a reader's snapshot still
+-- shows them.
+CREATE TABLE access_revisions (
+    singleton BOOLEAN PRIMARY KEY NOT NULL DEFAULT TRUE CHECK (singleton IN (0, 1) AND singleton = 1),
+    token TEXT NOT NULL CHECK (length(token) > 0)
+);
+
+CREATE TABLE workspace_access_revisions (
+    workspace_id TEXT PRIMARY KEY NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    token TEXT NOT NULL CHECK (length(token) > 0)
+);
+
 CREATE TABLE relationships (
     id TEXT PRIMARY KEY NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

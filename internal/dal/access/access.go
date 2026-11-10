@@ -193,6 +193,38 @@ func (d Dialect) Resource(idColumn string, p Principal, action Action) (string, 
 	return query, append(args, limitArgs...)
 }
 
+// Content tests that the principal may take action on the live items and
+// folders of a collection that sit in the permission scope scopeColumn
+// names. It is what Resource decides for each of them: their access depends
+// only on their scope, their workspace and their collection. Only the grants
+// of the scope depend on it, so deciding many scopes of one collection reads
+// everything else once.
+func (d Dialect) Content(scopeColumn, collectionID string, p Principal, action Action) (string, []any) {
+	// The collection row stands for its content: it shares their workspace
+	// and is their container. Content is never itself a credential's
+	// resource, and never a workspace.
+	module, moduleArgs := d.module("'item'", p, action)
+	args := append([]any{collectionID}, moduleArgs...)
+	// within tests the collection row, so it is asked for Write whatever
+	// the action: for Read it would also pass a listed collection's
+	// workspace, an exception that holds for the workspace row and never
+	// for content.
+	limit, limitArgs := within("acl", p, Write)
+	args = append(args, limitArgs...)
+	args = append(args, collectionID, p.Subject)
+	admin, adminArgs := d.Scope(p, "workspace.manage")
+	args = append(args, adminArgs...)
+	grantee, granteeArgs := d.grantee("g", p.Subject)
+	args = append(args, granteeArgs...)
+	actions, actionArgs := marks(action)
+	query := `(EXISTS (SELECT 1 FROM resources acl JOIN resources workspace ON workspace.id=acl.workspace_id AND workspace.deleted_at IS NULL
+ WHERE acl.id=? AND acl.deleted_at IS NULL AND ` + module + limit + `)
+ AND (EXISTS(SELECT 1 FROM resources acl JOIN grants owner ON owner.resource_id=acl.workspace_id WHERE acl.id=? AND owner.principal_type='user' AND owner.principal_id=? AND owner.action='manage' AND owner.effect='allow')
+ OR ` + admin + `
+ OR EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=` + scopeColumn + ` AND ` + grantee + ` AND g.effect='allow' AND g.action IN (` + actions + `))))`
+	return query, append(args, actionArgs...)
+}
+
 // within tests that the resources row alias is inside the credential's
 // resource limit: a listed workspace, list or library, or what they hold. A
 // listed collection's workspace may be read, so clients can reach the

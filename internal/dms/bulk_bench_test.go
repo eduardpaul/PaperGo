@@ -69,9 +69,16 @@ func BenchmarkItemUpdates(b *testing.B) {
 	}
 }
 
-// Measure bulk creation of items with six indexed columns, as imports do.
-// Run with -cpuprofile to see where ingest time goes.
+// Measure bulk creation of items with six indexed columns, as imports do, at
+// the top of a list and inside a folder. Run with -cpuprofile to see where
+// ingest time goes.
 func BenchmarkBulkCreate(b *testing.B) {
+	for _, place := range []string{"collection", "folder"} {
+		b.Run(place, func(b *testing.B) { benchBulkCreate(b, place == "folder") })
+	}
+}
+
+func benchBulkCreate(b *testing.B, inFolder bool) {
 	ctx := context.Background()
 	s := NewService(daltest.Database(b).SQL)
 	w, err := s.Create(ctx, "writer", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
@@ -94,6 +101,14 @@ func BenchmarkBulkCreate(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+	parent := ""
+	if inFolder {
+		folder, err := s.Create(ctx, "writer", list.ID, CreateResource{Kind: "folder", Name: "2026"})
+		if err != nil {
+			b.Fatal(err)
+		}
+		parent = folder.ID
+	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	created := 0
@@ -101,7 +116,7 @@ func BenchmarkBulkCreate(b *testing.B) {
 		operations := make([]BulkOperation, MaxBulkOperations)
 		for i := range operations {
 			created++
-			operations[i] = BulkOperation{Action: "create", Create: &BulkCreate{
+			operations[i] = BulkOperation{Action: "create", ParentID: parent, Create: &BulkCreate{
 				Name:     fmt.Sprintf("Invoice INV-%07d Acme Travel", created),
 				Keywords: []string{"finance"},
 				Values: map[string]any{

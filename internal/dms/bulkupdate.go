@@ -159,6 +159,7 @@ func (s *Service) bulkUpdateItem(ctx context.Context, op *operations.Operation, 
 			if r.ContainerID == nil || *r.ContainerID != op.ContainerID || !contentKind(r.Kind) {
 				e = invalid("bulk target is outside the collection")
 			} else {
+				s.batchTouches(r)
 				patch := UpdateResource{Name: in.Name, Keywords: in.Keywords, ContentTypeID: in.ContentTypeID}
 				if len(in.Values) > 0 {
 					values := maps.Clone(in.Values)

@@ -8,11 +8,12 @@ import (
 	"papergo/internal/dal/catalog"
 )
 
-// batchCache keeps what cannot change between the operations of one batch:
+// batchCache keeps what stays the same between the operations of one batch:
 // a batch only creates, changes and deletes items and folders, so the
-// collections the caller may write to and their field definitions stay the
-// same. Imports otherwise check the same list and load its columns again for
-// every item.
+// collections the caller may write to and their field definitions do not
+// change. Imports otherwise check the same list and load its columns again
+// for every item. The folders the caller may write to are kept until an
+// operation touches a folder, which can delete or move one.
 type batchCache struct {
 	subject     string
 	writable    map[string]*resources.Resource
@@ -26,8 +27,8 @@ func newBatchCache(subject string) *batchCache {
 	return &batchCache{subject: subject, writable: map[string]*resources.Resource{}, collections: map[string]*resources.Resource{}, defs: map[string][]*catalog.FieldDefinition{}, schemas: map[string]*catalog.SchemaRevision{}}
 }
 
-// authorizeWrite authorizes a write to id, deciding a collection once per batch.
-// Folders are checked every time: an earlier operation may have deleted one.
+// authorizeWrite authorizes a write to id, deciding a collection or folder
+// once per batch, until the batch changes a folder.
 func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*resources.Resource, error) {
 	cache := s.batch
 	if cache != nil && cache.subject == subject {
@@ -37,11 +38,25 @@ func (s *Service) authorizeWrite(ctx context.Context, subject, id string) (*reso
 		}
 	}
 	r, err := s.authorize(ctx, subject, id, "write")
-	if err == nil && cache != nil && cache.subject == subject && (r.Kind == refs.KindList || r.Kind == refs.KindLibrary) {
+	if err == nil && cache != nil && cache.subject == subject && (r.Kind == refs.KindList || r.Kind == refs.KindLibrary || r.Kind == refs.KindFolder) {
 		copied := *r
 		cache.writable[id] = &copied
 	}
 	return r, err
+}
+
+// batchTouches tells the batch that an operation is about to change r. A
+// folder's deletion, move or change undoes what the batch knows of folders:
+// the folder itself and those below it.
+func (s *Service) batchTouches(r *resources.Resource) {
+	if s.batch == nil || r.Kind != refs.KindFolder {
+		return
+	}
+	for id, kept := range s.batch.writable {
+		if kept.Kind == refs.KindFolder {
+			delete(s.batch.writable, id)
+		}
+	}
 }
 
 // collectionDefinitions returns a collection's field definitions, loaded once per batch.

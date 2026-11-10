@@ -203,11 +203,33 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 15. **Live updates no longer slow bulk work.** An open list refreshed everything for each changed item; during a bulk
     edit that is about 100 refreshes a second. It now refreshes at most once a second: editing 2,502 items with the list
     open took 47 s instead of 116 s (25 s with no page open).
+16. **Permissions decided once, not per query.** A page tested every row it returned against the grants, and a
+    collection with more than 64 ACL scopes did so for every row it counted. Pages now match rows against the
+    scopes the person reads, as totals do, up to 4,096 scopes, and a person's decisions for a collection are kept
+    until a grant or permission scope in its workspace, a membership, an assignment, a role's scopes or a user's status
+    changes (`access_revisions`, `workspace_access_revisions`). `BenchmarkCollectionQuery`
+    on SQLite, 50-row pages, mean per query (4 vCPU Xeon 2.1 GHz):
+
+    | Query | 2,000 items, 40 scopes | 20,000 items, 400 scopes |
+    | --- | ---: | ---: |
+    | First page by id, owner | 5.0 → 3.7 ms | 6.6 → 4.7 ms |
+    | Sort by an indexed number, owner, auto surface | 7.1 → 3.8 ms | 25.4 → 5.6 ms |
+    | Same, a reader with drafts on one item in 50 | 27.4 → 10.9 ms | 66.2 → 27.8 ms |
+    | Broad filter, sorted | 8.8 → 4.8 ms | 27.4 → 7.1 ms |
+    | Search by name, reader | 23.4 → 7.7 ms | 46.1 → 11.9 ms |
+    | First page with an exact total | 13.9 → 6.3 ms | 571 → 57 ms |
+
+    A selective filter sorted by another column (5 ms and 59 ms) and the hydration of a page (`BenchmarkBrowse`)
+    are as before. Requests made with an access token decide every time: their pages cost what they did up to
+    about 40 scopes and 8.0 ms instead of 6.6 ms at 400, with the same gains on auto-surface sorts, searches and
+    totals.
+17. **Imports into folders.** A bulk request decides the caller's write permission on a folder once, until one of its
+    operations changes a folder, instead of twice for every item. `BenchmarkBulkCreate` into a folder: about 300 →
+    327 items/s (three runs each), with 11 % fewer allocations; at the top of a list it is unchanged.
 
 ## Open work
 
 Nothing structural remains from this test. Smaller things worth doing:
 
-- Imports into folders still check the folder's permission for every item (a deleted folder must stop the batch).
 - Turning publishing on for a very large list copies every surface in one transaction; at 500,000 items that would
   hold the writer for minutes and should become a background operation like index builds.

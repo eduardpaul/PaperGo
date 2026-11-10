@@ -28,9 +28,9 @@ func (s *Service) countedGroups(ctx context.Context, subject, collection string,
 	if err != nil || scopes == nil {
 		return nil, false, err
 	}
-	surface, ok := scopes.Uniform(in.Surface)
-	if !ok {
-		return nil, false, nil
+	surface, ok, err := s.DAL.Content().Uniform(ctx, collection, scopes, in.Surface)
+	if err != nil || !ok {
+		return nil, false, err
 	}
 	if !c.PublishingEnabled {
 		surface = "published"

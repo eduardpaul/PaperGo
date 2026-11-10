@@ -22,10 +22,12 @@ type Repo struct {
 	exec bob.Executor
 	d    dialect.Dialect
 	acl  access.Dialect
+	// scopes keeps scope decisions between queries; nil decides every time.
+	scopes *ScopeCache
 }
 
-func NewRepo(exec bob.Executor, d dialect.Dialect) *Repo {
-	return &Repo{exec: exec, d: d, acl: access.For(d)}
+func NewRepo(exec bob.Executor, d dialect.Dialect, scopes *ScopeCache) *Repo {
+	return &Repo{exec: exec, d: d, acl: access.For(d), scopes: scopes}
 }
 
 // strings runs a query of one text column.
