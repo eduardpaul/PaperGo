@@ -150,6 +150,7 @@ applied: 4 change(s)
 | a choice leaving a choice field | stored items may hold it |
 | a field of the solution leaving its content type | its stored values would have no field |
 | a `papergo` range this PaperGo is outside of | the solution was written for another version |
+| a capability the solution `requires` as `true` that this PaperGo does not provide | it cannot work here |
 
 A solution's version that no longer declares a workflow, an app or a view leaves it in place, marks it retired and says so once. `--prune` deletes those; a collection, a content type or a field is never deleted by a solution.
 
@@ -187,7 +188,8 @@ A collection of another solution (`use`) is found through that solution's instal
 - each collection is there and still a list or a library;
 - it accepts the solution's content types, with their fields;
 - a collection of another solution still has what the solution expects there, and what it added;
-- each workflow and app is there and published.
+- each workflow and app is there and published;
+- the deployment provides what the solution `requires`: OCR (`ocr`), a chat model (`ai.chat`), a batch provider (`ai.batch`), search (`search`) and an embedding model (`embeddings`). One required as `false` is reported as "works in part".
 
 ```
 receipts 1.0.0 needs attention:

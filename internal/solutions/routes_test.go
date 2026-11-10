@@ -44,7 +44,7 @@ func call(h http.Handler, method, path string, body []byte) *httptest.ResponseRe
 func TestSolutionRoutes(t *testing.T) {
 	db := daltest.Database(t)
 	s := dms.NewService(db.SQL)
-	a := &httpapi.API{DMS: s, Auth: auth.Development{Token: token, Subject: admin}, Logger: slog.Default(), Modules: []httpapi.Module{Module()}}
+	a := &httpapi.API{DMS: s, Auth: auth.Development{Token: token, Subject: admin}, Logger: slog.Default(), Modules: []httpapi.Module{Module(nil)}}
 	h := a.Handler()
 	ws, err := s.Create(t.Context(), admin, "", dms.CreateResource{Kind: "workspace", Name: "Casa"})
 	if err != nil {

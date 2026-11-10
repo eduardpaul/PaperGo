@@ -88,6 +88,28 @@ type Service struct {
 	// PaperGo is the running version, which a solution's papergo range is
 	// checked against.
 	PaperGo string
+	// Capabilities says what the deployment provides of what solutions may
+	// require; nil when that is not known, and then nothing is refused.
+	Capabilities map[string]bool
+}
+
+// lacks returns the capabilities a solution names that the deployment does
+// not provide: those it cannot work without, and those it works in part
+// without.
+func (s *Service) lacks(m Manifest) (required, optional []string) {
+	if s.Capabilities == nil {
+		return nil, nil
+	}
+	for _, name := range sortedKeys(m.Requires) {
+		switch {
+		case s.Capabilities[name]:
+		case m.Requires[name]:
+			required = append(required, name)
+		default:
+			optional = append(optional, name)
+		}
+	}
+	return required, optional
 }
 
 // errRollback ends a plan's transaction without keeping what it did.
@@ -120,6 +142,13 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		preferences: map[string]string{"time_zone": preferences.TimeZone, "language": preferences.Language, "default_currency": preferences.DefaultCurrency,
 			"number_format": preferences.NumberFormat, "date_format": preferences.DateFormat, "time_format": preferences.TimeFormat},
 		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}}}
+	required, optional := s.lacks(sol.Manifest)
+	for _, name := range required {
+		r.refuse("solution", sol.Manifest.Key, "needs %s, which this PaperGo does not provide", name)
+	}
+	for _, name := range optional {
+		r.warn("this PaperGo does not provide %s: the solution works in part", name)
+	}
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		r.t = t
 		if err := r.reconcile(); err != nil {

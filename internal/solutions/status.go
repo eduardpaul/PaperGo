@@ -145,6 +145,13 @@ func (s *Service) Status(ctx context.Context, subject, workspaceID, key string) 
 				}
 			}
 		}
+		required, optional := s.lacks(in.Manifest)
+		for _, name := range required {
+			say("needs %s, which this PaperGo does not provide", name)
+		}
+		for _, name := range optional {
+			say("works in part: this PaperGo does not provide %s", name)
+		}
 		sort.Strings(out.Problems)
 		out.OK = len(out.Problems) == 0
 		return out, nil

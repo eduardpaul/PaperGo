@@ -145,3 +145,26 @@ func TestPullReturnsWhatIsLive(t *testing.T) {
 		t.Fatalf("still reported as edited after pulling: %v", r2.Customized)
 	}
 }
+
+// A solution says what it needs of the deployment: without what it cannot
+// work without it is refused, and status says what it works in part without.
+func TestRequiredCapabilities(t *testing.T) {
+	p := newPlace(t)
+	p.svc.Capabilities = map[string]bool{"ocr": true}
+	needs := edit("solution.json", `"requires": {"ocr": false}`, `"requires": {"ocr": true, "ai.batch": true}`)
+	has(t, p.apply(needs, Options{}), "REFUSED solution tank: needs ai.batch, which this PaperGo does not provide")
+
+	partly := edit("solution.json", `"requires": {"ocr": false}`, `"requires": {"ocr": true, "ai.batch": false}`)
+	r := p.applied(partly, Options{})
+	if !strings.Contains(strings.Join(r.Warnings, "\n"), "this PaperGo does not provide ai.batch: the solution works in part") {
+		t.Fatalf("warnings: %v", r.Warnings)
+	}
+	status, err := p.svc.Status(p.ctx, admin, p.ws, "tank")
+	if err != nil || status.OK || len(status.Problems) != 1 || status.Problems[0] != "works in part: this PaperGo does not provide ai.batch" {
+		t.Fatalf("status: %+v %v", status, err)
+	}
+	p.svc.Capabilities["ai.batch"] = true
+	if status, err = p.svc.Status(p.ctx, admin, p.ws, "tank"); err != nil || !status.OK {
+		t.Fatalf("status with the capability: %+v %v", status, err)
+	}
+}

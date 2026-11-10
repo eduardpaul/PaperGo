@@ -37,7 +37,7 @@ func folder(t *testing.T, files fstest.MapFS) string {
 func TestCommandsTalkToAServer(t *testing.T) {
 	db := daltest.Database(t)
 	s := dms.NewService(db.SQL)
-	server := httptest.NewServer((&httpapi.API{DMS: s, Auth: auth.Development{Token: token, Subject: admin}, Logger: slog.Default(), Modules: []httpapi.Module{Module()}}).Handler())
+	server := httptest.NewServer((&httpapi.API{DMS: s, Auth: auth.Development{Token: token, Subject: admin}, Logger: slog.Default(), Modules: []httpapi.Module{Module(nil)}}).Handler())
 	defer server.Close()
 	ws, err := s.Create(t.Context(), admin, "", dms.CreateResource{Kind: "workspace", Name: "Casa"})
 	if err != nil {

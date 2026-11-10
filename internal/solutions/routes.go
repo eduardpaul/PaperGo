@@ -16,10 +16,11 @@ import (
 // MaxPackageBytes bounds a packed solution sent to the API.
 const MaxPackageBytes = 16 << 20
 
-// Module serves the solutions routes.
-func Module() httpapi.Module { return module{} }
+// Module serves the solutions routes. capabilities says what the deployment
+// provides of what solutions may require (see Capabilities).
+func Module(capabilities map[string]bool) httpapi.Module { return module{capabilities} }
 
-type module struct{}
+type module struct{ capabilities map[string]bool }
 
 func (module) Name() string { return "solutions" }
 
@@ -38,7 +39,9 @@ func (m module) Routes() []httpapi.Route {
 	}
 }
 
-func service(in httpapi.Request) *Service { return &Service{DMS: in.DMS, PaperGo: buildinfo.Version} }
+func (m module) service(in httpapi.Request) *Service {
+	return &Service{DMS: in.DMS, PaperGo: buildinfo.Version, Capabilities: m.capabilities}
+}
 
 // read reads the packed solution of a request's body and the options of
 // its options query parameter.
@@ -70,12 +73,12 @@ func read(w http.ResponseWriter, r *http.Request) (Solution, Options, error) {
 	return s, o, nil
 }
 
-func (module) plan(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+func (m module) plan(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
 	s, o, err := read(w, r)
 	if err != nil {
 		return err
 	}
-	out, err := service(in).Plan(r.Context(), in.Subject, r.PathValue("id"), s, o)
+	out, err := m.service(in).Plan(r.Context(), in.Subject, r.PathValue("id"), s, o)
 	if err != nil {
 		return err
 	}
@@ -85,12 +88,12 @@ func (module) plan(w http.ResponseWriter, r *http.Request, in httpapi.Request) e
 
 // apply answers 200 with what was applied, and 409 with the refusals when
 // nothing was.
-func (module) apply(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+func (m module) apply(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
 	s, o, err := read(w, r)
 	if err != nil {
 		return err
 	}
-	out, err := service(in).Apply(context.WithoutCancel(r.Context()), in.Subject, r.PathValue("id"), s, o)
+	out, err := m.service(in).Apply(context.WithoutCancel(r.Context()), in.Subject, r.PathValue("id"), s, o)
 	if err != nil {
 		return err
 	}
@@ -102,8 +105,8 @@ func (module) apply(w http.ResponseWriter, r *http.Request, in httpapi.Request) 
 	return nil
 }
 
-func (module) list(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	out, err := service(in).List(r.Context(), in.Subject, r.PathValue("id"))
+func (m module) list(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := m.service(in).List(r.Context(), in.Subject, r.PathValue("id"))
 	if err != nil {
 		return err
 	}
@@ -111,8 +114,8 @@ func (module) list(w http.ResponseWriter, r *http.Request, in httpapi.Request) e
 	return nil
 }
 
-func (module) get(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	out, err := service(in).Get(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
+func (m module) get(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := m.service(in).Get(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
 	if err != nil {
 		return err
 	}
@@ -120,8 +123,8 @@ func (module) get(w http.ResponseWriter, r *http.Request, in httpapi.Request) er
 	return nil
 }
 
-func (module) status(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	out, err := service(in).Status(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
+func (m module) status(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := m.service(in).Status(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
 	if err != nil {
 		return err
 	}
@@ -130,8 +133,8 @@ func (module) status(w http.ResponseWriter, r *http.Request, in httpapi.Request)
 }
 
 // pull answers with the installation as a packed solution.
-func (module) pull(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	s, err := service(in).Pull(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
+func (m module) pull(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	s, err := m.service(in).Pull(r.Context(), in.Subject, r.PathValue("id"), r.PathValue("key"))
 	if err != nil {
 		return err
 	}
@@ -147,8 +150,8 @@ func (module) pull(w http.ResponseWriter, r *http.Request, in httpapi.Request) e
 	return nil
 }
 
-func (module) remove(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
-	out, err := service(in).Remove(context.WithoutCancel(r.Context()), in.Subject, r.PathValue("id"), r.PathValue("key"))
+func (m module) remove(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	out, err := m.service(in).Remove(context.WithoutCancel(r.Context()), in.Subject, r.PathValue("id"), r.PathValue("key"))
 	if err != nil {
 		return err
 	}
