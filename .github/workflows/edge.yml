@@ -89,7 +89,10 @@ jobs:
             BUILD_DATE=${{ steps.version.outputs.date }}
             SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=release-image-${{ matrix.arch }}
+          # Its own cache from the last push to main, and a release's for the first one.
+          cache-from: |
+            type=gha,scope=edge-image-${{ matrix.arch }}
+            type=gha,scope=release-image-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=edge-image-${{ matrix.arch }}
       - name: Pull and test the image
         env:

@@ -42,4 +42,4 @@ The cache (`internal/dal/resultcache`, the `cached_results` table) stores a name
 
 ## Samples
 
-[`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers that call the model immediately: receipts with a model-written summary chunk, and contracts split at headings with model-written context per section. [`samples/receipts-package`](../samples/receipts-package/README.md) extracts structured purchase lines from a receipt photo through batch completions.
+[`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers that call the model immediately: receipts with a model-written summary chunk, and contracts split at headings with model-written context per section. [`samples/receipts`](../samples/receipts/README.md) extracts structured purchase lines from a receipt photo through batch completions.
