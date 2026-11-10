@@ -524,6 +524,7 @@ func TestApplySettingsAndPause(t *testing.T) {
 		t.Fatalf("an apply resumed a paused installation: %+v", again)
 	}
 	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity_l": "a lot"}}), "REFUSED settings tank")
+	has(t, p.apply(tank(), Options{Settings: map[string]any{"capacity": 900}}), `REFUSED settings tank: the solution has no setting "capacity"; it has capacity_l, time_zone`)
 }
 
 // A setting nobody gave follows its default, read again at each apply; one

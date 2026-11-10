@@ -209,12 +209,9 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 		if o.Settings == nil {
 			o.Settings = map[string]any{}
 		}
-		var parsed any
-		if json.Unmarshal([]byte(value), &parsed) != nil {
-			parsed = value
-		}
+		parsed, err := settingValue(s.Manifest.Settings, name, value)
 		o.Settings[name] = parsed
-		return nil
+		return err
 	}); err != nil {
 		return err
 	}
@@ -264,6 +261,28 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 		return fmt.Errorf("%d refusal(s); nothing was applied", len(result.Refusals))
 	}
 	return nil
+}
+
+// settingValue reads the value of a --set as the solution's settings form
+// types it: text as it was written, and anything else as JSON.
+func settingValue(form map[string]any, name, value string) (any, error) {
+	properties, _ := form["properties"].(map[string]any)
+	setting, ok := properties[name].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("--set %s: the solution has no such setting; it has %s", name, orNone(sortedKeys(properties)))
+	}
+	kind, _ := setting["type"].(string)
+	if kind == "string" {
+		return value, nil
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		if kind == "" {
+			return value, nil // untyped: text unless it reads as JSON
+		}
+		return nil, fmt.Errorf("--set %s=%s: the setting is a %s, written as JSON", name, value, kind)
+	}
+	return parsed, nil
 }
 
 // leading splits the positional argument commands start with from their flags.

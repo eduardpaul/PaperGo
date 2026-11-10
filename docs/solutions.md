@@ -187,7 +187,7 @@ A decision to keep is remembered: the object stays as edited until the solution 
 
 A choice added to a solution's field in PaperGo, and a field added to its content type, are not edits of what the solution says: they stay through every apply, and a [pull](#pulling-and-removing) brings them to the files.
 
-**Settings.** `--set name=value` gives a value of the solution's settings form, and the installation keeps it. A setting nobody gave takes the form's default, read again at each apply: the organization's preference where the form says so, and a newer version's default. `--unset name` returns a setting to its default. Parameters that name `$setting:<name>` get the values.
+**Settings.** `--set name=value` gives a value of the solution's settings form, and the installation keeps it. A text setting takes the value as written; a number, a yes or no, a list or an object is written as JSON (`--set capacity_l=1000`, `--set days='["mon","thu"]'`). A setting nobody gave takes the form's default, read again at each apply: the organization's preference where the form says so, and a newer version's default. `--unset name` returns a setting to its default. Parameters that name `$setting:<name>` get the values.
 
 **Collections.** A collection the solution owns is created with its name, content types, views and search setting. Its name, a library's WebDAV setting and its search setting are the solution's like everything else: changed in PaperGo, they stay. `--bind slot=<list name or ID>` uses a list or library that exists instead: it keeps its name and settings, and gets the solution's content types and views. The binding is remembered.
 

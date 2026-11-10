@@ -122,3 +122,35 @@ func installationOf(t *testing.T, s *dms.Service, workspaceID, key string) Insta
 	}
 	return r.Installations[key]
 }
+
+// A --set value is read as its setting's type says: text stays text even
+// when it reads as a number.
+func TestSetReadsValuesByTheirType(t *testing.T) {
+	form := map[string]any{"properties": map[string]any{
+		"postal_code": map[string]any{"type": "string"},
+		"capacity_l":  map[string]any{"type": "number"},
+		"notify":      map[string]any{"type": "boolean"},
+		"days":        map[string]any{"type": "array"},
+		"anything":    map[string]any{},
+	}}
+	for _, c := range []struct {
+		name, value string
+		want        any
+	}{
+		{"postal_code", "28001", "28001"}, {"postal_code", "true", "true"}, {"postal_code", "null", "null"}, {"postal_code", "", ""},
+		{"capacity_l", "900", float64(900)}, {"notify", "false", false}, {"anything", "plain", "plain"}, {"anything", "3", float64(3)},
+	} {
+		if got, err := settingValue(form, c.name, c.value); err != nil || got != c.want {
+			t.Errorf("--set %s=%s: %#v %v, want %#v", c.name, c.value, got, err, c.want)
+		}
+	}
+	if got, err := settingValue(form, "days", `["mon", "thu"]`); err != nil || len(got.([]any)) != 2 {
+		t.Errorf("a list: %#v %v", got, err)
+	}
+	if _, err := settingValue(form, "capacity_l", "a lot"); err == nil || !strings.Contains(err.Error(), "the setting is a number") {
+		t.Errorf("text for a number: %v", err)
+	}
+	if _, err := settingValue(form, "capacity", "900"); err == nil || !strings.Contains(err.Error(), "no such setting; it has anything, capacity_l, days, notify, postal_code") {
+		t.Errorf("a setting the solution lacks: %v", err)
+	}
+}

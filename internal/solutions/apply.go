@@ -430,6 +430,11 @@ func (r *run) settle() {
 			p["default"] = r.preferences[strings.TrimPrefix(def, OrganizationDefault)]
 		}
 	}
+	for _, name := range sortedKeys(r.opts.Settings) {
+		if _, known := props[name]; !known {
+			r.refuse("settings", r.sol.Manifest.Key, "the solution has no setting %q; it has %s", name, orNone(sortedKeys(props)))
+		}
+	}
 	for name := range given {
 		if _, known := props[name]; !known {
 			delete(given, name) // a setting an earlier version had
