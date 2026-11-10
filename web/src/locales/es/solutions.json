@@ -1,0 +1,82 @@
+{
+  "page": {
+    "title": "Soluciones",
+    "description": "Listas, flujos y aplicaciones que se instalan juntos en este espacio. Aplicar una solución crea lo que declara y actualiza lo que ha cambiado; nunca borra, y los elementos guardados quedan como están.",
+    "needScope": "Instalar soluciones requiere poder administrar el espacio y el permiso solution.manage, que tienen los administradores.",
+    "empty": "No hay ninguna solución instalada en este espacio.",
+    "installed": "Instaladas",
+    "version": "{{key}} · versión {{version}}",
+    "applied": "Aplicada el {{date}} por {{who}}",
+    "paused": "En pausa",
+    "removeTitle": "¿Quitar {{name}}?",
+    "removeDescription": "Se borran sus flujos, aplicaciones y vistas. Sus listas, tipos de contenido y campos se quedan, con todos los elementos que contienen.",
+    "removeConfirm": "Quitar solución"
+  },
+  "status": {
+    "ok": "Tiene lo que necesita",
+    "attention": "Necesita atención"
+  },
+  "actions": {
+    "download": "Descargar archivos",
+    "remove": "Quitar",
+    "review": "Revisar cambios",
+    "apply": "Aplicar",
+    "clear": "Elegir otro archivo"
+  },
+  "install": {
+    "title": "Instalar o actualizar",
+    "description": "Elige una solución empaquetada, el ZIP que escribe papergo solution pack. Nada cambia hasta que apliques.",
+    "file": "Solución empaquetada",
+    "reviewFirst": "Revisa qué cambiaría antes de aplicar."
+  },
+  "plan": {
+    "heading": "{{name}} {{version}}",
+    "first": "Primera instalación",
+    "from": "Instalada: {{version}}",
+    "settings": "Ajustes",
+    "collections": "Listas y bibliotecas",
+    "slotCreate": "Crear «{{name}}»",
+    "slotChoose": "Elige una…",
+    "slotInstalled": "Instalada como «{{name}}»",
+    "slotUses": "«{{name}}» de la solución {{solution}}",
+    "slotUsesMissing": "Una lista de la solución {{solution}}, que no está instalada aquí",
+    "kindList": "Lista",
+    "kindLibrary": "Biblioteca",
+    "changes": "Cambios",
+    "noChanges": "Aplicar no cambia nada: el espacio ya coincide con la solución.",
+    "kept": "Se deja como se editó en PaperGo",
+    "warnings": "Notas",
+    "refusals": "Todavía no se puede aplicar",
+    "decide": "Decidir",
+    "undecided": "Decide…",
+    "keep": "Conservar lo que hay en PaperGo",
+    "replace": "Tomar lo de la solución",
+    "paused": "Instalar en pausa: que sus flujos no se inicien solos",
+    "prune": "Borrar los flujos, aplicaciones y vistas que esta versión ya no tiene",
+    "applied_one": "Aplicada: {{count}} cambio.",
+    "applied_many": "Aplicada: {{count}} cambios.",
+    "applied_other": "Aplicada: {{count}} cambios.",
+    "stale": "Has cambiado una opción. Revisa de nuevo para ver qué haría aplicar ahora."
+  },
+  "action": {
+    "create": "Crear",
+    "update": "Actualizar",
+    "attach": "Añadir",
+    "extend": "Ampliar",
+    "bind": "Usar",
+    "delete": "Borrar",
+    "keep": "Conservar"
+  },
+  "kind": {
+    "field": "campo",
+    "content_type": "tipo de contenido",
+    "relationship_type": "tipo de relación",
+    "collection": "lista o biblioteca",
+    "view": "vista",
+    "workflow": "flujo",
+    "app": "aplicación",
+    "extension": "campos añadidos a",
+    "solution": "solución",
+    "settings": "ajustes"
+  }
+}

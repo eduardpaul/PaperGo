@@ -140,8 +140,12 @@ func TestApplyInstallsOnceAndIsThenUnchanged(t *testing.T) {
 		t.Fatalf("app: %+v", a.Parameters)
 	}
 
+	// A plan says what stands for each collection and which settings it uses.
+	if len(plan.Slots) != 1 || plan.Slots[0].State != SlotCreate || plan.Slots[0].Name != "Tank" || plan.Settings["time_zone"] != "UTC" || plan.SettingsForm == nil {
+		t.Fatalf("plan slots %+v settings %+v", plan.Slots, plan.Settings)
+	}
 	again := p.applied(tank(), Options{})
-	if len(again.Changes) != 0 || len(again.Customized) != 0 || again.From != "1.0.0" {
+	if len(again.Changes) != 0 || len(again.Customized) != 0 || again.From != "1.0.0" || again.Slots[0].State != SlotInstalled || again.Slots[0].CollectionID != list.ID {
 		t.Fatalf("applying the same solution again:\n%s", said(again))
 	}
 }

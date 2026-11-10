@@ -1,0 +1,81 @@
+{
+  "page": {
+    "title": "Solutions",
+    "description": "Lists, workflows and apps installed together into this workspace. Applying a solution creates what it declares and updates what it changed; it never deletes, and stored items stay as they are.",
+    "needScope": "Installing solutions needs manage access to the workspace and the solution.manage scope, which administrators have.",
+    "empty": "No solution is installed in this workspace.",
+    "installed": "Installed",
+    "version": "{{key}} · version {{version}}",
+    "applied": "Applied {{date}} by {{who}}",
+    "paused": "Paused",
+    "removeTitle": "Remove {{name}}?",
+    "removeDescription": "Its workflows, apps and views are deleted. Its lists, content types and fields stay, with every item they hold.",
+    "removeConfirm": "Remove solution"
+  },
+  "status": {
+    "ok": "Has what it needs",
+    "attention": "Needs attention"
+  },
+  "actions": {
+    "download": "Download files",
+    "remove": "Remove",
+    "review": "Review changes",
+    "apply": "Apply",
+    "clear": "Choose another file"
+  },
+  "install": {
+    "title": "Install or update",
+    "description": "Choose a packed solution, the ZIP that papergo solution pack writes. Nothing changes until you apply.",
+    "file": "Packed solution",
+    "reviewFirst": "Review what applying would change before you apply."
+  },
+  "plan": {
+    "heading": "{{name}} {{version}}",
+    "first": "First installation",
+    "from": "Installed: {{version}}",
+    "settings": "Settings",
+    "collections": "Lists and libraries",
+    "slotCreate": "Create \"{{name}}\"",
+    "slotChoose": "Choose one…",
+    "slotInstalled": "Installed as \"{{name}}\"",
+    "slotUses": "\"{{name}}\" of the solution {{solution}}",
+    "slotUsesMissing": "A list of the solution {{solution}}, which is not installed here",
+    "kindList": "List",
+    "kindLibrary": "Library",
+    "changes": "Changes",
+    "noChanges": "Applying changes nothing: the workspace already matches the solution.",
+    "kept": "Left as edited in PaperGo",
+    "warnings": "Notes",
+    "refusals": "Cannot be applied yet",
+    "decide": "Decide",
+    "undecided": "Decide…",
+    "keep": "Keep what is in PaperGo",
+    "replace": "Take the solution's",
+    "paused": "Install paused: keep its workflows from starting on their own",
+    "prune": "Delete the workflows, apps and views this version no longer has",
+    "applied_one": "Applied: {{count}} change.",
+    "applied_other": "Applied: {{count}} changes.",
+    "stale": "You changed a choice. Review again to see what applying does now."
+  },
+  "action": {
+    "create": "Create",
+    "update": "Update",
+    "attach": "Attach",
+    "extend": "Extend",
+    "bind": "Use",
+    "delete": "Delete",
+    "keep": "Keep"
+  },
+  "kind": {
+    "field": "field",
+    "content_type": "content type",
+    "relationship_type": "relationship type",
+    "collection": "list or library",
+    "view": "view",
+    "workflow": "workflow",
+    "app": "app",
+    "extension": "fields added to",
+    "solution": "solution",
+    "settings": "settings"
+  }
+}

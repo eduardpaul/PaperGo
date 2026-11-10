@@ -19,6 +19,7 @@ import search from '@/locales/en/search.json';
 import settings from '@/locales/en/settings.json';
 import shell from '@/locales/en/shell.json';
 import smartFolders from '@/locales/en/smartFolders.json';
+import solutions from '@/locales/en/solutions.json';
 import tasks from '@/locales/en/tasks.json';
 import workflows from '@/locales/en/workflows.json';
 import workspaces from '@/locales/en/workspaces.json';
@@ -42,6 +43,7 @@ export const en = {
   settings,
   shell,
   smartFolders,
+  solutions,
   tasks,
   workflows,
   workspaces,

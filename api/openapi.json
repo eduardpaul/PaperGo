@@ -36538,6 +36538,10 @@
           },
           "reason": {
             "type": "string"
+          },
+          "conflict": {
+            "type": "boolean",
+            "description": "An object edited in PaperGo that the solution changes too: a decision for \"<kind>:<key>\" lifts the refusal."
           }
         }
       },
@@ -36551,7 +36555,9 @@
           "changes",
           "refusals",
           "customized",
-          "warnings"
+          "warnings",
+          "slots",
+          "settings"
         ],
         "properties": {
           "solution": {
@@ -36595,6 +36601,21 @@
             "items": {
               "type": "string"
             }
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SolutionSlot"
+            },
+            "description": "The solution's collections and what stands for each in the workspace."
+          },
+          "settings_form": {
+            "type": "object",
+            "description": "The solution's settings form, its defaults read from the organization where it says so."
+          },
+          "settings": {
+            "type": "object",
+            "description": "The settings values used."
           }
         }
       },
@@ -36776,6 +36797,55 @@
               "type": "string"
             },
             "description": "What is missing or no longer as the solution needs it."
+          }
+        }
+      },
+      "SolutionSlot": {
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "owned",
+          "state"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The name the solution gives the collection it creates."
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "uses": {
+            "type": "string",
+            "description": "The solution whose collection the slot names."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "create",
+              "installed",
+              "bound",
+              "uses",
+              "unresolved"
+            ],
+            "description": "create: applying creates the collection; installed: an earlier apply created it; bound: chosen by hand; uses: another installed solution's; unresolved: a refusal says why."
+          },
+          "collection_id": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
           }
         }
       }

@@ -1,6 +1,6 @@
 # Solutions (plan)
 
-Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Step 0's quick wins are done except unique field keys and parameter `PATCH`, as its section says. Steps 4 and 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
+Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Step 0's quick wins are done except unique field keys and parameter `PATCH`, as its section says. Step 4, the screen in Workspace settings, is done. Step 6 is planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
 
 ## Why
 
@@ -267,7 +267,7 @@ The order puts the smallest things that remove the most scripting first.
 
 **Step 3: upgrade and removal** (done). Customized objects, conflicts, objects that left the solution, uninstall, pull, paused installation. Tests: the three-state table above, row by row.
 
-**Step 4: the web screens.** Install with slot pickers and the settings form, the plan as a diff, status and notices in apps.
+**Step 4: the web screens** (done). Install with slot pickers and the settings form, the plan as a diff, status and notices in apps.
 
 **Step 5: settings fan-out and capabilities** (done). `$setting:` references, `=organization.` defaults, `requires`.
 

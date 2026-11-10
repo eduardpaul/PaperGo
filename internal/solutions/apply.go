@@ -64,6 +64,40 @@ type Refusal struct {
 	Kind   string `json:"kind"`
 	Key    string `json:"key"`
 	Reason string `json:"reason"`
+	// Conflict marks an object edited in PaperGo that the solution changes
+	// too: a decision for "<kind>:<key>" lifts the refusal.
+	Conflict bool `json:"conflict,omitempty"`
+}
+
+// Slot states.
+const (
+	// SlotCreate: applying creates the collection.
+	SlotCreate = "create"
+	// SlotInstalled: the collection an earlier apply created.
+	SlotInstalled = "installed"
+	// SlotBound: a collection chosen by hand.
+	SlotBound = "bound"
+	// SlotUses: a collection of another installed solution.
+	SlotUses = "uses"
+	// SlotUnresolved: nothing stands for the slot yet; a refusal says why.
+	SlotUnresolved = "unresolved"
+)
+
+// Slot is one of a solution's collections and what stands for it in the
+// workspace.
+type Slot struct {
+	Key  string `json:"key"`
+	Kind string `json:"kind"`
+	// Name is the name the solution gives the collection it creates.
+	Name  string `json:"name,omitempty"`
+	Owned bool   `json:"owned"`
+	// Uses is the solution whose collection the slot names.
+	Uses  string `json:"uses,omitempty"`
+	State string `json:"state"`
+	// CollectionID and CollectionName are the collection that stands for
+	// the slot, unless it is yet to be created.
+	CollectionID   string `json:"collection_id,omitempty"`
+	CollectionName string `json:"collection_name,omitempty"`
 }
 
 // Result is what applying a solution does, or would do.
@@ -80,6 +114,12 @@ type Result struct {
 	// Customized are the objects edited in PaperGo that were left as they are.
 	Customized []string `json:"customized"`
 	Warnings   []string `json:"warnings"`
+	// Slots are the solution's collections and what stands for each.
+	Slots []Slot `json:"slots"`
+	// SettingsForm is the solution's settings form, its defaults read from
+	// the organization where it says so, and Settings the values used.
+	SettingsForm map[string]any `json:"settings_form,omitempty"`
+	Settings     map[string]any `json:"settings"`
 }
 
 // Service plans, applies and reads the solutions of workspaces.
@@ -141,7 +181,7 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		ids: map[string]string{}, fieldIDs: map[string]string{}, typeIDs: map[string]string{},
 		preferences: map[string]string{"time_zone": preferences.TimeZone, "language": preferences.Language, "default_currency": preferences.DefaultCurrency,
 			"number_format": preferences.NumberFormat, "date_format": preferences.DateFormat, "time_format": preferences.TimeFormat},
-		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}}}
+		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}}}
 	required, optional := s.lacks(sol.Manifest)
 	for _, name := range required {
 		r.refuse("solution", sol.Manifest.Key, "needs %s, which this PaperGo does not provide", name)
@@ -193,7 +233,7 @@ func (r *run) change(action, kind, key, detail string) {
 }
 
 func (r *run) refuse(kind, key, format string, args ...any) {
-	r.result.Refusals = append(r.result.Refusals, Refusal{kind, key, fmt.Sprintf(format, args...)})
+	r.result.Refusals = append(r.result.Refusals, Refusal{Kind: kind, Key: key, Reason: fmt.Sprintf(format, args...)})
 }
 
 func (r *run) warn(format string, args ...any) {
@@ -325,12 +365,13 @@ func (r *run) settle() {
 			delete(given, name) // a setting an earlier version had
 		}
 	}
+	r.result.SettingsForm = resolved
 	values, err := forms.Values(resolved, given, "settings")
 	if err != nil {
 		r.refuse("settings", r.sol.Manifest.Key, "%s", err)
 		return
 	}
-	r.settings = values
+	r.settings, r.result.Settings = values, values
 }
 
 // Actions settling an object can take.
@@ -380,6 +421,7 @@ func (r *run) decide(kind, key string, want, live any, exists bool) (action int,
 		return doSkip, before.Live
 	}
 	r.refuse(kind, key, "was edited in PaperGo and the solution changes it too: decide %q: keep or replace", name)
+	r.result.Refusals[len(r.result.Refusals)-1].Conflict = true
 	return doSkip, before.Live
 }
 
@@ -621,10 +663,29 @@ func (r *run) existingCollection(slot string) (string, bool) {
 
 func (r *run) collections() error {
 	for _, slot := range r.sol.Manifest.Collections {
+		before := r.previous.object(KindCollection, slot.Key)
 		c, role, err := r.target(slot)
 		if err != nil {
 			return err
 		}
+		info := Slot{Key: slot.Key, Kind: slot.Kind, Name: slot.Name, Owned: slot.Owned(), State: SlotUnresolved}
+		if slot.Use != nil {
+			info.Uses = slot.Use.Solution
+		}
+		if c != nil {
+			info.CollectionID, info.CollectionName = c.ID, c.Name
+			switch {
+			case r.next.Bindings[slot.Key] != "":
+				info.State = SlotBound
+			case !slot.Owned():
+				info.State = SlotUses
+			case before != nil && before.ID == c.ID:
+				info.State = SlotInstalled
+			default:
+				info.State, info.CollectionID, info.CollectionName = SlotCreate, "", ""
+			}
+		}
+		r.result.Slots = append(r.result.Slots, info)
 		if c == nil {
 			continue // refused
 		}

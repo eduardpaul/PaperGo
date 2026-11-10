@@ -4,7 +4,7 @@ A **solution** is the definitions of lists, workflows and apps that belong toget
 
 A solution is **applied** to a workspace that exists: PaperGo creates what the solution declares and the workspace lacks, updates what the solution changed since it was last applied, and leaves everything else, stored items first of all. Applying the same solution again changes nothing. A workspace holds any number of solutions, and two can work on the same list.
 
-`papergo solution` checks, packs, plans, applies, pulls and removes solutions. The web screens and languages are [planned](plans/solutions.md).
+`papergo solution` checks, packs, plans, applies, pulls and removes solutions, and **Workspace settings → Solutions** installs, updates and removes them in the web app. Languages are [planned](plans/solutions.md).
 
 ## The folder
 
@@ -174,6 +174,20 @@ A collection of another solution (`use`) is found through that solution's instal
 **Paused.** `--paused` installs the solution with its workflows' automatic starts off, for trying a version in another workspace; `--resume` turns them on as the solution says.
 
 **Who may.** Planning and applying need manage access to the workspace and the `solution.manage` scope, which administrators have. Each change is also checked as if made by hand, as the person applying: catalog fields and content types need their scopes, apps need `app.manage`. That person becomes the author the solution's workflows run as.
+
+## In the web app
+
+**Workspace settings → Solutions** lists the solutions installed in the workspace, each with its version, when and by whom it was applied, and whether it has what it needs; what it lacks is listed under it. Everyone who reads the workspace sees the list. Those who manage it and have `solution.manage` also install, update and remove:
+
+1. Choose a packed solution, the ZIP `papergo solution pack` writes.
+2. **Review changes.** The screen shows the plan and asks what the solution leaves open:
+   - its settings, with the values it would use;
+   - for each list or library it owns, whether to create it or use one the workspace has;
+   - for each object edited in PaperGo that the solution changes too, whether to keep the edit or take the solution's;
+   - whether to install it paused, and whether to delete what its version no longer has.
+3. **Apply.** A choice changed after the review asks for another review first, so what is applied is what was shown. What cannot be applied says why, and nothing is applied.
+
+**Download files** saves the installation as a packed solution, as pull does. **Remove** uninstalls it.
 
 ## Pulling and removing
 
