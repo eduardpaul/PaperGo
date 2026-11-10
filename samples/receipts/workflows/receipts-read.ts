@@ -74,9 +74,10 @@ const linesFolder = "Receipt lines";
 
 // The solution's fields start with its key: receipts_store, receipts_total…
 // The model's answer and this script name them without it; fields() adds it
-// where values are written.
+// where values are written, and leaves a name that already has it.
+const prefix = "receipts_";
 const fields = (values: Record<string, unknown>): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(values).map(([key, value]) => ["receipts_" + key, value]));
+  Object.fromEntries(Object.entries(values).map(([key, value]) => [key.startsWith(prefix) ? key : prefix + key, value]));
 
 // update sets values of the item at version, the receipt as it was when its
 // text was read, and returns its new version. A newer file or edit fails it.

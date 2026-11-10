@@ -9,6 +9,7 @@
       "capacity_l": {
         "type": "number",
         "title": "Tank capacity (L)",
+        "minimum": 1,
         "default": 750
       },
       "time_zone": {

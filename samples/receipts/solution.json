@@ -4,8 +4,8 @@
   "description": "Photos of purchase receipts and the lines read from them.",
   "version": "1.0.0",
   "requires": {
-    "ocr": true,
-    "ai.batch": false
+    "ai.batch": true,
+    "ocr": false
   },
   "fields": [
     {
