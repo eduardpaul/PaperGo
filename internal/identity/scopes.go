@@ -40,6 +40,9 @@ var Catalog = []Scope{
 	{"organization.manage", false}, {"audit.read", false},
 	// app.manage writes apps, whose code acts as everyone who opens them.
 	{"app.manage", false},
+	// solution.manage installs and removes solutions; each change a
+	// solution makes also needs the scope that change needs by hand.
+	{"solution.manage", false},
 }
 
 func RequireScope(ctx context.Context, store *dal.Store, subject, scope string) error {
