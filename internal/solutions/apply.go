@@ -1149,9 +1149,16 @@ func (r *run) views(slot Collection, collectionID string) error {
 	if len(slot.Views) == 0 {
 		return nil
 	}
-	page, err := r.t.Views(r.ctx, r.subject, collectionID, "", 200)
-	if err != nil {
-		return err
+	var all []viewstore.ListView
+	for after := ""; ; {
+		page, err := r.t.Views(r.ctx, r.subject, collectionID, after, 200)
+		if err != nil {
+			return err
+		}
+		all = append(all, page.Data...)
+		if after = page.NextCursor; after == "" {
+			break
+		}
 	}
 	for _, v := range slot.Views {
 		name := slot.Key + "/" + v.Key
@@ -1166,18 +1173,29 @@ func (r *run) views(slot Collection, collectionID string) error {
 		}
 		var want map[string]any
 		_ = json.Unmarshal(raw, &want)
+		// A view is the solution's when the installation made it; PaperGo
+		// has no key for one, and its name is anyone's to give.
 		var liveID string
 		var version int
 		var lives map[string]any
-		for i := range page.Data {
-			l := &page.Data[i]
-			before := r.previous.object(KindView, name)
-			if l.SystemKey != "" || (before != nil && before.ID != l.ID) || (before == nil && l.Name != v.Name) {
-				continue
+		taken := false
+		before := r.previous.object(KindView, name)
+		for i := range all {
+			l := &all[i]
+			if before != nil && before.ID == l.ID {
+				liveID, version, lives = l.ID, l.Version, storedView(l)
+			} else if l.Name == v.Name {
+				taken = true
 			}
-			liveID, version, lives = l.ID, l.Version, storedView(l)
 		}
 		action, kept := r.decide(KindView, name, want, lives, liveID != "")
+		if taken && action != doSkip {
+			r.refuse(KindView, name, "the collection has a view named %q that is not the solution's, and a name serves one view: rename or delete that one", v.Name)
+			if liveID != "" {
+				r.note(KindView, name, liveID, RoleOwns, want, lives, kept)
+			}
+			continue
+		}
 		switch action {
 		case doCreate:
 			created, err := r.t.CreateView(r.ctx, r.subject, collectionID, in)

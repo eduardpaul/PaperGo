@@ -2,6 +2,7 @@ package solutions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -498,6 +499,38 @@ func TestApplyBindsAnExistingCollection(t *testing.T) {
 	// Later applies need not name the binding again.
 	if again := p.applied(tank(), Options{}); len(again.Changes) != 0 {
 		t.Fatalf("applying again:\n%s", said(again))
+	}
+}
+
+// A view someone made is not the solution's for having its name: the
+// solution does not take it over, and removing the solution leaves it.
+func TestApplyLeavesAViewOfTheSameName(t *testing.T) {
+	p := newPlace(t)
+	mine, err := p.dms.Create(p.ctx, admin, p.ws, dms.CreateResource{Kind: "list", Name: "Depósito"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var in dms.ViewInput
+	if err := json.Unmarshal([]byte(`{"name": "Readings", "layout": "table", "columns": ["$name"]}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	view, err := p.dms.CreateView(p.ctx, admin, mine.ID, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound := Options{Bindings: map[string]string{"readings": mine.ID}}
+	has(t, p.apply(tank(), bound), `REFUSED view readings/all: the collection has a view named "Readings" that is not the solution's`)
+
+	in.Name = "My readings"
+	if _, err := p.dms.UpdateView(p.ctx, admin, view.ID, view.Version, in); err != nil {
+		t.Fatal(err)
+	}
+	has(t, p.applied(tank(), bound), "create view readings/all")
+	if _, err := p.svc.Remove(p.ctx, admin, p.ws, "tank"); err != nil {
+		t.Fatal(err)
+	}
+	if kept, err := p.dms.View(p.ctx, admin, view.ID); err != nil || strings.Join(kept.Columns, ",") != "$name" {
+		t.Fatalf("the view someone made did not stay as it was: %+v %v", kept, err)
 	}
 }
 

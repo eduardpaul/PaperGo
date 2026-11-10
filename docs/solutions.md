@@ -160,7 +160,7 @@ applied: 4 change(s)
 
 **One transaction.** Everything a solution brings is applied together or not at all. A plan is the apply itself, rolled back, so it says exactly what applying would do, the errors of each change included.
 
-**What is found, and by what.** A field and a content type are organization catalog entries, found by their key; a workflow and an app by their key in the workspace; a collection and a view by the installation, which remembers which object each key became. A renamed list is still the solution's list.
+**What is found, and by what.** A field and a content type are organization catalog entries, found by their key; a workflow and an app by their key in the workspace; a collection and a view by the installation, which remembers which object each key became. A renamed list is still the solution's list, and a view someone made is not the solution's for having its name: a name serves one view of a collection, so the apply is refused until one of the two is renamed.
 
 **Additive.** Applying never deletes. It refuses, and then applies nothing, when a change would break stored values:
 
