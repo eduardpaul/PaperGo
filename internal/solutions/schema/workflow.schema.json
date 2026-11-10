@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperGo solution workflow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "name",
+    "script"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,89}$",
+      "description": "Starts with the solution's key and a hyphen, such as diesel-levels."
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "script": {
+      "type": "string",
+      "description": "The workflow's TypeScript file, beside this one."
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Name what the solution declares as $collection:<key>, $type:<key> and $setting:<name>."
+    },
+    "automatic_enabled": {
+      "type": "boolean"
+    },
+    "manual_enabled": {
+      "type": "boolean"
+    },
+    "state": {
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ]
+    }
+  }
+}

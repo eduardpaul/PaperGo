@@ -29,6 +29,8 @@
     "/v1/workflows/**",
     "/v1/resources/*/workflow-roles",
     "/v1/workspaces/*/apps",
+    "/v1/workspaces/*/solutions",
+    "/v1/workspaces/*/solutions/**",
     "/v1/workspaces/*/workflow-actions",
     "/v1/workspaces/*/workflow-builtins",
     "/v1/workspaces/*/workflow-builtins/**",

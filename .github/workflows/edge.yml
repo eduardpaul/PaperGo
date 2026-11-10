@@ -1,0 +1,143 @@
+name: edge
+# Publishes ghcr.io/eduardpaul/papergo:edge from main, so that what main's
+# samples and documentation describe can be run before the next release.
+# Each image is also tagged edge-<commit>, to pin one. Releases are the
+# release workflow's; this one never moves latest or a version tag.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+# A newer commit replaces the edge image an older one is still building.
+concurrency:
+  group: papergo-edge
+  cancel-in-progress: true
+env:
+  IMAGE: ghcr.io/eduardpaul/papergo
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.x'
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            .tools/decision/model
+            .tools/embedding/models
+          key: presets-${{ hashFiles('internal/decision/manifest.json', 'scripts/decision-model/bundle.json', 'scripts/fetch-embedding-models.py') }}
+      - name: Package shared models and assets
+        run: python3 scripts/build-assets.py --output-dir shared/assets
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: edge-container-assets
+          path: shared
+          if-no-files-found: error
+          retention-days: 3
+  image:
+    needs: assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, arch: amd64}
+          - {runner: ubuntu-24.04-arm, arch: arm64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.x'
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: edge-container-assets
+          path: container-assets
+      - name: Give the model layer reproducible timestamps
+        run: find container-assets -exec touch -h -d @0 {} +
+      - name: Name the version
+        id: version
+        run: |
+          echo "version=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4.4.1
+        with:
+          driver: docker-container
+      - uses: docker/login-action@v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build an image by digest
+        id: image
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          pull: true
+          build-contexts: model-assets=./container-assets
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.version.outputs.date }}
+            SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Its own cache from the last push to main, and a release's for the first one.
+          cache-from: |
+            type=gha,scope=edge-image-${{ matrix.arch }}
+            type=gha,scope=release-image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=edge-image-${{ matrix.arch }}
+      - name: Pull and test the image
+        env:
+          CANDIDATE: ${{ env.IMAGE }}@${{ steps.image.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker pull "$CANDIDATE"
+          python3 scripts/docker-smoke.py --image "$CANDIDATE" --version "$VERSION"
+      - name: Record the tested digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: mkdir -p digests && echo "$DIGEST" > "digests/${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: edge-image-digest-${{ matrix.arch }}
+          path: digests/*
+          if-no-files-found: error
+          retention-days: 3
+  publish:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: edge-image-digest-*
+          merge-multiple: true
+          path: digests
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the tested multi-platform image
+        env:
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          version="edge-${GITHUB_SHA::7}"
+          docker buildx imagetools create --tag "$IMAGE:edge" --tag "$IMAGE:$version" \
+            --annotation "index:org.opencontainers.image.version=$version" \
+            --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE_URL" \
+            "$IMAGE@$(cat digests/amd64)" "$IMAGE@$(cat digests/arm64)"
+          docker buildx imagetools inspect "$IMAGE:edge"

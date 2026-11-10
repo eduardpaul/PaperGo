@@ -118,7 +118,8 @@ created. These templates cannot contain groups, group inboxes or organization
 identity settings. Use task selectors such as `role:owners` for portable reviewers;
 prompts, field values and other literal text are not substituted. Ordinary
 workspace copies preserve their source subjects. The [workflow samples](../samples/workflows/README.md)
-and [receipt sample](../samples/receipts-package/README.md) are ready to import.
+are ready to import. To install lists, workflows and apps into a workspace that
+exists, and upgrade them in place, use a [solution](solutions.md).
 
 Packages require the current PaperGo contract; they are not a cross-product
 PaperDotNet format. General parameter substitution and updating an existing

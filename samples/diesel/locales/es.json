@@ -1,0 +1,101 @@
+{
+  "name": "Gasóleo",
+  "description": "El depósito de gasóleo de la calefacción: mediciones con varilla, llenados, calefacción y temperaturas, con su panel.",
+  "fields": {
+    "diesel_measured_at": {
+      "label": "Medido el"
+    },
+    "diesel_stick_cm": {
+      "label": "Lectura de la varilla (cm)",
+      "description": "Longitud de la varilla desde la boca de llenado hasta el gasóleo."
+    },
+    "diesel_level_liters": {
+      "label": "Litros",
+      "description": "Worked out from the stick by the Diesel levels workflow."
+    },
+    "diesel_fill_percent": {
+      "label": "Llenado (%)"
+    },
+    "diesel_flag": {
+      "label": "Revisión",
+      "description": "check: higher than the last reading and what was bought since. Set reviewed once it is confirmed."
+    },
+    "diesel_purchased_at": {
+      "label": "Comprado el"
+    },
+    "diesel_bought_liters": {
+      "label": "Litros comprados"
+    },
+    "diesel_total_price": {
+      "label": "Precio total"
+    },
+    "diesel_price_per_liter": {
+      "label": "Precio por litro"
+    },
+    "diesel_supplier": {
+      "label": "Proveedor"
+    },
+    "diesel_heating_at": {
+      "label": "Cambio el"
+    },
+    "diesel_heating": {
+      "label": "Calefacción"
+    },
+    "diesel_temperature_at": {
+      "label": "Tomada el"
+    },
+    "diesel_indoor_c": {
+      "label": "Interior (°C)",
+      "description": "Dentro de casa."
+    },
+    "diesel_outdoor_c": {
+      "label": "Exterior (°C)",
+      "description": "Fuera, a la sombra."
+    }
+  },
+  "content_types": {
+    "diesel_reading": "Medición",
+    "diesel_purchase": "Llenado",
+    "diesel_heating": "Calefacción",
+    "diesel_temperature": "Temperatura"
+  },
+  "collections": {
+    "tank": {
+      "name": "Gasóleo",
+      "views": {
+        "readings": "Mediciones",
+        "purchases": "Llenados",
+        "heating": "Calefacción",
+        "temperatures": "Temperaturas",
+        "needs-a-look": "Para revisar"
+      }
+    }
+  },
+  "workflows": {
+    "diesel-levels": {
+      "name": "Niveles de gasóleo"
+    },
+    "diesel-measure-reminder": {
+      "name": "Recordatorio de medición"
+    },
+    "diesel-refill": {
+      "name": "Pedido de gasóleo"
+    },
+    "diesel-sample-data": {
+      "name": "Cargar datos de ejemplo de gasóleo"
+    }
+  },
+  "apps": {
+    "diesel-dashboard": {
+      "name": "Panel del gasóleo"
+    }
+  },
+  "settings": {
+    "capacity_l": {
+      "title": "Capacidad del depósito (L)"
+    },
+    "time_zone": {
+      "title": "Zona horaria de los recordatorios"
+    }
+  }
+}

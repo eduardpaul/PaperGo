@@ -129,7 +129,7 @@ func installReceipts(t *testing.T) *receipts {
 	t.Cleanup(func() { stop(); <-stopped })
 
 	r := &receipts{s: s, handler: api.Handler(), ai: assistant, batch: batch}
-	raw, err := os.ReadFile("../../samples/receipts-package/receipts.zip")
+	raw, err := os.ReadFile("../dms/testdata/sample-receipts.zip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func installReceipts(t *testing.T) *receipts {
 		t.Fatal(err)
 	}
 	for _, lt := range types {
-		if lt.Key == "receipt_line" {
+		if lt.Key == "receipts_line" {
 			r.lineType = *lt.ParentID
 		}
 	}
@@ -173,7 +173,7 @@ func installReceipts(t *testing.T) *receipts {
 	}
 	for _, flow := range flows {
 		// The desk finds the workflow by this key.
-		if flow.Key == "read-receipts" && flow.AutomaticEnabled {
+		if flow.Key == "receipts-read" && flow.AutomaticEnabled {
 			r.workflow = flow.ID
 		}
 	}
@@ -390,7 +390,7 @@ func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
 			t.Fatalf("line %q is in %q of %q", link.Related.Name, folder.Name, root.Name)
 		}
 		v := link.Related.Values
-		out[fmt.Sprint(v["description"])] = fmt.Sprintf("%v %v %v %v %v %v", v["category"], v["quantity"], v["unit_price"], v["amount"], v["currency"], v["purchase_date"])
+		out[fmt.Sprint(v["receipts_description"])] = fmt.Sprintf("%v %v %v %v %v %v", v["receipts_category"], v["receipts_quantity"], v["receipts_unit_price"], v["receipts_amount"], v["receipts_currency"], v["receipts_purchase_date"])
 	}
 	return out
 }
@@ -398,7 +398,7 @@ func (r *receipts) lineValues(t *testing.T, id string) map[string]string {
 func (r *receipts) expectRead(t *testing.T, id string) {
 	t.Helper()
 	item := r.item(t, id)
-	for key, want := range map[string]string{"store": "North Market", "purchase_date": "2026-10-15", "currency": "EUR", "total": "12.50", "status": "Read"} {
+	for key, want := range map[string]string{"receipts_store": "North Market", "receipts_purchase_date": "2026-10-15", "receipts_currency": "EUR", "receipts_total": "12.50", "receipts_status": "Read"} {
 		if got := fmt.Sprint(item.Values[key]); got != want {
 			t.Fatalf("%s = %q, want %q: %+v", key, got, want, item.Values)
 		}
@@ -435,7 +435,7 @@ func (r *receipts) lineCount(t *testing.T) int {
 // desk's spending by category does, waiting for them to reach want.
 func (r *receipts) spending(t *testing.T, currency, want string) {
 	t.Helper()
-	body := fmt.Sprintf(`{"query":{"content_type_id":%q,"filter":{"and":[{"field":"status","op":"eq","value":"Read"},{"field":"currency","op":"eq","value":%q}]}},"aggregates":[{"op":"sum","field":"amount","as":"spent"}]}`, r.lineType, currency)
+	body := fmt.Sprintf(`{"query":{"content_type_id":%q,"filter":{"and":[{"field":"receipts_status","op":"eq","value":"Read"},{"field":"receipts_currency","op":"eq","value":%q}]}},"aggregates":[{"op":"sum","field":"receipts_amount","as":"spent"}]}`, r.lineType, currency)
 	var last string
 	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		var page struct {
@@ -586,7 +586,7 @@ func TestReceiptsPackage(t *testing.T) {
 	r.flush(t)
 	reviewed := r.runOf(t, rejected, runstore.StatusCompleted)
 	// The photo stays, to be read again.
-	if item := r.item(t, rejected); item.Values["status"] != "Needs review" || item.Values["problem"] != "Not readable" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
+	if item := r.item(t, rejected); item.Values["receipts_status"] != "Needs review" || item.Values["receipts_problem"] != "Not readable" || item.File.ContentType != "image/png" || len(r.lineValues(t, rejected)) != 0 {
 		t.Fatalf("a refused answer: %+v %s", item, dump(r, t, []workflow.Run{reviewed}))
 	}
 
@@ -605,12 +605,12 @@ func TestReceiptsPackage(t *testing.T) {
 		}
 	}
 	r.spending(t, "EUR", "37.50")
-	patch(newer, `{"status":"Needs review"}`)
+	patch(newer, `{"receipts_status":"Needs review"}`)
 	r.spending(t, "EUR", "25.00")
-	patch(newer, `{"status":"Read","currency":"USD"}`)
+	patch(newer, `{"receipts_status":"Read","receipts_currency":"USD"}`)
 	r.spending(t, "USD", "12.50")
 	r.spending(t, "EUR", "25.00")
-	patch(newer, `{"currency":"EUR"}`)
+	patch(newer, `{"receipts_currency":"EUR"}`)
 	r.spending(t, "EUR", "37.50")
 	remove := httptest.NewRequest("DELETE", "/v1/resources/"+newer, nil)
 	remove.Header.Set("Authorization", "Bearer "+token)
@@ -628,7 +628,7 @@ func TestReceiptsPackage(t *testing.T) {
 	// A file the model cannot read does not wait to be read forever.
 	heic := r.uploadFile(t, "photo.heic", "image/heic", []byte("not a photo the model reads"))
 	unread := r.runOf(t, heic, runstore.StatusCompleted)
-	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["status"] != "Needs review" || item.Values["problem"] != "Not a photo" {
+	if item := r.item(t, heic); string(unread.Result) != `{"status":"No photo"}` || item.Values["receipts_status"] != "Needs review" || item.Values["receipts_problem"] != "Not a photo" {
 		t.Fatalf("a HEIC file: %s %+v", unread.Result, item)
 	}
 
@@ -638,7 +638,7 @@ func TestReceiptsPackage(t *testing.T) {
 	r.queued(t, 1)
 	r.flush(t)
 	r.runOf(t, local, runstore.StatusCompleted)
-	if item := r.item(t, local); item.Values["status"] != "Read" || item.Values["total"] != "1012.50" || item.Values["currency"] != "EUR" {
+	if item := r.item(t, local); item.Values["receipts_status"] != "Read" || item.Values["receipts_total"] != "1012.50" || item.Values["receipts_currency"] != "EUR" {
 		t.Fatalf("local amounts: %+v", item)
 	}
 	if lines := r.lineValues(t, local); lines["Diesel"] != "Other 40.1200 1.4590 58.53 EUR 2026-10-15" || lines["Refund"] != "Other 1.0000 4.5000 -4.50 EUR 2026-10-15" {
@@ -652,7 +652,7 @@ func TestReceiptsPackage(t *testing.T) {
 	r.queued(t, 1)
 	r.flush(t)
 	first := r.runOf(t, bad, runstore.StatusCompleted)
-	if item := r.item(t, bad); item.Values["status"] != "Needs review" || item.Values["store"] != nil || len(r.lineValues(t, bad)) != 0 {
+	if item := r.item(t, bad); item.Values["receipts_status"] != "Needs review" || item.Values["receipts_store"] != nil || len(r.lineValues(t, bad)) != 0 {
 		t.Fatalf("a bad amount: %+v %s", item, dump(r, t, []workflow.Run{first}))
 	}
 	// Reading it again asks the model again, whose new answer files it.
@@ -662,7 +662,7 @@ func TestReceiptsPackage(t *testing.T) {
 	}
 	r.queued(t, 1)
 	// While it is read it waits to be read again, without its problem.
-	if item := r.item(t, bad); item.Values["status"] != "New" || item.Values["problem"] != nil {
+	if item := r.item(t, bad); item.Values["receipts_status"] != "New" || item.Values["receipts_problem"] != nil {
 		t.Fatalf("a receipt read again: %+v", item)
 	}
 	r.flush(t)

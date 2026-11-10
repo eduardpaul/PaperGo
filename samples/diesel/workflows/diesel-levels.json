@@ -1,0 +1,20 @@
+{
+  "key": "diesel-levels",
+  "name": "Diesel levels",
+  "description": "Works out the litres and fill of each reading, checks it against the one before, and the price per litre of each purchase. Recalculate all converts every reading again.",
+  "script": "diesel-levels.ts",
+  "parameters": {
+    "list": "$collection:tank",
+    "reading_type": "$type:diesel_reading",
+    "purchase_type": "$type:diesel_purchase",
+    "capacity_l": "$setting:capacity_l",
+    "useful_height_cm": 125,
+    "stick_length_cm": 200,
+    "measure": "from_top",
+    "orientation": "upright",
+    "tolerance_l": 5
+  },
+  "automatic_enabled": true,
+  "manual_enabled": true,
+  "state": "published"
+}

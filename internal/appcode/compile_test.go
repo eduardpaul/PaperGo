@@ -136,7 +136,7 @@ func TestAppsThatDoNotCompileAreRefused(t *testing.T) {
 
 // The diesel sample's dashboard compiles and declares its parameters.
 func TestTheDieselSampleCompiles(t *testing.T) {
-	source, err := os.ReadFile("../../samples/diesel/diesel-app.tsx")
+	source, err := os.ReadFile("../../samples/diesel/apps/diesel-dashboard.tsx")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestTheDieselSampleCompiles(t *testing.T) {
 
 // The receipts sample's desk compiles and declares its parameters.
 func TestTheReceiptsSampleCompiles(t *testing.T) {
-	source, err := os.ReadFile("../../samples/receipts-package/receipts-app.tsx")
+	source, err := os.ReadFile("../../samples/receipts/apps/receipts-desk.tsx")
 	if err != nil {
 		t.Fatal(err)
 	}

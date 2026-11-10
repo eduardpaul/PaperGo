@@ -1,0 +1,66 @@
+{
+  "name": "Tiques",
+  "description": "Tiques de compra: se fotografían, un modelo lee tienda, fecha, total y líneas, y se guardan como PDF.",
+  "fields": {
+    "receipts_store": {
+      "label": "Tienda"
+    },
+    "receipts_purchase_date": {
+      "label": "Fecha de compra"
+    },
+    "receipts_currency": {
+      "label": "Moneda"
+    },
+    "receipts_total": {
+      "label": "Total"
+    },
+    "receipts_status": {
+      "label": "Estado"
+    },
+    "receipts_problem": {
+      "label": "Problema"
+    },
+    "receipts_description": {
+      "label": "Descripción"
+    },
+    "receipts_category": {
+      "label": "Categoría"
+    },
+    "receipts_quantity": {
+      "label": "Cantidad"
+    },
+    "receipts_unit_price": {
+      "label": "Precio unitario"
+    },
+    "receipts_amount": {
+      "label": "Importe"
+    }
+  },
+  "content_types": {
+    "receipts_receipt": "Tique",
+    "receipts_line": "Línea de tique"
+  },
+  "collections": {
+    "receipts": {
+      "name": "Tiques",
+      "views": {
+        "receipts": "Tiques",
+        "needs-review": "Pendientes de revisión",
+        "lines": "Líneas"
+      }
+    }
+  },
+  "workflows": {
+    "receipts-read": {
+      "name": "Leer tiques"
+    },
+    "receipts-sync-lines": {
+      "name": "Sincronizar líneas de tique"
+    }
+  },
+  "apps": {
+    "receipts-desk": {
+      "name": "Mesa de tiques"
+    }
+  }
+}

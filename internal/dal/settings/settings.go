@@ -22,9 +22,11 @@ const (
 	KeyComments Key = "comments"
 	// KeyTrustedHosts is the organization's list of trusted outside hosts.
 	KeyTrustedHosts Key = "trusted_hosts"
+	// KeySolutions are the solutions installed in a workspace.
+	KeySolutions Key = "solutions"
 )
 
-func (k Key) Valid() bool { return k == KeyComments || k == KeyTrustedHosts }
+func (k Key) Valid() bool { return k == KeyComments || k == KeyTrustedHosts || k == KeySolutions }
 
 // Setting is one feature's value at one level: the organization's when
 // ResourceID is empty.

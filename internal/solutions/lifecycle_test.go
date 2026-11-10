@@ -1,0 +1,258 @@
+package solutions
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"papergo/internal/apps"
+	"papergo/internal/dms"
+	"papergo/internal/workflow"
+)
+
+// Removing a solution deletes what it runs and shows, and keeps its list,
+// types, fields and items. A solution another one uses is not removed.
+func TestRemoveKeepsWhatHoldsItems(t *testing.T) {
+	p := newPlace(t)
+	p.applied(tank(), Options{})
+	p.applied(bills(), Options{})
+	in := p.installation("tank")
+	list, typ := in.object(KindCollection, "readings"), in.object(KindContentType, "tank_reading")
+	item, err := p.dms.Create(p.ctx, admin, list.ID, dms.CreateResource{Kind: "item", Name: "First", ContentTypeID: typ.ID, Values: map[string]any{"tank_measured_at": "2026-11-10T12:00:00Z"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := p.svc.Remove(p.ctx, admin, p.ws, "tank"); err == nil || !strings.Contains(err.Error(), `the solution bills uses the collection "readings" of tank; remove bills first`) {
+		t.Fatalf("a solution in use was removed: %v", err)
+	}
+	if _, err := p.svc.Remove(p.ctx, admin, p.ws, "bills"); err != nil {
+		t.Fatal(err)
+	}
+	r, err := p.svc.Remove(p.ctx, admin, p.ws, "tank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"delete workflow tank-levels", "delete app tank-dashboard", "delete view readings/all", "keep collection readings", "keep content_type tank_reading", "keep field tank_flag"} {
+		has(t, r, want)
+	}
+	if _, err := (&workflow.Service{DMS: p.dms}).Get(p.ctx, admin, in.object(KindWorkflow, "tank-levels").ID); err == nil {
+		t.Fatal("the workflow is still there")
+	}
+	if _, err := (&apps.Service{DMS: p.dms}).Get(p.ctx, admin, in.object(KindApp, "tank-dashboard").ID); err == nil {
+		t.Fatal("the app is still there")
+	}
+	if kept, err := p.dms.Get(p.ctx, admin, item.ID); err != nil || kept.Values["tank_measured_at"] == nil {
+		t.Fatalf("the item did not stay: %v", err)
+	}
+	if list, err := p.svc.List(p.ctx, admin, p.ws); err != nil || len(list) != 0 {
+		t.Fatalf("installations left: %+v %v", list, err)
+	}
+	// Installing again finds the fields and the type, and makes a new list.
+	again := p.applied(tank(), Options{})
+	has(t, again, "create collection readings")
+	if strings.Contains(said(again), "create field") || strings.Contains(said(again), "create content_type") {
+		t.Fatalf("the catalog entries were not found again:\n%s", said(again))
+	}
+}
+
+// What a version no longer declares stays, marked, until it is pruned.
+func TestApplyRetiresAndPrunes(t *testing.T) {
+	p := newPlace(t)
+	p.applied(tank(), Options{})
+	id := p.installation("tank").object(KindApp, "tank-dashboard").ID
+	without := tank()
+	delete(without, "apps/dashboard.json")
+	delete(without, "apps/dashboard.tsx")
+
+	r := p.applied(without, Options{})
+	if len(r.Changes) != 0 || !strings.Contains(strings.Join(r.Warnings, "\n"), "app tank-dashboard is no longer part of the solution; it was kept") {
+		t.Fatalf("retire:\n%s\n%v", said(r), r.Warnings)
+	}
+	if o := p.installation("tank").object(KindApp, "tank-dashboard"); o == nil || !o.Retired {
+		t.Fatalf("the app is not marked: %+v", o)
+	}
+	if again := p.applied(without, Options{}); strings.Contains(strings.Join(again.Warnings, "\n"), "tank-dashboard") {
+		t.Fatalf("said again: %v", again.Warnings)
+	}
+	pruned := p.applied(without, Options{Prune: true})
+	has(t, pruned, "delete app tank-dashboard no longer part of the solution")
+	if _, err := (&apps.Service{DMS: p.dms}).Get(p.ctx, admin, id); err == nil || p.installation("tank").object(KindApp, "tank-dashboard") != nil {
+		t.Fatal("the app was not pruned")
+	}
+}
+
+// Pulling returns the solution as it is in the workspace, with what was
+// edited there; applying what was pulled changes nothing.
+func TestPullReturnsWhatIsLive(t *testing.T) {
+	p := newPlace(t)
+	p.applied(tank(), Options{Settings: map[string]any{"time_zone": "Europe/Madrid"}})
+	in := p.installation("tank")
+	wf := &workflow.Service{DMS: p.dms}
+	w, err := wf.Get(p.ctx, admin, in.object(KindWorkflow, "tank-levels").ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := strings.Replace(w.Source, "async run() {}", "async run() { /* edited in PaperGo */ }", 1)
+	if _, err = wf.Update(p.ctx, admin, w.ID, w.Version, workflow.Save{Name: "Niveles", Source: source, Parameters: w.Parameters, State: w.State}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := p.dms.Get(p.ctx, admin, in.object(KindCollection, "readings").ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "Depósito"
+	if _, err = p.dms.Update(p.ctx, admin, list.ID, list.Version, dms.UpdateResource{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+
+	pulled, err := p.svc.Pull(p.ctx, admin, p.ws, "tank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if problems := Check(p.ctx, pulled); len(problems) > 0 {
+		t.Fatalf("what was pulled has problems:\n%s", problems)
+	}
+	if pulled.Manifest.Collections[0].Name != "Depósito" || len(pulled.Workflows) != 1 || len(pulled.Apps) != 1 {
+		t.Fatalf("pulled: %+v", pulled.Manifest.Collections[0])
+	}
+	pw := pulled.Workflows[0]
+	if pw.Name != "Niveles" || !strings.Contains(pw.Source, "edited in PaperGo") || pw.File != "workflows/levels.json" || pw.Script != "levels.ts" {
+		t.Fatalf("pulled workflow: %+v", pw)
+	}
+	// IDs are references again, and a setting's value its reference.
+	if pw.Parameters["list"] != "$collection:readings" || pw.Parameters["reading_type"] != "$type:tank_reading" || pw.Parameters["time_zone"] != "$setting:time_zone" {
+		t.Fatalf("pulled parameters: %+v", pw.Parameters)
+	}
+	if q := pulled.Manifest.Collections[0].Views[0].Query; q["content_type_id"] != "$type:tank_reading" {
+		t.Fatalf("pulled view: %+v", q)
+	}
+
+	raw, err := Pack(pulled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _ := OpenZIP(raw)
+	again, problems := Load(files)
+	if len(problems) > 0 {
+		t.Fatal(problems)
+	}
+	r, err := p.svc.Apply(p.ctx, admin, p.ws, again, Options{})
+	if err != nil || !r.Applied || len(r.Changes) != 0 || len(r.Refusals) != 0 {
+		t.Fatalf("applying what was pulled: %v\n%s\ncustomized %v", err, said(r), r.Customized)
+	}
+	// What was edited is now what the solution says, so nothing is "kept" any more.
+	if r2, _ := p.svc.Apply(p.ctx, admin, p.ws, again, Options{}); len(r2.Customized) != 0 {
+		t.Fatalf("still reported as edited after pulling: %v", r2.Customized)
+	}
+}
+
+// Status says what keeps a solution from working, and nothing of what is
+// no longer part of it.
+func TestStatusOfWorkflows(t *testing.T) {
+	p := newPlace(t)
+	automatic := edit("workflows/levels.json", `"state": "published"`, `"state": "published", "automatic_enabled": true`)
+	p.applied(automatic, Options{})
+	status := func() Status {
+		t.Helper()
+		s, err := p.svc.Status(p.ctx, admin, p.ws, "tank")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if s := status(); !s.OK {
+		t.Fatalf("status: %+v", s)
+	}
+	// Automatic starts turned off in PaperGo: the workflow still runs by hand, and no longer on its own.
+	wf := &workflow.Service{DMS: p.dms}
+	id := p.installation("tank").object(KindWorkflow, "tank-levels").ID
+	w, err := wf.Get(p.ctx, admin, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	if _, err := wf.Update(p.ctx, admin, id, w.Version, workflow.Save{Name: w.Name, Source: w.Source, Parameters: w.Parameters, State: w.State, AutomaticEnabled: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(); s.OK || len(s.Problems) != 1 || !strings.Contains(s.Problems[0], "workflow tank-levels no longer starts on its own") {
+		t.Fatalf("status of a workflow turned off: %+v", s)
+	}
+	// A paused installation has them off on purpose.
+	paused := true
+	p.applied(automatic, Options{Paused: &paused, Decisions: map[string]string{"workflow:tank-levels": DecisionReplace}})
+	if s := status(); !s.OK {
+		t.Fatalf("status of a paused installation: %+v", s)
+	}
+
+	// A workflow the solution no longer has, deleted by hand, is not missed.
+	without := tank()
+	delete(without, "workflows/levels.json")
+	delete(without, "workflows/levels.ts")
+	p.applied(without, Options{})
+	if w, err = wf.Get(p.ctx, admin, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := wf.Delete(p.ctx, admin, id, w.Version); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(); !s.OK {
+		t.Fatalf("status after deleting a retired workflow: %+v", s)
+	}
+}
+
+// A solution says what it needs of the deployment: without what it cannot
+// work without it is refused, and status says what it works in part without.
+func TestRequiredCapabilities(t *testing.T) {
+	p := newPlace(t)
+	p.svc.Capabilities = map[string]bool{"ocr": true}
+	needs := edit("solution.json", `"requires": {"ocr": false}`, `"requires": {"ocr": true, "ai.batch": true}`)
+	has(t, p.apply(needs, Options{}), "REFUSED solution tank: needs ai.batch, which this PaperGo does not provide")
+
+	partly := edit("solution.json", `"requires": {"ocr": false}`, `"requires": {"ocr": true, "ai.batch": false}`)
+	r := p.applied(partly, Options{})
+	if !strings.Contains(strings.Join(r.Warnings, "\n"), "this PaperGo does not provide ai.batch: the solution works in part") {
+		t.Fatalf("warnings: %v", r.Warnings)
+	}
+	status, err := p.svc.Status(p.ctx, admin, p.ws, "tank")
+	if err != nil || status.OK || len(status.Problems) != 1 || status.Problems[0] != "works in part: this PaperGo does not provide ai.batch" {
+		t.Fatalf("status: %+v %v", status, err)
+	}
+	p.svc.Capabilities["ai.batch"] = true
+	if status, err = p.svc.Status(p.ctx, admin, p.ws, "tank"); err != nil || !status.OK {
+		t.Fatalf("status with the capability: %+v %v", status, err)
+	}
+}
+
+// The samples are solutions: their folders have no problems, both install
+// into one workspace, and applying them again changes nothing.
+func TestSamplesInstallIntoOneWorkspace(t *testing.T) {
+	p := newPlace(t)
+	want := map[string][3]int{"diesel": {4, 1, 15}, "receipts": {2, 1, 11}}
+	for _, name := range []string{"diesel", "receipts"} {
+		files := os.DirFS(filepath.Join("..", "..", "samples", name))
+		s, problems := Load(files)
+		if problems = append(problems, Check(p.ctx, s)...); len(problems) > 0 {
+			t.Fatalf("%s has problems:\n%s", name, problems)
+		}
+		if got := [3]int{len(s.Workflows), len(s.Apps), len(s.Manifest.Fields)}; got != want[name] {
+			t.Fatalf("%s: %d workflows, %d apps, %d fields", name, got[0], got[1], got[2])
+		}
+		r, err := p.svc.Apply(p.ctx, admin, p.ws, s, Options{})
+		if err != nil || !r.Applied {
+			t.Fatalf("%s: %v\n%s", name, err, said(r))
+		}
+		again, err := p.svc.Apply(p.ctx, admin, p.ws, s, Options{})
+		if err != nil || !again.Applied || len(again.Changes) != 0 || len(again.Customized) != 0 {
+			t.Fatalf("%s applied again: %v\n%s\n%v", name, err, said(again), again.Customized)
+		}
+		status, err := p.svc.Status(p.ctx, admin, p.ws, name)
+		if err != nil || !status.OK {
+			t.Fatalf("%s status: %+v %v", name, status, err)
+		}
+	}
+	if list, err := p.svc.List(p.ctx, admin, p.ws); err != nil || len(list) != 2 {
+		t.Fatalf("installed: %+v %v", list, err)
+	}
+}

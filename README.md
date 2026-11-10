@@ -329,9 +329,11 @@ file versions, or export configuration only. Workspace settings link to the expo
 controls; administration provides export, validation and import. Imports create a
 new workspace alongside existing workspaces, optionally under a new name, and
 remap its internal references atomically. The
-[workflow examples](samples/workflows/README.md) and
-[batch receipt processing sample](samples/receipts-package/README.md) include ZIPs
-that can be installed directly from **Export and import**.
+[workflow examples](samples/workflows/README.md) include a ZIP that can be
+installed directly from **Export and import**. The
+[diesel tracker](samples/diesel/README.md) and
+[receipts](samples/receipts/README.md) samples are [solutions](docs/solutions.md),
+applied to a workspace that exists.
 
 ## Administrative backup and restore
 

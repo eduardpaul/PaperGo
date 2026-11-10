@@ -17,7 +17,7 @@ import (
 
 func sampleTemplateForTest(t *testing.T) corePackage {
 	t.Helper()
-	return samplePackageForTest(t, "../../samples/receipts-package/receipts.zip")
+	return samplePackageForTest(t, "testdata/sample-receipts.zip")
 }
 
 func samplePackageForTest(t *testing.T, path string) corePackage {
@@ -186,7 +186,7 @@ func TestWorkspaceTemplateRejectsUnboundIdentitiesAndInvalidScopes(t *testing.T)
 // Keep imports above checked when the ZIP is regenerated: the manifest stays a
 // single ordinary package entry, with no executable installer or staged files.
 func TestSampleTemplateArchiveHasOnlyManifest(t *testing.T) {
-	for _, path := range []string{"../../samples/receipts-package/receipts.zip", "../../samples/workflows/workflows.zip"} {
+	for _, path := range []string{"testdata/sample-receipts.zip", "../../samples/workflows/workflows.zip"} {
 		z, err := zip.OpenReader(path)
 		if err != nil {
 			t.Fatal(err)

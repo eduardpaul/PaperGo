@@ -48,6 +48,7 @@ import { Route as AppWWorkspaceIdSettingsIndexRouteImport } from './routes/_app/
 import { Route as AppWWorkspaceIdSettingsAppsRouteImport } from './routes/_app/w/$workspaceId/settings/apps'
 import { Route as AppWWorkspaceIdSettingsMembersRouteImport } from './routes/_app/w/$workspaceId/settings/members'
 import { Route as AppWWorkspaceIdSettingsRunsRouteImport } from './routes/_app/w/$workspaceId/settings/runs'
+import { Route as AppWWorkspaceIdSettingsSolutionsRouteImport } from './routes/_app/w/$workspaceId/settings/solutions'
 import { Route as AppWWorkspaceIdSettingsWorkflowsRouteImport } from './routes/_app/w/$workspaceId/settings/workflows'
 import { Route as AppWWorkspaceIdLListIdIndexRouteImport } from './routes/_app/w/$workspaceId/l/$listId/index'
 import { Route as AppWWorkspaceIdLListIdRecycleBinRouteImport } from './routes/_app/w/$workspaceId/l/$listId/recycle-bin'
@@ -259,6 +260,12 @@ const AppWWorkspaceIdSettingsRunsRoute =
     path: '/runs',
     getParentRoute: () => AppWWorkspaceIdSettingsRoute,
   } as any)
+const AppWWorkspaceIdSettingsSolutionsRoute =
+  AppWWorkspaceIdSettingsSolutionsRouteImport.update({
+    id: '/solutions',
+    path: '/solutions',
+    getParentRoute: () => AppWWorkspaceIdSettingsRoute,
+  } as any)
 const AppWWorkspaceIdSettingsWorkflowsRoute =
   AppWWorkspaceIdSettingsWorkflowsRouteImport.update({
     id: '/workflows',
@@ -358,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
+  '/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/w/$workspaceId/settings/': typeof AppWWorkspaceIdSettingsIndexRoute
   '/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
@@ -405,6 +413,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
+  '/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsIndexRoute
   '/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
@@ -456,6 +465,7 @@ export interface FileRoutesById {
   '/_app/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
   '/_app/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/_app/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
+  '/_app/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
   '/_app/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/_app/w/$workspaceId/settings/': typeof AppWWorkspaceIdSettingsIndexRoute
   '/_app/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/settings/apps'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
+    | '/w/$workspaceId/settings/solutions'
     | '/w/$workspaceId/settings/workflows'
     | '/w/$workspaceId/settings/'
     | '/w/$workspaceId/l/$listId/recycle-bin'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/settings/apps'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
+    | '/w/$workspaceId/settings/solutions'
     | '/w/$workspaceId/settings/workflows'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/l/$listId/recycle-bin'
@@ -605,6 +617,7 @@ export interface FileRouteTypes {
     | '/_app/w/$workspaceId/settings/apps'
     | '/_app/w/$workspaceId/settings/members'
     | '/_app/w/$workspaceId/settings/runs'
+    | '/_app/w/$workspaceId/settings/solutions'
     | '/_app/w/$workspaceId/settings/workflows'
     | '/_app/w/$workspaceId/settings/'
     | '/_app/w/$workspaceId/l/$listId/recycle-bin'
@@ -899,6 +912,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdSettingsRunsRouteImport
       parentRoute: typeof AppWWorkspaceIdSettingsRoute
     }
+    '/_app/w/$workspaceId/settings/solutions': {
+      id: '/_app/w/$workspaceId/settings/solutions'
+      path: '/solutions'
+      fullPath: '/w/$workspaceId/settings/solutions'
+      preLoaderRoute: typeof AppWWorkspaceIdSettingsSolutionsRouteImport
+      parentRoute: typeof AppWWorkspaceIdSettingsRoute
+    }
     '/_app/w/$workspaceId/settings/workflows': {
       id: '/_app/w/$workspaceId/settings/workflows'
       path: '/workflows'
@@ -1028,6 +1048,7 @@ interface AppWWorkspaceIdSettingsRouteChildren {
   AppWWorkspaceIdSettingsAppsRoute: typeof AppWWorkspaceIdSettingsAppsRoute
   AppWWorkspaceIdSettingsMembersRoute: typeof AppWWorkspaceIdSettingsMembersRoute
   AppWWorkspaceIdSettingsRunsRoute: typeof AppWWorkspaceIdSettingsRunsRoute
+  AppWWorkspaceIdSettingsSolutionsRoute: typeof AppWWorkspaceIdSettingsSolutionsRoute
   AppWWorkspaceIdSettingsWorkflowsRoute: typeof AppWWorkspaceIdSettingsWorkflowsRoute
   AppWWorkspaceIdSettingsIndexRoute: typeof AppWWorkspaceIdSettingsIndexRoute
 }
@@ -1037,6 +1058,8 @@ const AppWWorkspaceIdSettingsRouteChildren: AppWWorkspaceIdSettingsRouteChildren
     AppWWorkspaceIdSettingsAppsRoute: AppWWorkspaceIdSettingsAppsRoute,
     AppWWorkspaceIdSettingsMembersRoute: AppWWorkspaceIdSettingsMembersRoute,
     AppWWorkspaceIdSettingsRunsRoute: AppWWorkspaceIdSettingsRunsRoute,
+    AppWWorkspaceIdSettingsSolutionsRoute:
+      AppWWorkspaceIdSettingsSolutionsRoute,
     AppWWorkspaceIdSettingsWorkflowsRoute:
       AppWWorkspaceIdSettingsWorkflowsRoute,
     AppWWorkspaceIdSettingsIndexRoute: AppWWorkspaceIdSettingsIndexRoute,

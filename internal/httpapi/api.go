@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"io"
 	"log/slog"
@@ -515,7 +516,7 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 		if errors.As(err, &max) {
 			a.failure(w, r, err)
 		} else {
-			a.problem(w, r, 400, "invalid_json", "invalid JSON request body")
+			a.problem(w, r, 400, "invalid_json", invalidBody(err))
 		}
 		return false
 	}
@@ -525,6 +526,31 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 	}
 	return true
 }
+
+// invalidBody says what is wrong with a JSON request body as far as the
+// decoder knows: a property the route does not take, a value of the wrong
+// kind, or where the JSON breaks. Anything else stays unsaid.
+func invalidBody(err error) string {
+	const prefix = "invalid JSON request body"
+	var kind *json.UnmarshalTypeError
+	var syntax *json.SyntaxError
+	switch {
+	case errors.As(err, &kind):
+		if kind.Field == "" {
+			return fmt.Sprintf("%s: a %s cannot be read as the %s the request takes", prefix, kind.Value, kind.Type)
+		}
+		return fmt.Sprintf("%s: %s takes a %s, not a %s", prefix, kind.Field, kind.Type, kind.Value)
+	case errors.As(err, &syntax):
+		return fmt.Sprintf("%s: it is not JSON at byte %d", prefix, syntax.Offset)
+	case errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, io.EOF):
+		return prefix + ": it ends early or is empty"
+	}
+	if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+		return prefix + ": unknown property " + name
+	}
+	return prefix
+}
+
 func etag(w http.ResponseWriter, version int) {
 	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(version)))
 }

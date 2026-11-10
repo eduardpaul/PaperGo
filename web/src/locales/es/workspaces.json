@@ -28,6 +28,7 @@
     "workflows": "Flujos de trabajo",
     "runs": "Ejecuciones",
     "apps": "Aplicaciones",
+    "solutions": "Soluciones",
     "readOnly": "Solo los propietarios del espacio de trabajo cambian esta configuración. Tú puedes consultarla."
   },
   "keywords": {

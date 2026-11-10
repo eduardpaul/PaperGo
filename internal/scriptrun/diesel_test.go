@@ -15,7 +15,7 @@ import (
 )
 
 // diesel sets up the diesel sample in the runtime's workspace: its fields,
-// content types and list from samples/diesel/resources.json, and its four
+// content types and list from samples/diesel/solution.json, and its four
 // workflows bound to them.
 func diesel(t *testing.T, r *runtime) (list string, types map[string]string, workflows map[string]workflow.Workflow) {
 	t.Helper()
@@ -27,7 +27,7 @@ func diesel(t *testing.T, r *runtime) (list string, types map[string]string, wor
 			Fields    []string
 		} `json:"content_types"`
 	}
-	raw, err := os.ReadFile("../../samples/diesel/resources.json")
+	raw, err := os.ReadFile("../../samples/diesel/solution.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,10 +59,12 @@ func diesel(t *testing.T, r *runtime) (list string, types map[string]string, wor
 	if err != nil {
 		t.Fatal(err)
 	}
-	bindings := strings.NewReplacer("$LIST", l.ID, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"], "$TEMPERATURE_TYPE", types["diesel_temperature"])
+	// A reference stands for an ID; a setting for its default, as JSON.
+	bindings := strings.NewReplacer("$collection:tank", l.ID, "$type:diesel_reading", types["diesel_reading"], "$type:diesel_purchase", types["diesel_purchase"], "$type:diesel_heating", types["diesel_heating"], "$type:diesel_temperature", types["diesel_temperature"],
+		`"$setting:capacity_l"`, "750", `"$setting:time_zone"`, `"UTC"`)
 	workflows = map[string]workflow.Workflow{}
 	for _, name := range []string{"diesel-levels", "diesel-measure-reminder", "diesel-refill", "diesel-sample-data"} {
-		raw, err := os.ReadFile(filepath.Join("../../samples/diesel", name+".json"))
+		raw, err := os.ReadFile(filepath.Join("../../samples/diesel/workflows", name+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +75,7 @@ func diesel(t *testing.T, r *runtime) (list string, types map[string]string, wor
 		if err = json.Unmarshal([]byte(bindings.Replace(string(raw))), &sample); err != nil {
 			t.Fatal(err)
 		}
-		source, err := os.ReadFile(filepath.Join("../../samples/diesel", sample.Script))
+		source, err := os.ReadFile(filepath.Join("../../samples/diesel/workflows", sample.Script))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -6,6 +6,8 @@ The image contains the web UI, current database schema, native libraries and all
 
 Releases publish `ghcr.io/eduardpaul/papergo:vX.Y.Z` for Linux amd64 and arm64. Docker selects the matching architecture automatically. Stable releases update `latest`; release candidates use their exact `vX.Y.Z-rc.N` tag and never update `latest`. Pin a release tag or image digest for a deployment.
 
+`ghcr.io/eduardpaul/papergo:edge` is built from `main` on every push, after the same image test a release gets, and each build is also tagged `edge-<commit>`. It is what `main`'s samples and documentation describe between releases. Its database is the schema of that commit: use it for trying things, with data you can recreate.
+
 GitHub initially creates container packages as private. After the first publication, the package owner can set its visibility to Public in the package settings to allow anonymous pulls. A private package requires `docker login ghcr.io` with a personal access token (classic) granting `read:packages`. The release workflow itself uses `GITHUB_TOKEN` with job-scoped package permissions; no registry password needs to be configured in repository secrets. See [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 ## Start with Compose

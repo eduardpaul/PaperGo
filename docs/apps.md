@@ -98,7 +98,7 @@ An app does what its viewer may, through the API only, and never holds a login, 
 
 **Refused requests.** The page refuses some requests whoever views, with 403 `app_refused`, so an administrator who opens an app does not let it change who administers the organization:
 - **Any method:** `/v1/identity` (users, groups, roles, tokens, WebDAV credentials), `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch` and the apps routes.
-- **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members, permissions, and a list's integrations, which have the server fetch from the network.
+- **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members, permissions, and a list's integrations, which have the server fetch from the network; and installed [solutions](solutions.md), which an app may read but not plan, apply or remove.
 
 An app still starts workflow runs, answers and updates tasks, and reads and writes items.
 
@@ -140,4 +140,4 @@ The complete contract is in [OpenAPI](../api/openapi.json).
 
 ## Samples
 
-The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures. The [receipts desk](../samples/receipts-package/README.md) uploads receipt photos from a phone, shrunk on the phone to what the model reads, for a workflow that reads their lines and keeps each receipt as a PDF.
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a [solution](solutions.md) with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures. The [receipts desk](../samples/receipts/README.md) uploads receipt photos from a phone, shrunk on the phone to what the model reads, for a workflow that reads their lines and keeps each receipt as a PDF.

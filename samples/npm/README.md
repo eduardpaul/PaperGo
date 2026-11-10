@@ -65,6 +65,19 @@ Access tokens act without passing through NPM, so removing someone from the Acce
 
 PaperGo validates the actual forwarding peer, secret and username. It rejects duplicate assertion headers, forwarded `Authorization`, client attempts to override the assertion in batches, and cross-origin browser mutations. NPM overwrites incoming assertion headers with the authenticated username and configured secret.
 
+## Command line and automations
+
+`papergo solution` and other REST clients sign in with a [personal access token](../../docs/identity.md), which PaperGo checks itself on every request. NPM's sign-in would refuse them, so they do not go through NPM: run them on the backend network, where PaperGo answers on port 8080, with the same image as the server:
+
+```sh
+docker run --rm --network papergo-npm_backend \
+  -v "$PWD/diesel:/solution:ro" -v "$PWD/token:/run/token:ro" \
+  -e PAPERGO_URL=http://papergo:8080 -e PAPERGO_TOKEN_FILE=/run/token -e PAPERGO_WORKSPACE=Home \
+  papergo:npm-sample solution apply /solution
+```
+
+A token asserts no proxy identity: PaperGo trusts the identity headers only from NPM's address, and a token only as the person who made it, within its scopes. Create the token signed in through NPM, under **Settings → Access tokens**, and keep its file private.
+
 ## Storage and operations
 
 Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret and prepares the data directory. Setup writes `generated/config.yaml` and Compose mounts it into the PaperGo container. That file sets `auth.mode` to `proxy`, trusts the NPM address in `auth.proxy_trusted_cidrs`, and leaves the search store to follow the database. PaperGo creates or upgrades the database when the application starts.

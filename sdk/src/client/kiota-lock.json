@@ -1,5 +1,5 @@
 {
-  "descriptionHash": "1D746805FC275C9E3CE25504357B254FCCFEF72D36057FE51ADC51087BCEB6A1CC09CE64ADACE5AC2E5DA19FC0003F1B12CD7EE1CF844DB18D75946103FC9C86",
+  "descriptionHash": "C1F3E526D34E1EA8D944046B688734780DD1FDA32F63CDB3E101D8A3392E6BAFB59BABC35DAD17C3CDA25DAA36969B593C1545D95D0886B964FFA9A356E834AF",
   "descriptionLocation": "../../../api/openapi.json",
   "lockFileVersion": "1.0.0",
   "kiotaVersion": "1.35.0",
@@ -58,6 +58,8 @@
     "/v1/workflows/**",
     "/v1/resources/*/workflow-roles",
     "/v1/workspaces/*/apps",
+    "/v1/workspaces/*/solutions",
+    "/v1/workspaces/*/solutions/**",
     "/v1/workspaces/*/workflow-actions",
     "/v1/workspaces/*/workflow-builtins",
     "/v1/workspaces/*/workflow-builtins/**",

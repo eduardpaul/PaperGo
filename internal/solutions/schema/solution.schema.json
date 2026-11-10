@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperGo solution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "name",
+    "version"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]{1,31}$",
+      "description": "Names the solution. Everything it owns starts with it."
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+",
+      "description": "MAJOR.MINOR.PATCH"
+    },
+    "papergo": {
+      "type": "string",
+      "description": "The range of PaperGo versions the solution was written for, such as >=0.2.0."
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Capabilities of the deployment: true refuses an installation without it, false installs and reports it missing.",
+      "properties": {
+        "ai.batch": {
+          "type": "boolean"
+        },
+        "ai.chat": {
+          "type": "boolean"
+        },
+        "embeddings": {
+          "type": "boolean"
+        },
+        "ocr": {
+          "type": "boolean"
+        },
+        "search": {
+          "type": "boolean"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "description": "The form asked once when the solution is installed. Parameters take its values as $setting:<name>; a default of =organization.time_zone reads an organization preference."
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/field"
+      }
+    },
+    "content_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/content_type"
+      }
+    },
+    "relationship_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationship_type"
+      }
+    },
+    "collections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/collection"
+      }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "label",
+        "type"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "description": "Starts with the solution's key and an underscore, such as diesel_stick_cm."
+        },
+        "label": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "note",
+            "email",
+            "url",
+            "date",
+            "lookup",
+            "person",
+            "term",
+            "keywords",
+            "choice",
+            "datetime",
+            "integer",
+            "decimal",
+            "number",
+            "currency",
+            "boolean"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The values of a choice field. Workflows and apps match on them."
+        },
+        "indexed": {
+          "type": "boolean",
+          "description": "Filter, sort and group by the field."
+        },
+        "scale": {
+          "type": "integer",
+          "description": "Decimals kept by a decimal field."
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "unique": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "default_value": {},
+            "max_length": {
+              "type": "integer"
+            },
+            "minimum": {
+              "type": "string"
+            },
+            "maximum": {
+              "type": "string"
+            },
+            "currency_code": {
+              "type": "string"
+            },
+            "multiple": {
+              "type": "boolean"
+            },
+            "lookup_container_id": {
+              "type": "string",
+              "pattern": "^\\$collection:",
+              "description": "A collection of the solution, as $collection:<key>."
+            },
+            "term_set_id": {
+              "type": "string"
+            },
+            "apply_parents": {
+              "type": "boolean"
+            },
+            "search_weight": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "content_type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "fields"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "description": "Starts with the solution's key and an underscore, such as diesel_reading."
+        },
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "description": "Fields of the solution, by key."
+        }
+      }
+    },
+    "relationship_type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "inverse_label": {
+          "type": "string"
+        },
+        "directed": {
+          "type": "boolean"
+        },
+        "max_incoming": {
+          "type": "integer"
+        },
+        "max_outgoing": {
+          "type": "integer"
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "kind"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "description": "Workflows and apps name the collection as $collection:<key>."
+        },
+        "kind": {
+          "enum": [
+            "list",
+            "library"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "The collection's name when the solution creates it."
+        },
+        "content_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "description": "The solution's content types the collection accepts; the first is its default. A collection of another solution has expects instead."
+        },
+        "webdav_enabled": {
+          "type": "boolean"
+        },
+        "search": {
+          "type": "boolean",
+          "description": "Whether the collection's items are indexed for search."
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/view"
+          }
+        },
+        "use": {
+          "$ref": "#/$defs/use",
+          "description": "Binds the slot to a collection another solution declares."
+        },
+        "expects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            }
+          },
+          "description": "What the solution relies on in a collection it does not own: content types by key, each with the fields it needs. Verified, never changed."
+        },
+        "extends": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            }
+          },
+          "description": "The solution's own fields added to types of a collection it does not own."
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "layout": {
+          "type": "string"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Field keys, and built-in columns such as $name."
+        },
+        "query": {
+          "type": "object",
+          "description": "A collection query. Name a content type as $type:<key>."
+        },
+        "settings": {
+          "type": "object"
+        }
+      }
+    },
+    "use": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "solution",
+        "collection"
+      ],
+      "properties": {
+        "solution": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]{1,31}$",
+          "description": "The key of the solution that declares the collection. It becomes a dependency."
+        },
+        "collection": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "The range of that solution's versions, such as >=1.2.0."
+        }
+      }
+    }
+  }
+}

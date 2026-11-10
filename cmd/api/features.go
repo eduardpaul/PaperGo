@@ -32,6 +32,7 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/ocr"
 	"papergo/internal/search"
+	"papergo/internal/solutions"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 	"papergo/internal/workflow"
@@ -107,6 +108,12 @@ func enabled(ctx context.Context, e environment) (list features, err error) {
 	if searching != nil {
 		list = append(list, *searching)
 	}
+	// Solutions say what they need of a deployment, so they come once the
+	// features that provide it are known.
+	list = append(list, feature{name: "solutions", modules: []httpapi.Module{solutions.Module(map[string]bool{
+		"ocr": e.workflows.OCR, "ai.chat": assistant.Chat != nil, "ai.batch": assistant.Batch != nil,
+		"search": searching != nil, "embeddings": searching != nil && e.config.Embeddings.Provider != "" && e.config.Embeddings.Provider != "none",
+	})}})
 	if e.config.MCP {
 		registry, err := mcp.NewRegistry(builtin.Tools(), mcpContributions, e.config.MCPExtensions)
 		if err != nil {

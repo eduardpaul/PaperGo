@@ -283,7 +283,7 @@ func TestWorkspacePackageApps(t *testing.T) {
 // A template binds its source account where an app's people pickers select
 // it, and refuses any other subject there.
 func TestWorkspaceTemplateBindsAppPeople(t *testing.T) {
-	template := samplePackageForTest(t, "../../samples/diesel/diesel.zip")
+	template := samplePackageForTest(t, "testdata/sample-diesel.zip")
 	source := template.TemplateSubject
 	var list string
 	for _, row := range packageMaps(template.Tables["resources"]) {
@@ -293,7 +293,7 @@ func TestWorkspaceTemplateBindsAppPeople(t *testing.T) {
 	}
 	for _, owner := range []string{source, "someone-else"} {
 		t.Run(owner, func(t *testing.T) {
-			p := samplePackageForTest(t, "../../samples/diesel/diesel.zip")
+			p := samplePackageForTest(t, "testdata/sample-diesel.zip")
 			setPackageColumn(&p, "app_versions", "source", nil, func(map[string]any) any { return appSourceForTest(list, "x") })
 			setPackageColumn(&p, "apps", "parameters", nil, func(map[string]any) any {
 				raw, _ := json.Marshal(map[string]any{"list": list, "owner": owner})
