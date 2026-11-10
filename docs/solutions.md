@@ -248,7 +248,7 @@ Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at mos
 
 A workspace's installations are kept with the workspace and go with it.
 
-An [app](apps.md) may read these routes as its viewer, to say that its solution needs attention; the app page refuses its plans, applies and removals, whoever views it.
+An [app](apps.md) may read these routes as its viewer, to say that its solution needs attention; the app page refuses its plans, applies and removals, whoever views it. A workflow script cannot call them at all, as it cannot change workflows or apps.
 
 ## Editors
 
