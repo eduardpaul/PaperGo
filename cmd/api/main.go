@@ -80,7 +80,7 @@ func run(log *slog.Logger) error {
 	defer cancel()
 	blobLease, err := database.AcquireLease(c.BlobPath, false)
 	if err != nil {
-		return err
+		return config.ExplainPermission(err)
 	}
 	defer blobLease.Close()
 	var db *database.Database
@@ -146,7 +146,7 @@ func run(log *slog.Logger) error {
 	}
 	service.ConfigureIntegrations(secrets)
 
-	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
+	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup, c.OrganizationPreferences); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
 	if c.AuthMode == "local" {
@@ -288,7 +288,7 @@ func openSQLite(startup context.Context, log *slog.Logger, c *config.Config) (*d
 	}
 	dataLease, err := database.AcquireLease(c.DatabasePath, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, config.ExplainPermission(err)
 	}
 	db, err := database.Open(startup, c.DatabasePath)
 	if err != nil {

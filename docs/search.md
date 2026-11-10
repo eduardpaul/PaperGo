@@ -22,7 +22,7 @@ The text of files is indexed too, as [file content](#file-content), separately f
 
 **Field weights.** `search_weight` is a field option (`none`, `normal`, the default, or `high`). Search reads each field's current weight when it indexes an entry, so after changing it, entries follow as they change; `POST /v1/search/reindex` applies it to all of them at once.
 
-**Languages.** `SEARCH_LANGUAGES` lists the Snowball languages whose stems are indexed, comma-separated (default `english`; `none` indexes words only): arabic, danish, dutch, english, finnish, french, german, hungarian, irish, italian, norwegian, portuguese, romanian, russian, spanish, swedish, tamil and turkish. A word or phrase in a query matches itself or its stem in any of them, so `invoices` finds `invoice`; words that match as they are rank above words that match by stem. Prefixes (`invo*`) match words only. Changing the languages rebuilds the index at startup.
+**Languages.** `SEARCH_LANGUAGES` lists the Snowball languages whose stems are indexed, comma-separated, or `search.languages` in YAML (default: the [organization locale](configuration.md#organization-defaults)'s, else `english`; `none` indexes words only): arabic, danish, dutch, english, finnish, french, german, hungarian, irish, italian, norwegian, portuguese, romanian, russian, spanish, swedish, tamil and turkish. A word or phrase in a query matches itself or its stem in any of them, so `invoices` finds `invoice`; words that match as they are rank above words that match by stem. Prefixes (`invo*`) match words only. Changing the languages rebuilds the index at startup.
 
 ## Keeping it current
 

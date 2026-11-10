@@ -466,7 +466,7 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 		t.Fatal(err)
 	}
 	s := dms.NewService(db.SQL)
-	if err := s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
+	if err := s.Directory().Initialize(t.Context(), "organization-admin", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	store, err := storage.NewLocal(t.TempDir())

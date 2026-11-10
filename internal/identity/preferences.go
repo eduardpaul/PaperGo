@@ -100,7 +100,9 @@ func (d Directory) Preferences(ctx context.Context, subject string, organization
 	return
 }
 
-func validatePreference(name, value string) error {
+// ValidatePreference checks a preference value as a PATCH of preferences
+// does; name must be one of the preferences.
+func ValidatePreference(name, value string) error {
 	valid := false
 	switch name {
 	case "language", "number_format":
@@ -155,7 +157,7 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 			continue
 		}
 		value := strings.TrimSpace(*v)
-		if e := validatePreference(k, value); e != nil {
+		if e := ValidatePreference(k, value); e != nil {
 			return out, e
 		}
 		patch[k] = &value
@@ -203,4 +205,29 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		return e
 	})
 	return
+}
+
+// seedOrganizationPreferences gives the organization the preference
+// defaults the configuration names, at the directory's first
+// initialization; defaults it already has stay.
+func seedOrganizationPreferences(ctx context.Context, store *dal.Store, seed map[string]string) error {
+	if len(seed) == 0 {
+		return nil
+	}
+	own, version, err := ownPreferences(ctx, store, directory.OwnerOrganization, "")
+	if err != nil {
+		return err
+	}
+	if own == nil {
+		own = map[string]string{}
+	}
+	for k, v := range seed {
+		if err := ValidatePreference(k, v); err != nil {
+			return err
+		}
+		if _, set := own[k]; !set {
+			own[k] = v
+		}
+	}
+	return store.Directory().SavePreferences(ctx, directory.OwnerOrganization, "", int64(version), own)
 }

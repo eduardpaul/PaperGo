@@ -1,5 +1,6 @@
 # Sample configuration shipped beside the PaperGo executable.
-# Non-empty environment variables override the matching settings.
+# Non-empty environment variables override the matching settings; every
+# setting has a key here and a variable (docs/configuration.md).
 
 server:
   port: 8080
@@ -26,6 +27,23 @@ auth:
 # (sqlite, postgres or none, which runs without search):
 # search:
 #   store: none
+
+# The organization's language, time zone, date and number formats,
+# currency and OCR and search languages, applied when the database is
+# created; afterwards they change in Settings:
+# organization:
+#   locale: es-ES
+
+# An OpenAI-compatible chat model (OpenAI, Ollama, LM Studio) for AI
+# workflow steps, and local semantic search:
+# ai:
+#   chat:
+#     provider: openai
+#     endpoint: http://localhost:11434/v1
+#     model: gemma4
+#   embeddings:
+#     provider: local
+#     model: embeddinggemma-2
 
 # Discussions on items: "on" (the default) or "off". Off keeps existing
 # comments but serves none of them; organizations, workspaces and

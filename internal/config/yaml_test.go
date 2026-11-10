@@ -324,3 +324,183 @@ func TestListenAddress(t *testing.T) {
 		t.Fatalf("environment %q %v", got, err)
 	}
 }
+
+// Every setting the loader reads has a config.yaml key, so a deployment
+// can keep its whole configuration in one file.
+func TestEverySettingHasAYAMLKey(t *testing.T) {
+	covered := map[string]bool{}
+	for _, s := range (&yamlConfig{}).settings() {
+		if covered[s.env] {
+			t.Errorf("%s has two YAML keys", s.env)
+		}
+		covered[s.env] = true
+	}
+	for _, key := range derivedKeys {
+		covered[key] = true
+	}
+	dir := t.TempDir()
+	read := map[string]bool{}
+	// Each environment takes the loader down other branches; failures past
+	// the keys read do not matter here.
+	for _, env := range []map[string]string{
+		{},
+		{"AUTH_MODE": "development", "APP_ENV": "test"},
+		{"AUTH_MODE": "oidc"},
+		{"AUTH_MODE": "proxy", "PUBLIC_URL": "https://docs.example.com", "ADMIN_SUBJECT": "admin"},
+		{"AUTH_MODE": "local", "ADMIN_PASSWORD_FILE": filepath.Join(dir, "missing")},
+		{"AI_EMBEDDINGS_PROVIDER": "openai", "AI_EMBEDDINGS_API_KEY_FILE": filepath.Join(dir, "missing")},
+		{"AI_EMBEDDINGS_PROVIDER": "local", "ONNXRUNTIME_LIB": filepath.Join(dir, "lib.so")},
+		{"AI_DECISION_MODELS_PATH": dir},
+		{"AI_CHAT_PROVIDER": "openai", "AI_CHAT_MODEL": "m", "AI_CHAT_API_KEY_FILE": filepath.Join(dir, "missing")},
+		{"AI_BATCH_PROVIDER": "openai", "AI_BATCH_MODEL": "m", "AI_BATCH_MAX_TOKENS": "1000", "AI_BATCH_API_KEY_FILE": filepath.Join(dir, "missing")},
+		{"ORGANIZATION_LOCALE": "es-ES"},
+	} {
+		_, _ = LoadFrom(func(key string) string {
+			read[key] = true
+			return env[key]
+		}, "")
+	}
+	for key := range read {
+		if !covered[key] {
+			t.Errorf("%s has no config.yaml key", key)
+		}
+	}
+	if len(read) < 60 {
+		t.Fatalf("only %d settings were read; the loader changed shape", len(read))
+	}
+}
+
+// Installation defaults are below config.yaml, which is below the
+// environment; a later layer keeps what it leaves out.
+func TestYAMLLayers(t *testing.T) {
+	defaults := "server:\n  bind: 0.0.0.0\n  port: 8080\n  data_dir: /data\n  environment: production\nauth:\n  admin_password: from-defaults\n"
+	config := "server:\n  port: 9090\nstorage:\n  blob_path: /mnt/blobs\nsearch:\n  languages: [spanish, english]\n"
+	c, err := loadLayers(func(string) string { return "" }, t.TempDir(), defaults, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Address != "0.0.0.0:9090" || c.Env != "production" || c.AdminPassword != "from-defaults" {
+		t.Fatalf("address %s env %s password %q", c.Address, c.Env, c.AdminPassword)
+	}
+	if c.DatabasePath != filepath.Join("/data", "papergo.db") || c.SearchPath != filepath.Join("/data", "search.db") || c.BlobPath != "/mnt/blobs" {
+		t.Fatalf("paths %s %s %s", c.DatabasePath, c.SearchPath, c.BlobPath)
+	}
+	if strings.Join(c.SearchLanguages, ",") != "spanish,english" {
+		t.Fatalf("search languages %v", c.SearchLanguages)
+	}
+	c, err = loadLayers(func(key string) string {
+		return map[string]string{"HTTP_ADDR": "127.0.0.1:7070", "BLOB_PATH": "/env/blobs"}[key]
+	}, t.TempDir(), defaults, config)
+	if err != nil || c.Address != "127.0.0.1:7070" || c.BlobPath != "/env/blobs" || c.DatabasePath != filepath.Join("/data", "papergo.db") {
+		t.Fatalf("environment over layers: %s %s %s %v", c.Address, c.BlobPath, c.DatabasePath, err)
+	}
+}
+
+// Load and the admin commands read DefaultsFile beside the executable
+// before config.yaml.
+func TestReadLayers(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	getenv := func(string) string { return "" }
+	if layers, err := readLayers(getenv, dir); err != nil || len(layers) != 1 || layers[0] != "" {
+		t.Fatal("without files", layers, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, DefaultsFile), []byte("server:\n  data_dir: /data\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("config.yaml", []byte("server:\n  port: 9090\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	layers, err := readLayers(getenv, dir)
+	if err != nil || len(layers) != 2 || !strings.Contains(layers[0], "/data") || !strings.Contains(layers[1], "9090") {
+		t.Fatal("layers", layers, err)
+	}
+}
+
+func TestAISettingsInYAML(t *testing.T) {
+	dir := t.TempDir()
+	key := filepath.Join(dir, "key")
+	if err := os.WriteFile(key, []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadFrom(func(string) string { return "" }, `ai:
+  execution: batch
+  chat:
+    provider: openai
+    endpoint: http://ollama:11434/v1
+    model: gemma4
+  batch:
+    provider: anthropic
+    model: claude-haiku-5-5
+    api_key_file: `+key+`
+    max_tokens: 4096
+    deadline: 24h
+  embeddings:
+    provider: openai
+    endpoint: http://ollama:11434/v1
+    model: embeddinggemma
+    dimensions: 768
+retention:
+  runs: 240h
+quotas:
+  per_creator: 10
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AIExecution != "batch" || c.Chat.Model != "gemma4" || c.Chat.Endpoint != "http://ollama:11434/v1" {
+		t.Fatalf("chat %+v execution %s", c.Chat, c.AIExecution)
+	}
+	if c.Batch.Provider != "anthropic" || c.Batch.APIKey != "secret" || c.Batch.MaxTokens != 4096 || c.BatchDeadline.Hours() != 24 {
+		t.Fatalf("batch %+v deadline %s", c.Batch, c.BatchDeadline)
+	}
+	if c.Embeddings.Provider != "openai" || c.Embeddings.Dimensions != 768 || c.RunRetention.Hours() != 240 || c.OperationQuotas.PerCreator != 10 {
+		t.Fatalf("embeddings %+v retention %s quotas %+v", c.Embeddings, c.RunRetention, c.OperationQuotas)
+	}
+	if _, err = LoadFrom(nil, "ai:\n  batch:\n    deadline: 30s\n"); err == nil {
+		t.Fatal("YAML skipped the validation its environment variable gets")
+	}
+}
+
+// docs/configuration.md lists every setting.
+func TestConfigurationDocsListEverySetting(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "configuration.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := append([]string{}, derivedKeys...)
+	for _, s := range (&yamlConfig{}).settings() {
+		keys = append(keys, s.env)
+	}
+	for _, key := range keys {
+		if !strings.Contains(string(raw), "`"+key+"`") {
+			t.Errorf("docs/configuration.md does not list %s", key)
+		}
+	}
+	for _, locale := range LocalePresets() {
+		if !strings.Contains(string(raw), "`"+locale+"`") {
+			t.Errorf("docs/configuration.md does not list the %s preset", locale)
+		}
+	}
+}
+
+// The admin commands find the data where the server keeps it.
+func TestLoadStorageReadsYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "papergo.yaml")
+	if err := os.WriteFile(path, []byte("server:\n  data_dir: /srv/papergo\nstorage:\n  blob_path: /mnt/blobs\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PAPERGO_CONFIG", path)
+	for _, key := range []string{"DATABASE_PATH", "BLOB_PATH", "SEARCH_DATABASE_PATH", "DATABASE_URL"} {
+		t.Setenv(key, "")
+	}
+	s, err := LoadStorage()
+	if err != nil || s.DatabasePath != filepath.Join("/srv/papergo", "papergo.db") || s.BlobPath != "/mnt/blobs" || s.SearchPath != filepath.Join("/srv/papergo", "search.db") || !s.SearchPathSet {
+		t.Fatalf("%+v %v", s, err)
+	}
+	t.Setenv("DATABASE_PATH", filepath.Join(dir, "env.db"))
+	if s, err = LoadStorage(); err != nil || s.DatabasePath != filepath.Join(dir, "env.db") {
+		t.Fatalf("environment %+v %v", s, err)
+	}
+}

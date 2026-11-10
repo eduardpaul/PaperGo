@@ -27,10 +27,6 @@ services:
     build: ../..
     environment:
       PAPERGO_CONFIG: /config/config.yaml
-      # Image defaults must not override the mounted file.
-      HTTP_ADDR: ""
-      DATABASE_PATH: ""
-      BLOB_PATH: ""
     volumes:
       - papergo-data:/data
       - ./generated/config.yaml:/config/config.yaml:ro

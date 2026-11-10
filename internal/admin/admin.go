@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -83,12 +82,13 @@ func healthCommand(ctx context.Context, args []string, out io.Writer) error {
 // initializeCommand creates or upgrades a database without starting the
 // server.
 func initializeCommand(ctx context.Context, args []string, out io.Writer) error {
+	stored, err := config.LoadStorage()
+	if err != nil {
+		return err
+	}
 	flags := flag.NewFlagSet("initialize", flag.ContinueOnError)
 	flags.SetOutput(out)
-	path := os.Getenv("DATABASE_PATH")
-	if path == "" {
-		path = "data/papergo.db"
-	}
+	path := stored.DatabasePath
 	flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -96,8 +96,8 @@ func initializeCommand(ctx context.Context, args []string, out io.Writer) error 
 	if flags.NArg() != 0 {
 		return errors.New("initialize accepts no positional arguments")
 	}
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return database.InitializePostgres(ctx, dsn)
+	if stored.DatabaseURL != "" {
+		return database.InitializePostgres(ctx, stored.DatabaseURL)
 	}
 	return database.Initialize(ctx, path)
 }
@@ -105,37 +105,35 @@ func initializeCommand(ctx context.Context, args []string, out io.Writer) error 
 // archiveCommand backs up or restores the SQLite database, its files and
 // search store: args[0] is backup or restore.
 func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
-	if os.Getenv("DATABASE_URL") != "" {
+	stored, err := config.LoadStorage()
+	if err != nil {
+		return err
+	}
+	if stored.DatabaseURL != "" {
 		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
-	defaultPath := func(key, fallback string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return fallback
-	}
 	var in backup.Options
-	flags.StringVar(&in.DatabasePath, "database", defaultPath("DATABASE_PATH", "data/papergo.db"), "SQLite database path")
-	flags.StringVar(&in.BlobPath, "blobs", defaultPath("BLOB_PATH", "data/blobs"), "Local blob directory")
+	flags.StringVar(&in.DatabasePath, "database", stored.DatabasePath, "SQLite database path")
+	flags.StringVar(&in.BlobPath, "blobs", stored.BlobPath, "Local blob directory")
 	flags.StringVar(&in.ArchivePath, "file", "", "Backup archive path")
-	flags.StringVar(&in.SearchPath, "search", defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db")), "SQLite search file; restore removes it and a reindex rebuilds it")
+	flags.StringVar(&in.SearchPath, "search", stored.SearchPath, "SQLite search file; restore removes it and a reindex rebuilds it")
 	if args[0] == "restore" {
 		flags.BoolVar(&in.Force, "force", false, "Replace existing data after validating the complete archive")
 	}
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
-	searchExplicit := false
+	// Unless configured, the search file follows the database chosen.
+	searchExplicit := stored.SearchPathSet
 	flags.Visit(func(f *flag.Flag) { searchExplicit = searchExplicit || f.Name == "search" })
 	if !searchExplicit {
-		in.SearchPath = defaultPath("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(in.DatabasePath), "search.db"))
+		in.SearchPath = filepath.Join(filepath.Dir(in.DatabasePath), "search.db")
 	}
 	if flags.NArg() != 0 || in.ArchivePath == "" {
 		return errors.New("--file is required; positional arguments are not supported")
 	}
-	var err error
 	if args[0] == "backup" {
 		err = backup.Create(ctx, in)
 	} else {

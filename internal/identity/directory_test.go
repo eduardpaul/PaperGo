@@ -122,7 +122,7 @@ func TestEnrollmentAndBootstrapDoNotRestoreRemovedRoles(t *testing.T) {
 	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "item.read"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("enrollment restored removed role: %v", err)
 	}
-	if err := d.Initialize(ctx, user, ""); err != nil {
+	if err := d.Initialize(ctx, user, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := identity.RequireScope(ctx, dal.NewStore(db.SQL), user, "role.manage"); !errors.Is(err, identity.ErrForbidden) {
@@ -461,7 +461,7 @@ func TestAdminGroupBootstrap(t *testing.T) {
 	}
 
 	d := identity.Directory{DB: db.SQL}
-	if err := d.Initialize(ctx, "", "platform-admins"); err != nil {
+	if err := d.Initialize(ctx, "", "platform-admins", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -564,5 +564,34 @@ func TestOIDCGroupSyncLimitsAndValidation(t *testing.T) {
 	// Max allowed is 100
 	if oidcGroupCount > 100 {
 		t.Fatalf("expected at most 100 oidc groups, got %d", oidcGroupCount)
+	}
+}
+
+// The configuration's organization preferences are applied when the
+// directory is first initialized, and never again.
+func TestInitializeSeedsOrganizationPreferencesOnce(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.EmptyDatabase(t)
+	d := identity.Directory{DB: db.SQL}
+	seed := map[string]string{"language": "es-ES", "time_zone": "Europe/Madrid", "default_currency": "EUR", "document_languages": "spa+eng"}
+	if err := d.Initialize(ctx, "admin", "", seed); err != nil {
+		t.Fatal(err)
+	}
+	p, err := d.Preferences(ctx, "admin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Language != "es-ES" || p.TimeZone != "Europe/Madrid" || p.DefaultCurrency != "EUR" || p.DocumentLanguages != "spa+eng" || p.DateFormat != "yyyy-MM-dd" {
+		t.Fatalf("seeded preferences %+v", p)
+	}
+	if err = d.Initialize(ctx, "admin", "", map[string]string{"time_zone": "UTC"}); err != nil {
+		t.Fatal(err)
+	}
+	if p, err = d.Preferences(ctx, "admin", true); err != nil || p.TimeZone != "Europe/Madrid" {
+		t.Fatalf("a later start changed the preferences: %+v %v", p, err)
+	}
+	fresh := identity.Directory{DB: daltest.EmptyDatabase(t).SQL}
+	if err = fresh.Initialize(ctx, "admin", "", map[string]string{"time_zone": "Mars/Olympus"}); err == nil {
+		t.Fatal("an invalid preference was seeded")
 	}
 }

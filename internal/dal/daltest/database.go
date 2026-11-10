@@ -151,7 +151,7 @@ func seed(ctx context.Context, db *database.Database) error {
 		return fmt.Errorf("apply DAL schema: %w", err)
 	}
 	directory := identity.Directory{DB: db.SQL}
-	if err := directory.Initialize(ctx, "organization-admin", ""); err != nil {
+	if err := directory.Initialize(ctx, "organization-admin", "", nil); err != nil {
 		return err
 	}
 	// Content fixtures exercise ACL ownership independently of organization-wide

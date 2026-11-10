@@ -125,6 +125,11 @@ type Config struct {
 	// AdminPassword is the local administrator's initial password. It is
 	// applied only when that account has no password yet.
 	AdminPassword string
+	// OrganizationPreferences are the organization's preference defaults
+	// (ORGANIZATION_LOCALE and ORGANIZATION_<PREFERENCE>, or organization in
+	// YAML). PaperGo applies them when it creates the database; afterwards
+	// they change in the app and through the API.
+	OrganizationPreferences map[string]string
 	// AdminPasswordOmitted marks an explicitly cleared password or a missing
 	// production password. A non-interactive first start then requires an
 	// existing administrator instead of inventing a password.
@@ -145,75 +150,144 @@ const (
 // defaultAddress is where the server listens unless configured otherwise.
 const defaultAddress = "127.0.0.1:8080"
 
-// Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
-// environment variables. Environment variables win when they are non-empty.
+// Load reads the configuration: DefaultsFile beside the executable, then
+// config.yaml from PAPERGO_CONFIG or ./config.yaml, then environment
+// variables. A later source wins where it sets a non-empty value.
 func Load() (Config, error) {
-	text, err := readWorkingYAML(os.Getenv)
+	directory, err := executableDirectory()
 	if err != nil {
 		return Config{}, err
 	}
-	return LoadFrom(os.Getenv, text)
+	layers, err := readLayers(os.Getenv, directory)
+	if err != nil {
+		return Config{}, err
+	}
+	return loadLayers(os.Getenv, directory, layers...)
+}
+
+func executableDirectory() (string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("find executable directory: %w", err)
+	}
+	return filepath.Dir(executable), nil
+}
+
+// settingsFromLayers reads and merges the YAML layers Load reads, for the
+// commands that need a few settings without the whole configuration.
+func settingsFromLayers() (func(key, fallback string) string, error) {
+	directory, err := executableDirectory()
+	if err != nil {
+		return nil, err
+	}
+	layers, err := readLayers(os.Getenv, directory)
+	if err != nil {
+		return nil, err
+	}
+	file, err := parseLayers(layers)
+	if err != nil {
+		return nil, err
+	}
+	_, value := sources(os.Getenv, file)
+	return value, nil
 }
 
 // ListenAddress is the address the server listens on (HTTP_ADDR, or
-// server.bind and server.port in config.yaml), read as Load reads it but
-// without the rest of the configuration, for probes of a running server.
+// server.bind and server.port in YAML), read as Load reads it but without
+// the rest of the configuration, for probes of a running server.
 func ListenAddress() (string, error) {
-	text, err := readWorkingYAML(os.Getenv)
+	value, err := settingsFromLayers()
 	if err != nil {
 		return "", err
 	}
-	file, err := parseYAML(text)
-	if err != nil {
-		return "", err
-	}
-	if v := os.Getenv("HTTP_ADDR"); v != "" {
-		return v, nil
-	}
-	if v := file.values["HTTP_ADDR"]; v != "" {
-		return v, nil
-	}
-	return defaultAddress, nil
+	return value("HTTP_ADDR", defaultAddress), nil
 }
 
-// LoadFrom builds configuration from YAML text and getenv. Tests pass the
-// documented file and a map-backed getenv; Load uses the process environment.
-func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
-	executable, err := os.Executable()
-	if err != nil {
-		return Config{}, fmt.Errorf("find executable directory: %w", err)
-	}
-	return loadFrom(getenv, yamlText, filepath.Dir(executable))
+// Storage is where PaperGo keeps its data.
+type Storage struct {
+	DatabasePath string
+	// DatabaseURL is a PostgreSQL connection URL (DATABASE_URL); see Config.
+	DatabaseURL string
+	BlobPath    string
+	SearchPath  string
+	// SearchPathSet is true when SEARCH_DATABASE_PATH was configured, rather
+	// than following the database.
+	SearchPathSet bool
 }
 
-func loadFrom(getenv func(string) string, yamlText, directory string) (Config, error) {
-	file, err := parseYAML(yamlText)
+// LoadStorage reads where PaperGo keeps its data, as Load reads it but
+// without the rest of the configuration, for the admin commands.
+func LoadStorage() (Storage, error) {
+	value, err := settingsFromLayers()
 	if err != nil {
-		return Config{}, err
+		return Storage{}, err
 	}
+	return storageFrom(value)
+}
+
+func storageFrom(value func(key, fallback string) string) (Storage, error) {
+	s := Storage{DatabasePath: value("DATABASE_PATH", "data/papergo.db"), DatabaseURL: value("DATABASE_URL", ""), BlobPath: value("BLOB_PATH", "data/blobs")}
+	if s.DatabaseURL != "" {
+		if u, err := url.Parse(s.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
+			return s, fmt.Errorf("DATABASE_URL must be a postgres:// URL")
+		}
+	}
+	s.SearchPath = value("SEARCH_DATABASE_PATH", "")
+	s.SearchPathSet = s.SearchPath != ""
+	if !s.SearchPathSet {
+		s.SearchPath = filepath.Join(filepath.Dir(s.DatabasePath), "search.db")
+	}
+	return s, nil
+}
+
+// sources are the two ways the configuration is read: lookup returns a
+// setting's environment variable when it is non-empty, else its YAML
+// value; value adds a fallback.
+func sources(getenv func(string) string, file yamlFile) (lookup func(string) string, value func(key, fallback string) string) {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
-	lookup := func(key string) string {
+	lookup = func(key string) string {
 		if v := getenv(key); v != "" {
 			return v
 		}
 		return file.values[key]
 	}
-	value := func(key, fallback string) string {
+	value = func(key, fallback string) string {
 		if v := lookup(key); v != "" {
 			return v
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
-	c.DatabaseURL = lookup("DATABASE_URL")
-	if c.DatabaseURL != "" {
-		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
-			return c, fmt.Errorf("DATABASE_URL must be a postgres:// URL")
-		}
+	return lookup, value
+}
+
+// LoadFrom builds configuration from one YAML text and getenv. Tests pass
+// the documented file and a map-backed getenv; Load reads its layers.
+func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
+	directory, err := executableDirectory()
+	if err != nil {
+		return Config{}, err
 	}
-	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
+	return loadFrom(getenv, yamlText, directory)
+}
+
+func loadFrom(getenv func(string) string, yamlText, directory string) (Config, error) {
+	return loadLayers(getenv, directory, yamlText)
+}
+
+func loadLayers(getenv func(string) string, directory string, layers ...string) (Config, error) {
+	file, err := parseLayers(layers)
+	if err != nil {
+		return Config{}, err
+	}
+	lookup, value := sources(getenv, file)
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	storage, err := storageFrom(value)
+	if err != nil {
+		return c, err
+	}
+	c.DatabasePath, c.DatabaseURL, c.BlobPath, c.SearchPath = storage.DatabasePath, storage.DatabaseURL, storage.BlobPath, storage.SearchPath
 	// The search store follows the database unless chosen.
 	c.SearchStore = SearchSQLite
 	if c.DatabaseURL != "" {
@@ -249,7 +323,11 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, err
 		}
 	}
-	if languages := strings.ToLower(strings.TrimSpace(value("SEARCH_LANGUAGES", "english"))); languages != "none" {
+	locale, err := organizationLocale(lookup("ORGANIZATION_LOCALE"))
+	if err != nil {
+		return c, err
+	}
+	if languages := strings.ToLower(strings.TrimSpace(value("SEARCH_LANGUAGES", locale.search))); languages != "none" {
 		for _, l := range strings.Split(languages, ",") {
 			if l = strings.TrimSpace(l); l != "" {
 				c.SearchLanguages = append(c.SearchLanguages, l)
@@ -358,16 +436,19 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 	} else {
 		c.OCRModels = filepath.Join(models, "paddleocr")
 	}
-	if err := c.loadEmbeddings(models); err != nil {
+	if err := c.loadEmbeddings(models, value); err != nil {
 		return c, err
 	}
-	if err := c.loadDecisions(models); err != nil {
+	if err := c.loadDecisions(models, value); err != nil {
 		return c, err
 	}
-	if err := c.loadChat(); err != nil {
+	if err := c.loadChat(value); err != nil {
 		return c, err
 	}
-	if err := c.loadBatch(); err != nil {
+	if err := c.loadBatch(value); err != nil {
+		return c, err
+	}
+	if err := c.loadOrganization(value, locale); err != nil {
 		return c, err
 	}
 	if v := lookup("OCR_THREADS"); v != "" {
@@ -403,7 +484,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		case passwordFile != "":
 			file, err := os.Open(passwordFile)
 			if err != nil {
-				return c, fmt.Errorf("read ADMIN_PASSWORD_FILE: %w", err)
+				return c, fmt.Errorf("read ADMIN_PASSWORD_FILE: %w", explainPermission(passwordFile, err))
 			}
 			password, err := io.ReadAll(io.LimitReader(file, 75))
 			file.Close()
@@ -466,7 +547,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		secret, err := os.ReadFile(secretPath)
 		if err != nil {
-			return c, fmt.Errorf("read proxy secret file: %w", err)
+			return c, fmt.Errorf("read proxy secret file: %w", explainPermission(secretPath, err))
 		}
 		c.ProxySecret = strings.TrimSpace(string(secret))
 		if len(c.ProxySecret) < 32 || len(c.ProxySecret) > 256 || strings.ContainsAny(c.ProxySecret, "\r\n\x00") {
@@ -600,20 +681,13 @@ func (c *Config) validateBrowserClient() error {
 	return nil
 }
 
-func value(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 // loadEmbeddings reads AI_EMBEDDINGS_*: the provider (none, local or
 // openai), the model and optional dimensions; for local, the model directory,
 // threads and token limit, with ONNX Runtime from ONNXRUNTIME_LIB and a
 // statically linked tokenizer; for openai, an endpoint and an API key
 // file.
-func (c *Config) loadEmbeddings(models string) error {
-	e := ai.EmbeddingsConfig{Provider: strings.ToLower(value("AI_EMBEDDINGS_PROVIDER", ai.ProviderNone)), Model: os.Getenv("AI_EMBEDDINGS_MODEL")}
+func (c *Config) loadEmbeddings(models string, value func(key, fallback string) string) error {
+	e := ai.EmbeddingsConfig{Provider: strings.ToLower(value("AI_EMBEDDINGS_PROVIDER", ai.ProviderNone)), Model: value("AI_EMBEDDINGS_MODEL", "")}
 	numbers := []struct {
 		key      string
 		into     *int
@@ -633,7 +707,7 @@ func (c *Config) loadEmbeddings(models string) error {
 	case ai.ProviderOpenAI:
 		e.Endpoint = value("AI_EMBEDDINGS_ENDPOINT", ai.DefaultEndpoint)
 		numbers = numbers[:1]
-		if path := os.Getenv("AI_EMBEDDINGS_API_KEY_FILE"); path != "" {
+		if path := value("AI_EMBEDDINGS_API_KEY_FILE", ""); path != "" {
 			key, err := readAPIKey(path)
 			if err != nil {
 				return fmt.Errorf("AI_EMBEDDINGS_API_KEY_FILE: %w", err)
@@ -644,7 +718,7 @@ func (c *Config) loadEmbeddings(models string) error {
 		return fmt.Errorf("AI_EMBEDDINGS_PROVIDER must be none, local or openai")
 	}
 	for _, n := range numbers {
-		if v := os.Getenv(n.key); v != "" {
+		if v := value(n.key, ""); v != "" {
 			parsed, err := strconv.Atoi(v)
 			if err != nil || parsed < n.min || parsed > n.max {
 				return fmt.Errorf("%s must be between %d and %d", n.key, n.min, n.max)
@@ -661,9 +735,9 @@ func (c *Config) loadEmbeddings(models string) error {
 
 // loadChat reads AI_CHAT_*: the provider (none or openai), an
 // OpenAI-compatible endpoint, the model and an API key file.
-func (c *Config) loadChat() error {
-	chat := ai.ChatConfig{Provider: strings.ToLower(value("AI_CHAT_PROVIDER", ai.ProviderNone)), Endpoint: value("AI_CHAT_ENDPOINT", ai.DefaultEndpoint), Model: os.Getenv("AI_CHAT_MODEL")}
-	if path := os.Getenv("AI_CHAT_API_KEY_FILE"); path != "" && chat.Enabled() {
+func (c *Config) loadChat(value func(key, fallback string) string) error {
+	chat := ai.ChatConfig{Provider: strings.ToLower(value("AI_CHAT_PROVIDER", ai.ProviderNone)), Endpoint: value("AI_CHAT_ENDPOINT", ai.DefaultEndpoint), Model: value("AI_CHAT_MODEL", "")}
+	if path := value("AI_CHAT_API_KEY_FILE", ""); path != "" && chat.Enabled() {
 		key, err := readAPIKey(path)
 		if err != nil {
 			return fmt.Errorf("AI_CHAT_API_KEY_FILE: %w", err)
@@ -686,11 +760,11 @@ type OperationQuotas struct {
 // loadBatch reads AI_BATCH_*: an independent provider, endpoint, model and
 // credential file. AI_EXECUTION is the default for remote LLM actions.
 // AI_BATCH_DEADLINE bounds a parked request.
-func (c *Config) loadBatch() error {
+func (c *Config) loadBatch(value func(key, fallback string) string) error {
 	batch := ai.BatchConfig{
 		Provider: strings.ToLower(value("AI_BATCH_PROVIDER", ai.ProviderNone)),
-		Endpoint: os.Getenv("AI_BATCH_ENDPOINT"),
-		Model:    os.Getenv("AI_BATCH_MODEL"),
+		Endpoint: value("AI_BATCH_ENDPOINT", ""),
+		Model:    value("AI_BATCH_MODEL", ""),
 	}
 	// Anthropic's Message Batches API has its own endpoint and models; an
 	// OpenAI-compatible batch provider shares the chat provider's.
@@ -707,14 +781,14 @@ func (c *Config) loadBatch() error {
 	if strings.TrimSpace(batch.Model) == "" && batch.Provider != ai.ProviderAnthropic {
 		batch.Model = c.Chat.Model
 	}
-	if v := os.Getenv("AI_BATCH_MAX_TOKENS"); v != "" {
+	if v := value("AI_BATCH_MAX_TOKENS", ""); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
 			return fmt.Errorf("AI_BATCH_MAX_TOKENS must be a whole number")
 		}
 		batch.MaxTokens = n
 	}
-	if path := os.Getenv("AI_BATCH_API_KEY_FILE"); path != "" && batch.Enabled() {
+	if path := value("AI_BATCH_API_KEY_FILE", ""); path != "" && batch.Enabled() {
 		key, err := readAPIKey(path)
 		if err != nil {
 			return fmt.Errorf("AI_BATCH_API_KEY_FILE: %w", err)
@@ -730,7 +804,7 @@ func (c *Config) loadBatch() error {
 		return fmt.Errorf("AI_EXECUTION must be immediate or batch")
 	}
 	c.BatchDeadline = 72 * time.Hour
-	if v := os.Getenv("AI_BATCH_DEADLINE"); v != "" {
+	if v := value("AI_BATCH_DEADLINE", ""); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < time.Minute || d > 30*24*time.Hour {
 			return fmt.Errorf("AI_BATCH_DEADLINE must be a duration between 1m and 720h")
@@ -744,7 +818,7 @@ func (c *Config) loadBatch() error {
 func readAPIKey(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", explainPermission(path, err)
 	}
 	key := strings.TrimSpace(string(raw))
 	if key == "" || len(key) > 4096 || strings.ContainsAny(key, "\r\n\x00") {
@@ -753,8 +827,8 @@ func readAPIKey(path string) (string, error) {
 	return key, nil
 }
 
-func (c *Config) loadDecisions(models string) error {
-	d := decision.Config{Models: os.Getenv("AI_DECISION_MODELS_PATH"), Library: c.OCRLibrary}
+func (c *Config) loadDecisions(models string, value func(key, fallback string) string) error {
+	d := decision.Config{Models: value("AI_DECISION_MODELS_PATH", ""), Library: c.OCRLibrary}
 	if d.Models == "" {
 		path := filepath.Join(models, "laya")
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
@@ -770,7 +844,7 @@ func (c *Config) loadDecisions(models string) error {
 	}{
 		{"AI_DECISION_THREADS", &d.Threads}, {"AI_DECISION_MAX_TOKENS", &d.MaxTokens}, {"AI_DECISION_HEAD_TOKENS", &d.HeadTokens},
 	} {
-		if v := os.Getenv(n.key); v != "" {
+		if v := value(n.key, ""); v != "" {
 			parsed, err := strconv.Atoi(v)
 			if err != nil || parsed <= 0 {
 				return fmt.Errorf("%s must be a positive integer", n.key)

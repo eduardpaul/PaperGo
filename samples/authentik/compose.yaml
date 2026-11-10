@@ -148,10 +148,6 @@ services:
       PAPERGO_CONFIG: /config/config.yaml
       # Local TLS trusts the generated CA; public certificates use the image's roots.
       SSL_CERT_FILE: ${PAPERGO_TRUST_FILE:?Run setup.py first}
-      # Image defaults must not override the mounted file.
-      HTTP_ADDR: ""
-      DATABASE_PATH: ""
-      BLOB_PATH: ""
     volumes:
       - papergo-data:/data
       - ./generated/config.yaml:/config/config.yaml:ro

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/mail"
 	"slices"
@@ -130,10 +131,11 @@ func (d Directory) write(ctx context.Context, actor, scope string, fn func(*sql.
 	})
 }
 
-// Initialize provisions built-in roles and the configured first administrator
-// (by subject or by group) exactly once. A later configuration change never
-// creates another administrator.
-func (d Directory) Initialize(ctx context.Context, administrator, adminGroup string) error {
+// Initialize provisions built-in roles, the configured first administrator
+// (by subject or by group) and the organization's preference defaults
+// exactly once. A later configuration change never creates another
+// administrator or changes the preferences.
+func (d Directory) Initialize(ctx context.Context, administrator, adminGroup string, preferences map[string]string) error {
 	if administrator != "" {
 		if err := ValidateSubject(administrator); err != nil {
 			return err
@@ -168,6 +170,9 @@ func (d Directory) Initialize(ctx context.Context, administrator, adminGroup str
 			if _, err := repo.CreateRole(ctx, r); err != nil {
 				return err
 			}
+		}
+		if err := seedOrganizationPreferences(ctx, d.store(tx), preferences); err != nil {
+			return fmt.Errorf("organization preferences: %w", err)
 		}
 		if administrator != "" {
 			if err := ensureUser(ctx, d.store(tx), administrator); err != nil {

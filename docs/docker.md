@@ -24,13 +24,25 @@ docker compose -f deploy/compose.yaml up -d
 
 Open http://localhost:8080 and sign in as `admin` with the password stored in that file. `PAPERGO_VERSION=vX.Y.Z docker compose -f deploy/compose.yaml up -d` selects a release. `PAPERGO_PORT=8081` changes the host port. AI assistants connect at http://localhost:8080/v1/mcp ([MCP](mcp.md)).
 
-The secret's host directory is private. Its file is readable by the container's UID 65532 because Compose file-backed secrets retain host permissions. The secret is mounted read-only and is not stored in the image or the container's environment. Production local authentication requires an explicit initial password through `ADMIN_PASSWORD_FILE`, `ADMIN_PASSWORD` or YAML; it never supplies a default password. Use only one of the two environment settings. The password file accepts 1–72 bytes and ignores trailing CR/LF. The initial password applies only to a new administrator; changing the secret does not reset an existing password.
+The secret's host directory is private. Its file must be readable by the container's UID 65532; see [file permissions](#file-permissions). The secret is mounted read-only and is not stored in the image or the container's environment. Production local authentication requires an explicit initial password through `ADMIN_PASSWORD_FILE`, `ADMIN_PASSWORD` or YAML; it never supplies a default password. Use only one of the two environment settings. The password file accepts 1–72 bytes and ignores trailing CR/LF. The initial password applies only to a new administrator; changing the secret does not reset an existing password.
 
-The deployment runs as UID/GID 65532, drops capabilities, forbids privilege escalation, uses a read-only root filesystem and allows temporary files under `/tmp`. The named data volume persists the database, blobs, search index and integration encryption key across container replacement. It also holds PDFium's compilation cache in `/data/cache/pdfium`, which is derived and safe to delete: the next start compiles it again. `docker compose down` retains it; `down --volumes` deletes it. For a host bind mount instead, create the data directory with ownership `65532:65532` and writable permissions before mounting it.
+The deployment runs as UID/GID 65532, drops capabilities, forbids privilege escalation, uses a read-only root filesystem and allows temporary files under `/tmp`. The named data volume persists the database, blobs, search index and integration encryption key across container replacement. It also holds PDFium's compilation cache in `/data/cache/pdfium`, which is derived and safe to delete: the next start compiles it again. `docker compose down` retains it; `down --volumes` deletes it. For a host bind mount instead, see [file permissions](#file-permissions).
 
 The published port binds to loopback. Use the [Nginx Proxy Manager](../samples/npm/README.md) or [authentik](../samples/authentik/README.md) deployment for HTTPS ingress and external sign-in. The application serves HTTP inside the container. Configure the public HTTPS URL and trusted proxy/identity settings for the chosen ingress.
 
-To supply YAML, mount a readable configuration file at `/config/config.yaml` and set `PAPERGO_CONFIG=/config/config.yaml`. The image's `HTTP_ADDR`, `DATABASE_PATH` and `BLOB_PATH` defaults take precedence over YAML: keep them for `/data` deployment, or explicitly clear/replace those environment settings when YAML should provide the paths and address.
+The image's defaults are in `/opt/papergo/defaults.yaml` ([source](../deploy/container-defaults.yaml)): listen on `0.0.0.0:8080`, keep data in `/data`, run in production. To supply YAML, mount a readable configuration file at `/config/config.yaml` and set `PAPERGO_CONFIG=/config/config.yaml`. It overrides only what it names, environment variables override both, and every setting has a YAML key; see [Configuration](configuration.md).
+
+## File permissions
+
+PaperGo runs as user and group 65532. Compose file-backed secrets and bind mounts keep their host owner and mode, so a secret only its host owner can read (`0600`) cannot be read in the container. Give group 65532 read access to secret files and user 65532 the data directory, for example:
+
+```sh
+sudo chown "$(id -u)":65532 secrets/*
+sudo chmod 0640 secrets/*
+sudo chown -R 65532:65532 data
+```
+
+Without `sudo`, a short-lived container can do the same: `docker run --rm -v "$PWD:/w" alpine chown -R 65532:65532 /w/data`. A named volume needs nothing: the image creates `/data` owned by 65532. When a file or directory cannot be read or written, PaperGo stops with an error naming it, its owner and mode, and the user and group it runs as.
 
 Models load from `/opt/papergo/assets/models`; native libraries live in `/opt/papergo/lib`. Model assets are in a separate cached image layer. They are read directly, so runtime model extraction and a writable code directory are unnecessary. Local decisions and OCR are enabled; semantic search requires `AI_EMBEDDINGS_PROVIDER=local`, with `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. The image includes roughly 2 GiB of application/model files. Model inference needs additional RAM; allow at least 4 GiB when using Laya and embeddings together, and size for your workload.
 

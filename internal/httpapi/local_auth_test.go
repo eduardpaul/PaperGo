@@ -37,7 +37,7 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 	if err != nil || exists {
 		t.Fatal("empty database already has an administrator", exists, err)
 	}
-	if err = directory.Initialize(ctx, "admin", ""); err != nil {
+	if err = directory.Initialize(ctx, "admin", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err = directory.SetInitialPasswordHash(ctx, "admin", ""); err == nil {

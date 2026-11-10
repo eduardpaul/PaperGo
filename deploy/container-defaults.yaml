@@ -1,0 +1,8 @@
+# The container image's defaults, installed beside the executable as
+# /opt/papergo/defaults.yaml. A mounted config.yaml and environment
+# variables override any of them.
+server:
+  bind: 0.0.0.0
+  port: 8080
+  data_dir: /data
+  environment: production

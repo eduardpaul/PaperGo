@@ -22,7 +22,7 @@ import (
 func emptyPackageTarget(t *testing.T) *Service {
 	t.Helper()
 	s := NewService(daltest.EmptyDatabase(t).SQL)
-	if err := s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
+	if err := s.Directory().Initialize(t.Context(), "organization-admin", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	return s

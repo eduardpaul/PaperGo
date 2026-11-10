@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"papergo/internal/config"
 	"papergo/internal/dal/database"
 	"papergo/internal/worker"
 )
@@ -22,12 +23,13 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return usage
 	}
+	stored, err := config.LoadStorage()
+	if err != nil {
+		return err
+	}
 	flags := flag.NewFlagSet("workers "+args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
-	path := os.Getenv("DATABASE_PATH")
-	if path == "" {
-		path = "data/papergo.db"
-	}
+	path := stored.DatabasePath
 	flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
@@ -39,7 +41,7 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 	default:
 		return usage
 	}
-	db, closeDB, err := openDatabase(ctx, path)
+	db, closeDB, err := openDatabase(ctx, stored.DatabaseURL, path)
 	if err != nil {
 		return err
 	}
@@ -78,9 +80,9 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 }
 
 // openDatabase opens the database a running API serves: PostgreSQL when
-// DATABASE_URL is set, otherwise the SQLite file under a shared lease.
-func openDatabase(ctx context.Context, path string) (*database.Database, func(), error) {
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+// DATABASE_URL (dsn) is set, otherwise the SQLite file under a shared lease.
+func openDatabase(ctx context.Context, dsn, path string) (*database.Database, func(), error) {
+	if dsn != "" {
 		db, err := database.OpenPostgres(ctx, dsn)
 		if err != nil {
 			return nil, nil, err

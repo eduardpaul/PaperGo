@@ -18,6 +18,8 @@ The result is `text` or `json`, `cached` and `model`. An answer that does not ma
 
 ## Models
 
+Each `AI_*` variable below also has a key under `ai` in `config.yaml`, such as `ai.batch.provider` for `AI_BATCH_PROVIDER`; [Configuration](configuration.md) lists them.
+
 Immediate completions use any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`. They run at temperature 0 and time out after two minutes. A busy, failing or unreachable provider (429, 5xx or no answer) is called once per attempt: the operation defers itself until the provider's `Retry-After` (at most an hour), else for 30 seconds, without holding a worker, and fails when its attempts run out. Without a chat model, immediate requests are refused, and with no chat model, batch provider or decision engine at all the AI routes are not served. Requests still queued for a model that is gone fail at the next start, with what they need.
 
 Batch completions need their own provider and never fall back to the chat provider. `AI_BATCH_PROVIDER` chooses it, with `AI_BATCH_MODEL`, `AI_BATCH_ENDPOINT` and, when the server needs one, `AI_BATCH_API_KEY_FILE`:

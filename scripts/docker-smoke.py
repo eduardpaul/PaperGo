@@ -41,6 +41,10 @@ def exercise(image, version):
         config = json.loads(docker('image', 'inspect', image))[0]['Config']
         assert config['User'] == '65532:65532', config['User']
         assert config['Healthcheck']['Test'] == ['CMD', '/opt/papergo/papergo', 'admin', 'health']
+        # The image's defaults live in /opt/papergo/defaults.yaml, below a
+        # mounted config.yaml; an environment default would override it.
+        settings = {'HTTP_ADDR', 'DATABASE_PATH', 'BLOB_PATH', 'SEARCH_DATABASE_PATH', 'APP_ENV'}
+        assert not [e for e in config.get('Env') or [] if e.split('=', 1)[0] in settings], config.get('Env')
         output = docker('run', '--rm', '--network=none', image, '--version')
         assert 'PaperGo' in output and (not version or version in output), output
         # A fresh production instance must not expose a default admin password.
