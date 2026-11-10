@@ -37,7 +37,8 @@ var Tables = []string{
 }
 
 // accessTables hold what permission decisions read; a write to one replaces
-// the access revision.
+// the organization's access revision, since a package can change any
+// workspace.
 var accessTables = []string{"identity_users", "identity_roles", "identity_memberships", "identity_assignments", "resources", "grants"}
 
 // written notes a write to a table.

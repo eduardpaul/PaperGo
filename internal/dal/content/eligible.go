@@ -37,32 +37,40 @@ type scopeKey struct{ collection, subject string }
 // maxCachedScopes bounds the scopes the cached decisions hold together.
 const maxCachedScopes = 200000
 
+// keptScopes is a decision and the access revision it was made under.
+type keptScopes struct {
+	token  string
+	scopes *Scopes
+	size   int
+}
+
 // ScopeCache keeps the scope decisions of collections and their readers for
-// as long as the access revision they were made under is current. A store
-// and its transactions share one.
+// as long as the access revision each was made under is current: the
+// organization's and that of the collection's workspace. A store and its
+// transactions share one.
 type ScopeCache struct {
 	mu      sync.Mutex
-	token   string
 	size    int
-	entries map[scopeKey]*Scopes
+	entries map[scopeKey]keptScopes
 }
 
 // NewScopeCache returns an empty cache.
-func NewScopeCache() *ScopeCache { return &ScopeCache{} }
+func NewScopeCache() *ScopeCache { return &ScopeCache{entries: map[scopeKey]keptScopes{}} }
 
 // get returns the decision made for key under the access revision token.
 func (c *ScopeCache) get(token string, key scopeKey) (*Scopes, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.token != token {
+	kept, ok := c.entries[key]
+	if !ok || kept.token != token {
 		return nil, false
 	}
-	s, ok := c.entries[key]
-	return s, ok
+	return kept.scopes, true
 }
 
-// put keeps the decision made for key under the access revision token,
-// dropping what was decided under another.
+// put keeps the decision made for key under the access revision token in
+// place of an earlier one. When the decisions would hold too many scopes,
+// all are dropped.
 func (c *ScopeCache) put(token string, key scopeKey, s *Scopes) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -70,13 +78,14 @@ func (c *ScopeCache) put(token string, key scopeKey, s *Scopes) {
 	if s != nil {
 		size += len(s.draft) + len(s.read) + len(s.hidden)
 	}
-	if c.token != token || c.size+size > maxCachedScopes {
-		c.token, c.size, c.entries = token, 0, map[scopeKey]*Scopes{}
+	if kept, ok := c.entries[key]; ok {
+		c.size -= kept.size
 	}
-	if _, ok := c.entries[key]; !ok {
-		c.size += size
-		c.entries[key] = s
+	if c.size+size > maxCachedScopes {
+		c.size, c.entries = 0, map[scopeKey]keptScopes{}
 	}
+	c.size += size
+	c.entries[key] = keptScopes{token, s, size}
 }
 
 // Scopes decides, once per ACL scope, whether a reader reads a collection's
@@ -84,12 +93,13 @@ func (c *ScopeCache) put(token string, key scopeKey, s *Scopes) {
 // scope, its workspace and its collection, so the decision needs no row. It
 // returns nil for collections with too many scopes.
 //
-// Decisions are kept per collection and reader under the access revision:
-// they read grants, the directory and the scopes rows have, and every write
-// to those replaces the revision. A row created with inherited permissions
-// leaves it alone: it joins its parent's scope, which the collection already
-// has. A credential's reach can end with time, so its decisions are made
-// every time.
+// Decisions are kept per collection and reader under the access revisions
+// of the organization and of the collection's workspace: they read the
+// directory, the workspace's grants and the scopes its rows have, and every
+// change to those replaces one of the revisions. A row created with
+// inherited permissions, or moved or restored within its scope, leaves them
+// alone: the collection already has its scope. A credential's reach can end
+// with time, so its decisions are made every time.
 func (r *Repo) Scopes(ctx context.Context, collectionID string, reader access.Principal) (*Scopes, error) {
 	cached := r.scopes != nil && reader.Credential == nil
 	key := scopeKey{collectionID, reader.Subject}
@@ -98,7 +108,7 @@ func (r *Repo) Scopes(ctx context.Context, collectionID string, reader access.Pr
 		// The revision is read before the decisions, so decisions never
 		// sit under a revision older than what they read.
 		var err error
-		if token, err = access.Revision(ctx, r.exec, r.d); err != nil {
+		if token, err = access.Revision(ctx, r.exec, r.d, collectionID); err != nil {
 			return nil, err
 		}
 		if out, ok := r.scopes.get(token, key); ok {

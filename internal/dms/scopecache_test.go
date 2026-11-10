@@ -334,3 +334,162 @@ func TestManyScopesMatchRowChecks(t *testing.T) {
 	want = append(want, "Late")
 	check("row checks")
 }
+
+// Decisions are kept through changes to nothing they read: rows moving or
+// coming back within their scope, names, and another workspace's access.
+// What they do read still makes them again: a user's status and a held
+// role's scopes.
+func TestScopeDecisionsOutliveWhatTheyDoNotRead(t *testing.T) {
+	s, w, c := fixture(t)
+	ctx := testContext
+	if err := s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	a := create(t, s, c.ID, "folder", "A", nil)
+	b := create(t, s, c.ID, "folder", "B", nil)
+	doc := publishedItem(t, s, a.ID, "Doc")
+	create(t, s, c.ID, "item", "Draft", nil)
+	reader := principal(ctx, "reader")
+	kept := func() *content.Scopes {
+		t.Helper()
+		out, err := s.DAL.Content().Scopes(ctx, c.ID, reader)
+		if err != nil || out == nil {
+			t.Fatal(out, err)
+		}
+		return out
+	}
+	keeps := func(step string, change func()) {
+		t.Helper()
+		before := kept()
+		change()
+		if kept() != before {
+			t.Fatal(step, "made the decision again")
+		}
+	}
+	remakes := func(step string, change func()) {
+		t.Helper()
+		before := kept()
+		change()
+		if kept() == before {
+			t.Fatal(step, "kept a decision made before it")
+		}
+	}
+	d := s.Directory()
+	keeps("a move within the scope", func() {
+		r, err := s.Get(ctx, "alice", doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.MoveItem(ctx, "alice", doc, r.Version, MoveItem{CollectionID: c.ID, ParentID: b.ID}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	keeps("a deletion and restore within the scope", func() {
+		r, err := s.Get(ctx, "alice", doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Delete(ctx, "alice", doc, r.Version, DeleteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.RestoreDeleted(ctx, "alice", c.ID, doc, false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	keeps("a new name", func() {
+		name := "Alice Liddell"
+		if _, err := d.UpdateMe(ctx, "alice", &name); err != nil {
+			t.Fatal(err)
+		}
+	})
+	keeps("access in another workspace", func() {
+		other := create(t, s, "", "workspace", "Elsewhere", nil)
+		if err := s.SetWorkspaceMember(ctx, "alice", other.ID, WorkspaceMember{Subject: "reader", Role: "member"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var role identity.Role
+	keeps("a role nobody holds", func() {
+		var err error
+		if role, err = d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Auditor", Scopes: []string{"workspace.read", "item.read", "workspace.manage"}}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	wantView(t, s, "before the role", "reader", c.ID, "A", "B", "Doc")
+	remakes("the role assigned", func() {
+		if err := d.SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: directory.PrincipalUser, ID: "reader"}, false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	wantView(t, s, "with the role", "reader", c.ID, "A", "B", "Doc", "Draft")
+	keeps("the role renamed", func() {
+		var err error
+		if role, err = d.SaveRole(ctx, "alice", role.ID, role.Version, identity.RoleInput{Name: "Senior auditor", Scopes: role.Scopes}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	remakes("the role's scopes narrowed", func() {
+		var err error
+		if role, err = d.SaveRole(ctx, "alice", role.ID, role.Version, identity.RoleInput{Name: role.Name, Scopes: []string{"workspace.read", "item.read"}}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	wantView(t, s, "role narrowed", "reader", c.ID, "A", "B", "Doc")
+	remakes("the reader deactivated", func() {
+		if _, err := d.SetUserActive(ctx, "alice", "reader", false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, err := d.SetUserActive(ctx, "alice", "reader", true); err != nil {
+		t.Fatal(err)
+	}
+	wantView(t, s, "reactivated", "reader", c.ID, "A", "B", "Doc")
+}
+
+// A row that takes a scope of its own with no grants brings its collection
+// a scope its decisions have not seen; it must leave readers' pages and the
+// group counts they read.
+func TestKeptScopeDecisionsFollowAScopeWithoutGrants(t *testing.T) {
+	s, w, c := fixture(t)
+	ctx := testContext
+	if err := s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	fieldOK(t, s, c.ID, CreateField{Key: "status", Label: "Status", Type: "choice", Choices: []string{"Open", "Done"}, Indexed: true})
+	lone := create(t, s, c.ID, "item", "Lone", map[string]any{"status": "Open"}).ID
+	create(t, s, c.ID, "item", "Other", map[string]any{"status": "Open"})
+	groups := func(step string) string {
+		t.Helper()
+		in := QueryRequest{Surface: "head", Query: QuerySpec{GroupBy: "status"}}
+		kept, err := s.QueryGroups(ctx, "reader", c.ID, in)
+		if err != nil {
+			t.Fatal(step, err)
+		}
+		in.rowACL = true
+		rows, err := s.QueryGroups(ctx, "reader", c.ID, in)
+		if err != nil {
+			t.Fatal(step, err)
+		}
+		if fmt.Sprint(kept.Data) != fmt.Sprint(rows.Data) {
+			t.Fatal(step, "kept decisions count", kept.Data, "row checks", rows.Data)
+		}
+		return fmt.Sprint(rows.Data)
+	}
+	// Workspace members read drafts everywhere, so the counts kept for the
+	// whole collection are theirs.
+	if err := s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	before := groups("inherited")
+	r, err := s.Get(ctx, "alice", lone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetPermissions(ctx, "alice", lone, r.Version, Permissions{}); err != nil {
+		t.Fatal(err)
+	}
+	if after := groups("a scope without grants"); after == before {
+		t.Fatal("the counts still hold the row", after)
+	}
+	wantView(t, s, "a scope without grants", "reader", c.ID, "Other")
+}

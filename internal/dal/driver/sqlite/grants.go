@@ -78,7 +78,7 @@ func (q Queries) Grants(ctx context.Context, f grants.Filter) ([]grants.Grant, e
 }
 
 func (q Queries) InsertGrant(ctx context.Context, g grants.Grant) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if err := q.workspaceAccessChanged(ctx, `SELECT workspace_id FROM resources WHERE id=?`, g.ResourceID); err != nil {
 		return err
 	}
 	_, err := models.Grants.Insert(&models.GrantSetter{
@@ -89,7 +89,7 @@ func (q Queries) InsertGrant(ctx context.Context, g grants.Grant) error {
 }
 
 func (q Queries) SetGrantAction(ctx context.Context, id string, action grants.Action) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if err := q.workspaceAccessChanged(ctx, `SELECT r.workspace_id FROM grants g JOIN resources r ON r.id=g.resource_id WHERE g.id=? AND g.action<>?`, id, string(action)); err != nil {
 		return err
 	}
 	set := &models.GrantSetter{Action: omit.From(string(action))}
@@ -98,7 +98,7 @@ func (q Queries) SetGrantAction(ctx context.Context, id string, action grants.Ac
 }
 
 func (q Queries) DeleteGrant(ctx context.Context, id string) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if err := q.workspaceAccessChanged(ctx, `SELECT r.workspace_id FROM grants g JOIN resources r ON r.id=g.resource_id WHERE g.id=?`, id); err != nil {
 		return err
 	}
 	_, err := models.Grants.Delete(models.DeleteWhere.Grants.ID.EQ(id)).Exec(ctx, q.exec)
@@ -106,7 +106,21 @@ func (q Queries) DeleteGrant(ctx context.Context, id string) error {
 }
 
 func (q Queries) DeleteGrants(ctx context.Context, f grants.Filter) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if f.ResourceID == "" && f.PrincipalID == "" {
+		return dberr.ErrCheckViolation
+	}
+	// The workspaces of the grants about to go.
+	workspaces, args := `SELECT r.workspace_id FROM grants g JOIN resources r ON r.id=g.resource_id WHERE TRUE`, []any{}
+	if f.ResourceID != "" {
+		workspaces, args = workspaces+` AND g.resource_id=?`, append(args, f.ResourceID)
+	}
+	if f.PrincipalID != "" {
+		workspaces, args = workspaces+` AND g.principal_id=?`, append(args, f.PrincipalID)
+	}
+	if f.PrincipalType != "" {
+		workspaces, args = workspaces+` AND g.principal_type=?`, append(args, string(f.PrincipalType))
+	}
+	if err := q.workspaceAccessChanged(ctx, workspaces, args...); err != nil {
 		return err
 	}
 	w := models.DeleteWhere.Grants
@@ -119,9 +133,6 @@ func (q Queries) DeleteGrants(ctx context.Context, f grants.Filter) error {
 	}
 	if f.PrincipalType != "" {
 		query.Apply(w.PrincipalType.EQ(string(f.PrincipalType)))
-	}
-	if f.ResourceID == "" && f.PrincipalID == "" {
-		return dberr.ErrCheckViolation
 	}
 	_, err := query.Exec(ctx, q.exec)
 	return dberr.Translate(err)

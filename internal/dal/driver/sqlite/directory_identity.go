@@ -67,16 +67,13 @@ func (q Queries) InsertDirectoryUser(ctx context.Context, u directory.User) erro
 }
 
 func (q Queries) UpdateDirectoryUser(ctx context.Context, u directory.User) error {
-	if err := q.accessChanged(ctx); err != nil {
-		return err
-	}
 	set := &models.IdentityUserSetter{DisplayName: omit.From(u.DisplayName), Email: omit.From(u.Email), SyncHash: omit.From(u.SyncHash)}
 	_, err := models.IdentityUsers.Update(set.UpdateMod(), models.UpdateWhere.IdentityUsers.ID.EQ(u.ID), models.UpdateWhere.IdentityUsers.DeletedAt.IsNull()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) SetDirectoryUserActive(ctx context.Context, id string, active bool) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if err := q.accessChangedIf(ctx, `EXISTS(SELECT 1 FROM identity_users WHERE id=? AND active<>?)`, id, active); err != nil {
 		return err
 	}
 	set := &models.IdentityUserSetter{Active: omit.From(active)}
@@ -91,9 +88,6 @@ func (q Queries) SetDirectoryUserActive(ctx context.Context, id string, active b
 }
 
 func (q Queries) SetDirectoryPassword(ctx context.Context, id, hash string) error {
-	if err := q.accessChanged(ctx); err != nil {
-		return err
-	}
 	set := &models.IdentityUserSetter{PasswordHash: omit.From(hash)}
 	_, err := models.IdentityUsers.Update(set.UpdateMod(), models.UpdateWhere.IdentityUsers.ID.EQ(id), models.UpdateWhere.IdentityUsers.PasswordHash.EQ(""), models.UpdateWhere.IdentityUsers.DeletedAt.IsNull()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
@@ -219,15 +213,17 @@ func (q Queries) DirectoryRoles(ctx context.Context) ([]directory.Role, error) {
 }
 
 func (q Queries) InsertDirectoryRole(ctx context.Context, r directory.Role) error {
-	if err := q.accessChanged(ctx); err != nil {
-		return err
-	}
 	_, err := models.IdentityRoles.Insert(&models.IdentityRoleSetter{ID: omit.From(r.ID), Name: omit.From(r.Name), Description: omit.From(r.Description), Scopes: omit.From(types.NewJSON(r.Scopes)), Builtin: omit.From(r.Builtin), Version: omit.From(int64(1))}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) UpdateDirectoryRole(ctx context.Context, r directory.Role, version int) (bool, error) {
-	if err := q.accessChanged(ctx); err != nil {
+	// Only a role's scopes are read by decisions, not its name.
+	scopes, err := json.Marshal(r.Scopes)
+	if err != nil {
+		return false, err
+	}
+	if err := q.accessChangedIf(ctx, `EXISTS(SELECT 1 FROM identity_roles WHERE id=? AND scopes<>?)`, r.ID, string(scopes)); err != nil {
 		return false, err
 	}
 	set := &models.IdentityRoleSetter{Name: omit.From(r.Name), Description: omit.From(r.Description), Scopes: omit.From(types.NewJSON(r.Scopes)), Version: omit.From(int64(version + 1))}

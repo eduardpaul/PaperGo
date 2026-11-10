@@ -48,7 +48,7 @@ Each domain lives in its own package and is split in two:
   models, because their shape depends on the request. `dialect/` writes the
   expressions that differ between engines and numbers placeholders for
   PostgreSQL. `access/` writes permission checks for a principal and keeps
-  the access revision. `content/` compiles browse, filter, search and link
+  the access revisions. `content/` compiles browse, filter, search and link
   queries over resources.
   `portable/` reads and writes the rows of portable packages for every
   package table, with values that read the same on both engines.
@@ -145,18 +145,24 @@ and leases. Raw SQL inside DAL must support the selected engine.
 Use `dberr.Translate`, `dberr.IsNotFound`, `dberr.IsConstraintError` and
 `errors.Is` with the sentinel errors defined in `dberr`.
 
-## Access revision
+## Access revisions
 
 `content` keeps a reader's permission decisions for a collection between
-queries. They are valid for one state of what they read: `grants`,
-`identity_users`, `identity_memberships`, `identity_roles`,
-`identity_assignments` and the `scope_id` of resources. `access_revisions`
-names that state with a random token. A driver function that writes any of
-those calls `q.accessChanged(ctx)` in the same transaction, and
-`TestDriverAccessWritesReplaceTheRevision` fails for one that does not;
-`portable` does the same for the package tables among them. Creating an
-inheriting resource leaves the token alone: it joins a scope its parent
-already has.
+queries. They are valid for one state of what they read, which two random
+tokens name: `access_revisions` the organization's directory (the `active`
+flag of `identity_users`, `identity_memberships`, the scopes of
+`identity_roles` and `identity_assignments`), and `workspace_access_revisions`
+the collection's workspace (its `grants` and the `scope_id` of its
+resources). A driver function that changes any of those calls
+`q.accessChanged`, `q.accessChangedIf` or `q.workspaceAccessChanged` in the
+same transaction, testing the state before its write so that a token changes
+only with what decisions read. `TestDriverAccessWritesReplaceTheRevision`
+fails for a function that writes those tables without one, unless it is
+listed as changing nothing decisions read (a user's name or password, a role
+nobody holds yet). `portable` replaces the organization's token for the
+package tables among them. Creating an inheriting resource, and moving or
+restoring one within its scope, leaves the tokens alone: the collection
+already has its scope.
 
 ## Resource projections
 

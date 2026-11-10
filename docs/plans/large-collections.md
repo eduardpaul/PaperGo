@@ -206,7 +206,8 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 16. **Permissions decided once, not per query.** A page tested every row it returned against the grants, and a
     collection with more than 64 ACL scopes did so for every row it counted. Pages now match rows against the
     scopes the person reads, as totals do, up to 4,096 scopes, and a person's decisions for a collection are kept
-    until a grant, membership, role, user status or permission scope changes (`access_revisions`). `BenchmarkCollectionQuery`
+    until a grant or permission scope in its workspace, a membership, an assignment, a role's scopes or a user's status
+    changes (`access_revisions`, `workspace_access_revisions`). `BenchmarkCollectionQuery`
     on SQLite, 50-row pages, mean per query (4 vCPU Xeon 2.1 GHz):
 
     | Query | 2,000 items, 40 scopes | 20,000 items, 400 scopes |

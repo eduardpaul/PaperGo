@@ -181,13 +181,6 @@ func (q Queries) CountResources(ctx context.Context, f resources.Filter) (int, e
 }
 
 func (q Queries) InsertResource(ctx context.Context, r resources.Resource, values json.RawMessage) error {
-	// An inheriting resource joins a scope its parent already has; one with
-	// its own adds a scope decisions have not seen.
-	if r.ScopeID == nil || *r.ScopeID == r.ID {
-		if err := q.accessChanged(ctx); err != nil {
-			return err
-		}
-	}
 	set := &models.ResourceSetter{
 		ArchivedAt: omitnull.FromPtr(r.ArchivedAt), ArchivedBy: omitnull.FromPtr(r.ArchivedBy),
 		ID: omit.From(r.ID), CreatedAt: omit.From(r.CreatedAt), WorkspaceID: omit.From(r.WorkspaceID), PersonalOwnerID: omitnull.FromPtr(r.PersonalOwnerID),
@@ -203,13 +196,22 @@ func (q Queries) InsertResource(ctx context.Context, r resources.Resource, value
 	if r.SystemKey != nil {
 		set.SystemKey = omitnull.From(string(*r.SystemKey))
 	}
-	_, err := models.Resources.Insert(set).Exec(ctx, q.exec)
-	return dberr.Translate(err)
+	if _, err := models.Resources.Insert(set).Exec(ctx, q.exec); err != nil {
+		return dberr.Translate(err)
+	}
+	// An inheriting resource joins a scope its parent already has; one with
+	// its own adds a scope its workspace's decisions have not seen.
+	if r.ScopeID != nil && *r.ScopeID != r.ID {
+		return nil
+	}
+	return q.workspaceAccessChanged(ctx, `SELECT id FROM resources WHERE id=?`, r.WorkspaceID)
 }
 
 func (q Queries) UpdateResource(ctx context.Context, id string, version int, s resources.Set) (bool, error) {
-	if s.ScopeID != nil || s.InheritPermissions != nil {
-		if err := q.accessChanged(ctx); err != nil {
+	if s.ScopeID != nil {
+		// Only a scope that changes is news to decisions: a row that moves
+		// or comes back within its scope changes nothing they read.
+		if err := q.workspaceAccessChanged(ctx, `SELECT workspace_id FROM resources WHERE id=? AND (scope_id IS NULL OR scope_id<>?)`, id, *s.ScopeID); err != nil {
 			return false, err
 		}
 	}
@@ -282,7 +284,8 @@ func resourceSetter(s resources.Set) *models.ResourceSetter {
 }
 
 func (q Queries) DeleteResource(ctx context.Context, id string) error {
-	if err := q.accessChanged(ctx); err != nil {
+	// Rows in the scope of a resource that goes lose it (ON DELETE SET NULL).
+	if err := q.workspaceAccessChanged(ctx, `SELECT workspace_id FROM resources WHERE id=? AND EXISTS(SELECT 1 FROM resources s WHERE s.scope_id=? AND s.id<>?)`, id, id, id); err != nil {
 		return err
 	}
 	_, err := models.Resources.Delete(models.DeleteWhere.Resources.ID.EQ(id)).Exec(ctx, q.exec)
@@ -313,11 +316,15 @@ func (q Queries) IsAncestor(ctx context.Context, id, ancestor string) (bool, err
 }
 
 func (q Queries) InheritScope(ctx context.Context, id, scopeID string) error {
-	if err := q.accessChanged(ctx); err != nil {
-		return err
+	res, err := q.exec.ExecContext(ctx, `WITH RECURSIVE sub(id) AS (SELECT id FROM resources WHERE parent_id = $1 AND inherit_permissions UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id = sub.id WHERE c.inherit_permissions) UPDATE resources SET scope_id = $2 WHERE id IN (SELECT id FROM sub) AND (scope_id IS NULL OR scope_id <> $3)`, id, scopeID, scopeID)
+	if err != nil {
+		return dberr.Translate(err)
 	}
-	_, err := q.exec.ExecContext(ctx, `WITH RECURSIVE sub(id) AS (SELECT id FROM resources WHERE parent_id = $1 AND inherit_permissions UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id = sub.id WHERE c.inherit_permissions) UPDATE resources SET scope_id = $2 WHERE id IN (SELECT id FROM sub)`, id, scopeID)
-	return dberr.Translate(err)
+	changed, err := res.RowsAffected()
+	if err != nil || changed == 0 {
+		return dberr.Translate(err)
+	}
+	return q.workspaceAccessChanged(ctx, `SELECT workspace_id FROM resources WHERE id=?`, id)
 }
 
 func (q Queries) FolderHeight(ctx context.Context, id string, limit int) (int, error) {
@@ -366,7 +373,7 @@ func resourceRecord(r *models.Resource) (resources.Resource, error) {
 }
 
 func (q Queries) ClearWorkspace(ctx context.Context, workspaceID, actor string, at time.Time) error {
-	if err := q.accessChanged(ctx); err != nil {
+	if err := q.workspaceAccessChanged(ctx, `SELECT id FROM resources WHERE id=?`, workspaceID); err != nil {
 		return err
 	}
 	sub := "SELECT id FROM resources WHERE workspace_id = $1"

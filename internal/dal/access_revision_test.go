@@ -7,11 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 )
 
-// accessWrite matches a driver statement that writes what permission
+// accessWrite matches a driver statement that writes a table permission
 // decisions read: grants, directory users, memberships, roles and
 // assignments, the permission scope of resources, and resource rows removed
 // from under the scopes that name them.
@@ -20,17 +19,28 @@ var accessWrite = regexp.MustCompile(`models\.(Grants|IdentityUsers|IdentityMemb
 	`|(INSERT INTO|UPDATE|DELETE FROM) (grants|identity_users|identity_memberships|identity_assignments|identity_roles)\b` +
 	`|DELETE FROM resources\b|SET scope_id\b`)
 
-// Scope decisions are kept between queries under the access revision, so a
-// write the revision does not follow would leave readers with permissions
-// they no longer have. Every driver function with such a write replaces the
-// revision.
+// revisionChange matches a call that replaces an access revision.
+var revisionChange = regexp.MustCompile(`q\.(accessChanged|accessChangedIf|workspaceAccessChanged)\(ctx\b`)
+
+// readNothing lists the driver functions that write those tables without
+// changing anything a decision reads, so they leave the revisions alone.
+var readNothing = map[string]string{
+	"UpdateDirectoryUser":  "a user's name, email and sync hash",
+	"SetDirectoryPassword": "a user's password",
+	"InsertDirectoryRole":  "a role nobody holds yet",
+}
+
+// Scope decisions are kept between queries under the access revisions, so a
+// write the revisions do not follow would leave readers with permissions
+// they no longer have. Every driver function with such a write replaces a
+// revision, unless it is listed in readNothing.
 func TestDriverAccessWritesReplaceTheRevision(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		files, err := filepath.Glob(filepath.Join("driver", engine, "*.go"))
 		if err != nil || len(files) == 0 {
 			t.Fatal(engine, files, err)
 		}
-		found := 0
+		found, exempt := 0, map[string]bool{}
 		for _, path := range files {
 			source, err := os.ReadFile(path)
 			if err != nil {
@@ -51,9 +61,22 @@ func TestDriverAccessWritesReplaceTheRevision(t *testing.T) {
 					continue
 				}
 				found++
-				if !strings.Contains(body, "q.accessChanged(ctx)") {
-					t.Errorf("%s: %s writes what permission decisions read without replacing the access revision", path, fn.Name.Name)
+				changes := revisionChange.MatchString(body)
+				if _, ok := readNothing[fn.Name.Name]; ok {
+					exempt[fn.Name.Name] = true
+					if changes {
+						t.Errorf("%s: %s is listed as changing nothing decisions read, yet replaces a revision", path, fn.Name.Name)
+					}
+					continue
 				}
+				if !changes {
+					t.Errorf("%s: %s writes what permission decisions read without replacing an access revision", path, fn.Name.Name)
+				}
+			}
+		}
+		for name := range readNothing {
+			if !exempt[name] {
+				t.Errorf("%s: %s is listed in readNothing but writes none of the tables decisions read", engine, name)
 			}
 		}
 		if found < 15 {
