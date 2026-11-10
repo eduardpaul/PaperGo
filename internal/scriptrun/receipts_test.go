@@ -645,6 +645,17 @@ func TestReceiptsPackage(t *testing.T) {
 		t.Fatalf("local amounts' lines: %+v", lines)
 	}
 
+	// Two numbers in one amount, as a model copying "2 x 4,00" writes it,
+	// are not read as one number (24.00): the receipt goes to review.
+	r.batch.SetReceiptMode("two-numbers")
+	merged := r.upload(t, "merged.png", receiptPhoto(t, 875, 585))
+	r.queued(t, 1)
+	r.flush(t)
+	r.runOf(t, merged, runstore.StatusCompleted)
+	if item := r.item(t, merged); item.Values["receipts_status"] != "Needs review" || item.Values["receipts_total"] != nil || len(r.lineValues(t, merged)) != 0 {
+		t.Fatalf("two numbers in an amount: %+v", item)
+	}
+
 	// An amount that cannot be stored exactly stores nothing and sends the
 	// receipt to review, though the answer matched the schema and is cached.
 	r.batch.SetReceiptMode("bad-amount")

@@ -144,21 +144,31 @@ async function folder(api: PaperGoClient, parent: string, name: string): Promise
   }
 }
 
+// A number as a receipt prints it: digits with dots, commas, and spaces
+// before a group of three digits (1 234,50), from a separator before the
+// first digit (.50) on. Text around it, a currency or a unit, is not part of it.
+const numberPattern = /[.,]?\d(?:[\d.,]|[ \u00a0\u202f](?=\d{3}(?!\d)))*/g;
+
 // decimal is an amount the model read, as a field of scale decimals takes it.
 // The prompt asks for 1234.50, but a model can copy the receipt's 12,50,
-// 1.234,50 EUR or 12,50-: the last separator is the decimal one, unless it
-// repeats, as in 1,234,567. Digits past scale are not rounded: an amount this
-// cannot read exactly throws, and the receipt goes to review.
+// 1.234,50 EUR, 12,50-, 0,846 kg or 2,25 €/kg: the last separator is the
+// decimal one, unless it repeats, as in 1,234,567, and a currency or unit
+// around the number is left out. Text holding more than one number, such as
+// 2 x 4,50, is not an amount, nor are digits past scale, which are not
+// rounded: an amount this cannot read exactly throws, and the receipt goes to
+// review instead of storing a wrong amount.
 function decimal(text: string, scale: number): string {
-  const bare = text.replace(/[^\d.,+-]/g, "");
-  const digits = bare.replace(/^[+-]|[+-]$/g, "");
-  if (!/^\d[\d.,]*$/.test(digits)) throw new Error(`"${text}" is not an amount`);
+  const numbers = text.match(numberPattern) ?? [];
+  if (numbers.length !== 1) throw new Error(`"${text}" is not one amount`);
+  const digits = numbers[0].replace(/[ \u00a0\u202f]/g, "").replace(/[.,]+$/, "");
+  if (!/\d/.test(digits)) throw new Error(`"${text}" is not an amount`);
   const last = Math.max(digits.lastIndexOf("."), digits.lastIndexOf(","));
   const point = last >= 0 && digits.indexOf(digits[last]) === last;
-  const whole = (point ? digits.slice(0, last) : digits).replace(/[.,]/g, "") || "0";
+  const whole = (point ? digits.slice(0, last) : digits).replace(/[.,]/g, "").replace(/^0+(?=\d)/, "") || "0";
   const fraction = (point ? digits.slice(last + 1) : "").replace(/0+$/, "");
   if (fraction.length > scale) throw new Error(`"${text}" has more than ${scale} decimals`);
-  const negative = bare.startsWith("-") || bare.endsWith("-");
+  // A minus before or after the number, as in -4,50, € -4,50 or 4,50-.
+  const negative = /[-\u2212]/.test(text.replace(numbers[0], " "));
   return `${negative ? "-" : ""}${whole}${fraction && `.${fraction}`}`;
 }
 
