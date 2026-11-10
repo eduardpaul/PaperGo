@@ -547,6 +547,30 @@ func TestApplyLeavesAViewOfTheSameName(t *testing.T) {
 	}
 }
 
+// Something PaperGo already has can stand in the way of what a solution
+// brings, such as a workflow of the same name: the plan names the object,
+// and nothing is applied.
+func TestApplyNamesWhatStandsInTheWay(t *testing.T) {
+	p := newPlace(t)
+	manual := `import { workflow } from "@papergo/workflow";
+export default workflow({ triggers: [{ type: "manual" }], async run() {} });
+`
+	if _, err := (&workflow.Service{DMS: p.dms}).Create(p.ctx, admin, p.ws, workflow.Save{Key: "mine", Name: "Levels", Source: manual}); err != nil {
+		t.Fatal(err)
+	}
+	r := p.apply(tank(), Options{})
+	if r.Applied {
+		t.Fatalf("applied:\n%s", said(r))
+	}
+	has(t, r, "REFUSED workflow tank-levels: conflicts with something PaperGo already has")
+	fields, _ := p.dms.CatalogFields(p.ctx, admin)
+	for _, f := range fields {
+		if strings.HasPrefix(f.Key, "tank_") {
+			t.Fatalf("a refused apply created %s", f.Key)
+		}
+	}
+}
+
 // Settings given once are kept; a default reads the organization's
 // preference; pausing keeps workflows from starting on their own.
 func TestApplySettingsAndPause(t *testing.T) {

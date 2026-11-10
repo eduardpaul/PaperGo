@@ -14,6 +14,7 @@ import (
 	"papergo/internal/apps"
 	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/catalog"
+	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/resources"
 	viewstore "papergo/internal/dal/views"
 	"papergo/internal/dms"
@@ -209,9 +210,12 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 	for _, name := range optional {
 		r.warn("this PaperGo does not provide %s: the solution works in part", name)
 	}
+	// at is the object the apply failed at, when it failed at one.
+	var at *objectError
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		r.t = t
 		if err := r.reconcile(); err != nil {
+			errors.As(err, &at)
 			return err
 		}
 		if !commit || len(r.result.Refusals) > 0 {
@@ -220,6 +224,14 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		r.result.Applied = true
 		return nil
 	})
+	// What PaperGo already has can stand in an object's way, such as a
+	// workflow of the same name. That is a refusal like the others: it
+	// names the object, and nothing was applied.
+	if at != nil && (errors.Is(err, dms.ErrConflict) || dberr.IsIntegrityError(err)) {
+		r.refuse(at.kind, at.key, "conflicts with something PaperGo already has, such as another one of the same name; what follows it in the solution was not looked at")
+		r.result.Applied = false
+		return r.result, nil
+	}
 	if err != nil && !errors.Is(err, errRollback) {
 		return Result{}, err
 	}
@@ -267,10 +279,20 @@ func (r *run) warn(format string, args ...any) {
 	r.result.Warnings = append(r.result.Warnings, fmt.Sprintf(format, args...))
 }
 
-// failed says which object an error of the services below came from.
-func failed(kind, key string, err error) error {
-	return fmt.Errorf("%s %s: %w", strings.ReplaceAll(kind, "_", " "), key, err)
+// objectError is an error of the services below, with the object of the
+// solution it came from.
+type objectError struct {
+	kind, key string
+	err       error
 }
+
+func (e *objectError) Error() string {
+	return strings.ReplaceAll(e.kind, "_", " ") + " " + e.key + ": " + e.err.Error()
+}
+func (e *objectError) Unwrap() error { return e.err }
+
+// failed says which object an error of the services below came from.
+func failed(kind, key string, err error) error { return &objectError{kind, key, err} }
 
 func (r *run) reconcile() error {
 	m := r.sol.Manifest

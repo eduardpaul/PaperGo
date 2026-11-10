@@ -78,12 +78,17 @@ func (c *client) do(ctx context.Context, method, path string, body []byte, conte
 	for _, status := range accepted {
 		ok = ok || res.StatusCode == status
 	}
+	// An accepted status other than 200 carries a result, such as a refused
+	// apply; the same status with a problem is an error like any other.
+	var problem struct {
+		Detail string `json:"detail"`
+		Title  string `json:"title"`
+	}
+	if res.StatusCode != http.StatusOK && json.Unmarshal(raw, &problem) == nil && problem.Title != "" {
+		ok = false
+	}
 	if !ok {
-		var problem struct {
-			Detail string `json:"detail"`
-			Title  string `json:"title"`
-		}
-		if json.Unmarshal(raw, &problem) == nil && (problem.Detail != "" || problem.Title != "") {
+		if problem.Detail != "" || problem.Title != "" {
 			return res.StatusCode, fmt.Errorf("%s %s: %d %s", method, path, res.StatusCode, strings.TrimSpace(problem.Title+": "+problem.Detail))
 		}
 		return res.StatusCode, fmt.Errorf("%s %s: %d", method, path, res.StatusCode)

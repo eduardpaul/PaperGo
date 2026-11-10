@@ -169,6 +169,7 @@ applied: 4 change(s)
 | a field's type, scale or multiplicity changing | values of the old type are stored |
 | a choice the solution gave a field leaving it | stored items may hold it |
 | a field the solution gave its content type leaving it | its stored values would have no field |
+| something PaperGo already has standing in the way, such as a workflow or an app of the same name | a name serves one of them in a workspace |
 | a `papergo` range this PaperGo is outside of | the solution was written for another version |
 | a capability the solution `requires` as `true` that this PaperGo does not provide | it cannot work here |
 
