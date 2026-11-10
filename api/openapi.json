@@ -24797,6 +24797,262 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/solutions/plan": {
+      "post": {
+        "summary": "Plan a Solution",
+        "operationId": "planSolution",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "Returns what applying the packed solution to the workspace would do, and changes nothing: the changes, the refusals (what would break stored values, a missing dependency, a conflict with an edit made in PaperGo), the objects left as someone edited them, and warnings. The plan is the apply itself, rolled back. Needs manage access to the workspace and solution.manage, and for each change what that change needs when made by hand.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "options",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "SolutionOptions as JSON: settings, bindings, paused and decisions."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "description": "A packed solution, as papergo solution pack writes it; at most 16 MiB."
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "solution.manage"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/solutions/apply": {
+      "post": {
+        "summary": "Apply a Solution",
+        "operationId": "applySolution",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "Makes the workspace match the packed solution in one transaction: creates what it declares and lacks, updates what the solution changed since it was last applied (a changed source is a new version), and never deletes. Objects edited in PaperGo are left; when the solution changes one of them too, the apply is refused until options.decisions says keep or replace for it. Answers 409 with the result when anything was refused; nothing is applied then. Needs manage access to the workspace and solution.manage, and for each change what that change needs when made by hand. The caller becomes the author the solution's workflows run as.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "options",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "SolutionOptions as JSON: settings, bindings, paused and decisions."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "description": "A packed solution, as papergo solution pack writes it; at most 16 MiB."
+        },
+        "responses": {
+          "200": {
+            "description": "Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Refused; nothing was applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "solution.manage"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/solutions": {
+      "get": {
+        "summary": "List Solutions",
+        "operationId": "listSolutions",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "The solutions installed in the workspace, by key, for those who may read it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/solutions/{key}": {
+      "get": {
+        "summary": "Solution",
+        "operationId": "getSolution",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "One installed solution: its version, settings, bindings, the manifest it was applied with, and which object each of its keys became.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The solution's key."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionInstallation"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/solutions/{key}/status": {
+      "get": {
+        "summary": "Solution Status",
+        "operationId": "getSolutionStatus",
+        "tags": [
+          "Solutions"
+        ],
+        "description": "Checks an installed solution against what it declared when it was applied: each collection is there and of its kind, accepts the solution's content types with their fields, others' collections still have what the solution expects, and its workflows and apps exist and are published.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The solution's key."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -36105,6 +36361,315 @@
             "items": {
               "$ref": "#/components/schemas/AppVersion"
             }
+          }
+        }
+      },
+      "SolutionOptions": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "description": "Values of the solution's settings form; those left out keep what the installation has, or the form's defaults."
+          },
+          "bindings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "An existing list or library for a slot, by the slot's key."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "Keeps the solution's workflows from starting on their own."
+          },
+          "decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "keep",
+                "replace"
+              ]
+            },
+            "description": "For \"<kind>:<key>\": keep what was edited in PaperGo, or replace it with the solution's."
+          }
+        }
+      },
+      "SolutionChange": {
+        "type": "object",
+        "required": [
+          "action",
+          "kind",
+          "key"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update",
+              "attach",
+              "extend",
+              "bind"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "SolutionRefusal": {
+        "type": "object",
+        "required": [
+          "kind",
+          "key",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "SolutionResult": {
+        "type": "object",
+        "required": [
+          "solution",
+          "name",
+          "version",
+          "applied",
+          "changes",
+          "refusals",
+          "customized",
+          "warnings"
+        ],
+        "properties": {
+          "solution": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "The version installed before; absent for a first installation."
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "False for a plan, and for an apply that was refused."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SolutionChange"
+            }
+          },
+          "refusals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SolutionRefusal"
+            }
+          },
+          "customized": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects edited in PaperGo that were left as they are, as \"<kind>:<key>\"."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SolutionSummary": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "version",
+          "paused",
+          "applied_by",
+          "applied_at"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "applied_by": {
+            "type": "string"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SolutionList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SolutionSummary"
+            }
+          }
+        }
+      },
+      "SolutionObject": {
+        "type": "object",
+        "required": [
+          "kind",
+          "key",
+          "id",
+          "role"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "field",
+              "content_type",
+              "relationship_type",
+              "collection",
+              "view",
+              "workflow",
+              "app",
+              "extension"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owns",
+              "uses",
+              "extends"
+            ]
+          },
+          "applied": {
+            "type": "string",
+            "description": "The hash of what the solution said the object is when it was last applied."
+          },
+          "live": {
+            "type": "string",
+            "description": "The hash of the object as it then was."
+          }
+        }
+      },
+      "SolutionInstallation": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "version",
+          "settings",
+          "paused",
+          "applied_by",
+          "applied_at",
+          "objects",
+          "manifest"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "bindings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "applied_by": {
+            "type": "string"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SolutionObject"
+            }
+          },
+          "manifest": {
+            "type": "object",
+            "description": "The solution's manifest (solution.json) as it was applied."
+          }
+        }
+      },
+      "SolutionStatus": {
+        "type": "object",
+        "required": [
+          "solution",
+          "version",
+          "ok",
+          "problems"
+        ],
+        "properties": {
+          "solution": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What is missing or no longer as the solution needs it."
           }
         }
       }

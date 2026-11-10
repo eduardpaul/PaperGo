@@ -53,6 +53,9 @@ type Installation struct {
 	AppliedBy string    `json:"applied_by"`
 	AppliedAt time.Time `json:"applied_at"`
 	Objects   []Object  `json:"objects"`
+	// Manifest is the solution's manifest as it was applied: what the
+	// installation is checked against afterwards.
+	Manifest Manifest `json:"manifest"`
 }
 
 // Object is one object of an installation.

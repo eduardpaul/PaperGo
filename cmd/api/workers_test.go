@@ -22,6 +22,7 @@ import (
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/solutions"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 	"papergo/internal/workflow"
@@ -109,7 +110,7 @@ func TestOffFeaturesAreAbsent(t *testing.T) {
 	for _, f := range list {
 		names = append(names, f.name)
 	}
-	if want := []string{"documents", "previews", "apps", "ai-retention"}; !slices.Equal(names, want) {
+	if want := []string{"documents", "previews", "apps", "solutions", "ai-retention"}; !slices.Equal(names, want) {
 		t.Fatalf("features = %v, want %v", names, want)
 	}
 	if err = list.register(service); err != nil {
@@ -178,6 +179,7 @@ func testFeatures(search bool) features {
 		documentsFeature(&documenttext.Reader{}, &documentfiles.Maker{}),
 		previewsFeature(&documentpreview.Renderer{}),
 		{name: "apps", modules: []httpapi.Module{apps.Module()}},
+		{name: "solutions", modules: []httpapi.Module{solutions.Module()}},
 		{name: "comments", modules: []httpapi.Module{comments.Module()}},
 		*aiFeature(assistant, func() {}),
 		aiRetentionFeature(assistant, nil),

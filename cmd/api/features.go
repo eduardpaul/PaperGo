@@ -32,6 +32,7 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/ocr"
 	"papergo/internal/search"
+	"papergo/internal/solutions"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
 	"papergo/internal/workflow"
@@ -89,6 +90,7 @@ func enabled(ctx context.Context, e environment) (list features, err error) {
 	}
 	list = append(list, documents...)
 	list = append(list, feature{name: "apps", modules: []httpapi.Module{apps.Module()}})
+	list = append(list, feature{name: "solutions", modules: []httpapi.Module{solutions.Module()}})
 	if e.config.Comments {
 		list = append(list, feature{name: "comments", modules: []httpapi.Module{comments.Module()}})
 	}

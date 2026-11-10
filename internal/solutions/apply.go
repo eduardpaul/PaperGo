@@ -212,7 +212,7 @@ func (r *run) reconcile() error {
 			}
 		}
 	}
-	r.next.Settings = r.settings
+	r.next.Settings, r.next.Manifest = r.settings, m
 	r.installed.Installations[m.Key] = r.next
 	if err := writeInstalled(r.ctx, r.t, r.workspaceID, r.subject, r.installed); err != nil {
 		return err

@@ -2,7 +2,9 @@
 
 A **solution** is the definitions of lists, workflows and apps that belong together, as a folder of files: the fields and content types, the lists and libraries with their views, the [workflows](workflows.md) and the [apps](apps.md). It carries no content: no items, files, people, permissions or IDs.
 
-`papergo solution pack` checks a solution's folder and writes it as one ZIP. Installing a solution into a workspace is [planned](plans/solutions.md); a [workspace package](workspace-portability.md) installs the samples.
+A solution is **applied** to a workspace that exists: PaperGo creates what the solution declares and the workspace lacks, updates what the solution changed since it was last applied, and leaves everything else, stored items first of all. Applying the same solution again changes nothing. A workspace holds any number of solutions, and two can work on the same list.
+
+`papergo solution` checks, packs, plans and applies solutions. Removing a solution, the web screens and languages are [planned](plans/solutions.md).
 
 ## The folder
 
@@ -111,6 +113,93 @@ It checks:
 - each app, compiled as saving it would, and a published app's parameters against its form.
 
 The ZIP holds the manifest and each settings file with the source it names. The same folder always packs to the same bytes, and a packed solution packs again to itself.
+
+## Applying
+
+```sh
+export PAPERGO_URL=https://docs.example.com PAPERGO_TOKEN_FILE=~/.papergo-token PAPERGO_WORKSPACE=Casa
+papergo solution plan ./diesel            # what applying would change; changes nothing
+papergo solution apply ./diesel           # apply it
+papergo solution list                     # the solutions installed
+papergo solution status diesel            # whether one still has what it needs
+```
+
+The commands take a folder or a packed ZIP, check it as `pack` does, and talk to the server's REST API with a [personal access token](identity.md). The workspace is named by its name or ID.
+
+```
+diesel 1.3.0 (installed: 1.2.0)
+  create  field diesel_notes: text
+  update  content type diesel_purchase: fields
+  update  view tank/purchases: columns
+  update  app diesel-dashboard: source (version 4)
+  kept    workflow diesel-levels, as it was edited in PaperGo
+applied: 4 change(s)
+```
+
+**One transaction.** Everything a solution brings is applied together or not at all. A plan is the apply itself, rolled back, so it says exactly what applying would do, the errors of each change included.
+
+**What is found, and by what.** A field and a content type are organization catalog entries, found by their key; a workflow and an app by their key in the workspace; a collection and a view by the installation, which remembers which object each key became. A renamed list is still the solution's list.
+
+**Additive.** Applying never deletes. It refuses, and then applies nothing, when a change would break stored values:
+
+| Refused | Why |
+| --- | --- |
+| a field's type, scale or multiplicity changing | values of the old type are stored |
+| a choice leaving a choice field | stored items may hold it |
+| a field of the solution leaving its content type | its stored values would have no field |
+| a `papergo` range this PaperGo is outside of | the solution was written for another version |
+
+A solution's version that no longer declares a workflow, an app or a view leaves it in place and says so.
+
+**Edits made in PaperGo stay.** The installation keeps, for each object, what the solution said it was and how it then was. On the next apply:
+
+| The object in PaperGo | The solution changes it | Result |
+| --- | --- | --- |
+| as applied | yes | updated |
+| as applied | no | untouched |
+| edited since | no | untouched, and listed as kept |
+| edited since | yes | refused until `--decide <kind>:<key>=keep` or `=replace` |
+
+A decision to keep is remembered: the object stays as edited until the solution changes it again. What keeps stored values usable is not open to this: a field the solution adds to its content type is added even to a type someone renamed.
+
+**Settings.** `--set name=value` gives a value of the solution's settings form; values given once are kept by the installation, and the rest take the form's defaults, read from the organization's preferences where the form says so. Parameters that name `$setting:<name>` get the values.
+
+**Collections.** A collection the solution owns is created with its name, content types, views and search setting. `--bind slot=<list name or ID>` uses a list or library that exists instead: it keeps its name and settings, and gets the solution's content types and views. The binding is remembered.
+
+A collection of another solution (`use`) is found through that solution's installation in the same workspace, which must be there, in the `version` range. What the slot `expects` is checked and never changed. What it `extends` is added to the list's own copy of the content type, so the catalog type, and every other list of that type, stays as its owner made it.
+
+**Paused.** `--paused` installs the solution with its workflows' automatic starts off, for trying a version in another workspace; `--resume` turns them on as the solution says.
+
+**Who may.** Planning and applying need manage access to the workspace and the `solution.manage` scope, which administrators have. Each change is also checked as if made by hand, as the person applying: catalog fields and content types need their scopes, apps need `app.manage`. That person becomes the author the solution's workflows run as.
+
+## Status
+
+`papergo solution status <key>`, or `GET /v1/workspaces/{id}/solutions/{key}/status`, checks an installation against the manifest it was applied with:
+
+- each collection is there and still a list or a library;
+- it accepts the solution's content types, with their fields;
+- a collection of another solution still has what the solution expects there, and what it added;
+- each workflow and app is there and published.
+
+```
+receipts 1.0.0 needs attention:
+  fills (Diesel): expects the field diesel_total_price on diesel_purchase, which lacks it
+  workflow receipts-read is draft, so it does not run
+```
+
+## API
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/v1/workspaces/{id}/solutions/plan` | What applying the packed solution in the body would do; changes nothing |
+| POST | `/v1/workspaces/{id}/solutions/apply` | Apply it: 200 with the changes, 409 with the refusals when nothing was applied |
+| GET | `/v1/workspaces/{id}/solutions` | The solutions installed |
+| GET | `/v1/workspaces/{id}/solutions/{key}` | One installation: version, settings, bindings, the manifest applied, and the object of each key |
+| GET | `/v1/workspaces/{id}/solutions/{key}/status` | Whether it has what it needs |
+
+Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
+
+A workspace's installations are kept with the workspace and go with it.
 
 ## Editors
 

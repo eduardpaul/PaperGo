@@ -1,0 +1,366 @@
+package solutions
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// client talks to a PaperGo server's REST API with a personal access token.
+type client struct {
+	base, token string
+	http        *http.Client
+}
+
+// connection are the flags every command that talks to a server has.
+type connection struct {
+	url, token, tokenFile, workspace *string
+}
+
+func connect(flags *flag.FlagSet) connection {
+	return connection{
+		url:       flags.String("url", os.Getenv("PAPERGO_URL"), "The server's address, such as https://docs.example.com (PAPERGO_URL)"),
+		token:     flags.String("token", os.Getenv("PAPERGO_TOKEN"), "A personal access token (PAPERGO_TOKEN)"),
+		tokenFile: flags.String("token-file", os.Getenv("PAPERGO_TOKEN_FILE"), "A file holding the token (PAPERGO_TOKEN_FILE)"),
+		workspace: flags.String("workspace", os.Getenv("PAPERGO_WORKSPACE"), "The workspace, by name or ID (PAPERGO_WORKSPACE)"),
+	}
+}
+
+func (c connection) client() (*client, error) {
+	if *c.url == "" {
+		return nil, errors.New("name the server with --url or PAPERGO_URL")
+	}
+	token := *c.token
+	if token == "" && *c.tokenFile != "" {
+		raw, err := os.ReadFile(*c.tokenFile)
+		if err != nil {
+			return nil, err
+		}
+		token = strings.TrimSpace(string(raw))
+	}
+	if token == "" {
+		return nil, errors.New("give a personal access token with --token, --token-file, PAPERGO_TOKEN or PAPERGO_TOKEN_FILE")
+	}
+	return &client{base: strings.TrimRight(*c.url, "/"), token: token, http: &http.Client{Timeout: 5 * time.Minute}}, nil
+}
+
+// do sends a request and reads its JSON answer into into. An answer with
+// one of the accepted statuses is no error.
+func (c *client) do(ctx context.Context, method, path string, body []byte, contentType string, into any, accepted ...int) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	if body != nil {
+		req.Header.Set("Content-Type", contentType)
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 64<<20))
+	if err != nil {
+		return res.StatusCode, err
+	}
+	ok := res.StatusCode == http.StatusOK
+	for _, status := range accepted {
+		ok = ok || res.StatusCode == status
+	}
+	if !ok {
+		var problem struct {
+			Detail string `json:"detail"`
+			Title  string `json:"title"`
+		}
+		if json.Unmarshal(raw, &problem) == nil && (problem.Detail != "" || problem.Title != "") {
+			return res.StatusCode, fmt.Errorf("%s %s: %d %s", method, path, res.StatusCode, strings.TrimSpace(problem.Title+": "+problem.Detail))
+		}
+		return res.StatusCode, fmt.Errorf("%s %s: %d", method, path, res.StatusCode)
+	}
+	if into != nil {
+		if err := json.Unmarshal(raw, into); err != nil {
+			return res.StatusCode, fmt.Errorf("%s %s: the answer is not what a PaperGo server sends: %w", method, path, err)
+		}
+	}
+	return res.StatusCode, nil
+}
+
+var looksLikeID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+type named struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+// find returns the ID of the entry of a listing with a name, or the name
+// itself when it is an ID.
+func (c *client) find(ctx context.Context, what, path, name string) (string, error) {
+	if looksLikeID.MatchString(name) {
+		return name, nil
+	}
+	var names []string
+	for next := path; next != ""; {
+		var page struct {
+			Value []named `json:"value"`
+			Next  string  `json:"@odata.nextLink"`
+		}
+		if _, err := c.do(ctx, http.MethodGet, next, nil, "", &page); err != nil {
+			return "", err
+		}
+		for _, e := range page.Value {
+			if strings.EqualFold(e.Name, name) {
+				return e.ID, nil
+			}
+			names = append(names, e.Name)
+		}
+		next = ""
+		if u, err := url.Parse(page.Next); err == nil && page.Next != "" {
+			next = u.RequestURI()
+		}
+	}
+	return "", fmt.Errorf("there is no %s %q; there are: %s", what, name, strings.Join(names, ", "))
+}
+
+func (c *client) workspace(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", errors.New("name the workspace with --workspace or PAPERGO_WORKSPACE")
+	}
+	return c.find(ctx, "workspace", "/v1/workspaces", name)
+}
+
+// pairs collects repeated key=value flags.
+type pairs []string
+
+func (p *pairs) String() string     { return strings.Join(*p, ",") }
+func (p *pairs) Set(v string) error { *p = append(*p, v); return nil }
+
+func (p pairs) each(what string, fn func(key, value string) error) error {
+	for _, pair := range p {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok || key == "" {
+			return fmt.Errorf("--%s takes key=value, not %q", what, pair)
+		}
+		if err := fn(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyCommand plans or applies a solution's folder or ZIP on a server.
+func applyCommand(ctx context.Context, command string, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(out)
+	conn := connect(flags)
+	var set, bind, decide pairs
+	flags.Var(&set, "set", "A setting of the solution, as name=value; repeat for more")
+	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID; repeat for more")
+	flags.Var(&decide, "decide", "What to do with an object edited in PaperGo that the solution changes too, as kind:key=keep or kind:key=replace")
+	paused := flags.Bool("paused", false, "Keep the solution's workflows from starting on their own")
+	resume := flags.Bool("resume", false, "Let the workflows of a paused solution start again")
+	folder, rest := leading(args)
+	if err := flags.Parse(rest); err != nil {
+		return err
+	}
+	if folder == "" || flags.NArg() != 0 || (*paused && *resume) {
+		return errors.New(usage)
+	}
+	files, err := Open(folder)
+	if err != nil {
+		return err
+	}
+	s, problems := Load(files)
+	if problems = append(problems, Check(ctx, s)...); len(problems) > 0 {
+		for _, p := range problems {
+			fmt.Fprintln(out, p)
+		}
+		return fmt.Errorf("%s has %d problem(s)", folder, len(problems))
+	}
+	packed, err := Pack(s)
+	if err != nil {
+		return err
+	}
+	c, err := conn.client()
+	if err != nil {
+		return err
+	}
+	workspaceID, err := c.workspace(ctx, *conn.workspace)
+	if err != nil {
+		return err
+	}
+	var o Options
+	if err := set.each("set", func(name, value string) error {
+		if o.Settings == nil {
+			o.Settings = map[string]any{}
+		}
+		var parsed any
+		if json.Unmarshal([]byte(value), &parsed) != nil {
+			parsed = value
+		}
+		o.Settings[name] = parsed
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := bind.each("bind", func(slot, name string) error {
+		id, err := c.find(ctx, "list or library", "/v1/resources/"+workspaceID+"/children", name)
+		if o.Bindings == nil {
+			o.Bindings = map[string]string{}
+		}
+		o.Bindings[slot] = id
+		return err
+	}); err != nil {
+		return err
+	}
+	if err := decide.each("decide", func(object, decision string) error {
+		if decision != DecisionKeep && decision != DecisionReplace {
+			return fmt.Errorf("--decide %s takes keep or replace, not %q", object, decision)
+		}
+		if o.Decisions == nil {
+			o.Decisions = map[string]string{}
+		}
+		o.Decisions[object] = decision
+		return nil
+	}); err != nil {
+		return err
+	}
+	if *paused || *resume {
+		o.Paused = paused
+	}
+	options, err := json.Marshal(o)
+	if err != nil {
+		return err
+	}
+	var result Result
+	path := "/v1/workspaces/" + workspaceID + "/solutions/" + command + "?options=" + url.QueryEscape(string(options))
+	if _, err := c.do(ctx, http.MethodPost, path, packed, "application/zip", &result, http.StatusConflict); err != nil {
+		return err
+	}
+	report(out, result, command == "plan")
+	if len(result.Refusals) > 0 {
+		return fmt.Errorf("%d refusal(s); nothing was applied", len(result.Refusals))
+	}
+	return nil
+}
+
+// leading splits the positional argument commands start with from their flags.
+func leading(args []string) (string, []string) {
+	if len(args) > 0 && args[0] != "" && args[0][0] != '-' {
+		return args[0], args[1:]
+	}
+	return "", args
+}
+
+// report prints what applying a solution did, or would do.
+func report(out io.Writer, r Result, plan bool) {
+	from := "first installation"
+	if r.From != "" {
+		from = "installed: " + r.From
+	}
+	fmt.Fprintf(out, "%s %s (%s)\n", r.Solution, r.Version, from)
+	for _, c := range r.Changes {
+		fmt.Fprintf(out, "  %-7s %s %s", c.Action, strings.ReplaceAll(c.Kind, "_", " "), c.Key)
+		if c.Detail != "" {
+			fmt.Fprintf(out, ": %s", c.Detail)
+		}
+		fmt.Fprintln(out)
+	}
+	for _, name := range r.Customized {
+		fmt.Fprintf(out, "  kept    %s, as it was edited in PaperGo\n", strings.Replace(name, ":", " ", 1))
+	}
+	for _, w := range r.Warnings {
+		fmt.Fprintf(out, "  warning %s\n", w)
+	}
+	for _, f := range r.Refusals {
+		fmt.Fprintf(out, "  REFUSED %s %s: %s\n", strings.ReplaceAll(f.Kind, "_", " "), f.Key, f.Reason)
+	}
+	switch {
+	case len(r.Refusals) > 0:
+	case plan:
+		fmt.Fprintf(out, "plan: %d change(s); nothing was changed\n", len(r.Changes))
+	default:
+		fmt.Fprintf(out, "applied: %d change(s)\n", len(r.Changes))
+	}
+}
+
+// listCommand lists the solutions installed in a workspace.
+func listCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("list", flag.ContinueOnError)
+	flags.SetOutput(out)
+	conn := connect(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	c, err := conn.client()
+	if err != nil {
+		return err
+	}
+	workspaceID, err := c.workspace(ctx, *conn.workspace)
+	if err != nil {
+		return err
+	}
+	var list struct {
+		Value []Summary `json:"value"`
+	}
+	if _, err := c.do(ctx, http.MethodGet, "/v1/workspaces/"+workspaceID+"/solutions", nil, "", &list); err != nil {
+		return err
+	}
+	for _, s := range list.Value {
+		paused := ""
+		if s.Paused {
+			paused = " (paused)"
+		}
+		fmt.Fprintf(out, "%s %s%s: %s, applied %s by %s\n", s.Key, s.Version, paused, s.Name, s.AppliedAt, s.AppliedBy)
+	}
+	if len(list.Value) == 0 {
+		fmt.Fprintln(out, "no solution is installed")
+	}
+	return nil
+}
+
+// statusCommand checks an installed solution; problems are an error.
+func statusCommand(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("status", flag.ContinueOnError)
+	flags.SetOutput(out)
+	conn := connect(flags)
+	key, rest := leading(args)
+	if err := flags.Parse(rest); err != nil {
+		return err
+	}
+	if key == "" || flags.NArg() != 0 {
+		return errors.New(usage)
+	}
+	c, err := conn.client()
+	if err != nil {
+		return err
+	}
+	workspaceID, err := c.workspace(ctx, *conn.workspace)
+	if err != nil {
+		return err
+	}
+	var status Status
+	if _, err := c.do(ctx, http.MethodGet, "/v1/workspaces/"+workspaceID+"/solutions/"+url.PathEscape(key)+"/status", nil, "", &status); err != nil {
+		return err
+	}
+	if status.OK {
+		fmt.Fprintf(out, "%s %s: has what it needs\n", status.Solution, status.Version)
+		return nil
+	}
+	fmt.Fprintf(out, "%s %s needs attention:\n", status.Solution, status.Version)
+	for _, p := range status.Problems {
+		fmt.Fprintf(out, "  %s\n", p)
+	}
+	return fmt.Errorf("%d problem(s)", len(status.Problems))
+}

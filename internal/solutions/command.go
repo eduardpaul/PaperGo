@@ -10,7 +10,15 @@ import (
 	"path/filepath"
 )
 
-const usage = "usage: papergo solution pack <folder> [--out <file or folder>] | schema [solution|workflow|app]"
+const usage = `usage: papergo solution <command>
+  pack <folder> [--out <file or folder>]       check a solution's folder and write its ZIP
+  plan <folder or ZIP> --workspace <name>       show what applying it would change
+  apply <folder or ZIP> --workspace <name>      apply it
+       [--set name=value] [--bind slot=list] [--decide kind:key=keep|replace] [--paused | --resume]
+  list --workspace <name>                       the solutions installed
+  status <key> --workspace <name>               whether one has what it needs
+  schema [solution|workflow|app]                the JSON Schemas of the files
+plan, apply, list and status talk to a server: --url (PAPERGO_URL) and --token or --token-file (PAPERGO_TOKEN, PAPERGO_TOKEN_FILE)`
 
 // Run runs a solution command: papergo solution <command>. A command asked
 // for --help prints it and returns flag.ErrHelp.
@@ -26,6 +34,12 @@ func Run(ctx context.Context, args []string, out io.Writer) error {
 		return packCommand(ctx, args[1:], out)
 	case "schema":
 		return schemaCommand(args[1:], out)
+	case "plan", "apply":
+		return applyCommand(ctx, args[0], args[1:], out)
+	case "list":
+		return listCommand(ctx, args[1:], out)
+	case "status":
+		return statusCommand(ctx, args[1:], out)
 	}
 	return errors.New(usage)
 }
