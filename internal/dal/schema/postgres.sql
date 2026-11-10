@@ -554,6 +554,16 @@ CREATE TABLE grants (
 CREATE UNIQUE INDEX grant_resource_id_principal_type_principal_id_action ON grants(resource_id, principal_type, principal_id, action);
 CREATE INDEX grant_principal_type_principal_id_resource_id ON grants(principal_type, principal_id, resource_id);
 
+-- The access revision names the current state of everything a permission
+-- decision reads besides content: grants, the directory's users, groups, roles
+-- and assignments, and the permission scopes of resources. The DAL replaces
+-- its token in the transaction of every such change, so a decision cached
+-- under a token holds for as long as a reader's snapshot still shows it.
+CREATE TABLE access_revisions (
+    singleton BOOLEAN PRIMARY KEY NOT NULL DEFAULT TRUE CHECK (singleton = TRUE),
+    token TEXT NOT NULL CHECK (length(token) > 0)
+);
+
 CREATE TABLE relationships (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

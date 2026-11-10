@@ -187,6 +187,13 @@ func (q Queries) CountResources(ctx context.Context, f resources.Filter) (int, e
 }
 
 func (q Queries) InsertResource(ctx context.Context, r resources.Resource, values json.RawMessage) error {
+	// An inheriting resource joins a scope its parent already has; one with
+	// its own adds a scope decisions have not seen.
+	if r.ScopeID == nil || *r.ScopeID == r.ID {
+		if err := q.accessChanged(ctx); err != nil {
+			return err
+		}
+	}
 	set := &models.ResourceSetter{
 		ArchivedAt: omitnull.FromPtr(r.ArchivedAt), ArchivedBy: omitnull.FromPtr(r.ArchivedBy),
 		ID: omit.From(r.ID), CreatedAt: omit.From(r.CreatedAt), WorkspaceID: omit.From(r.WorkspaceID), PersonalOwnerID: omitnull.FromPtr(r.PersonalOwnerID),
@@ -207,6 +214,11 @@ func (q Queries) InsertResource(ctx context.Context, r resources.Resource, value
 }
 
 func (q Queries) UpdateResource(ctx context.Context, id string, version int, s resources.Set) (bool, error) {
+	if s.ScopeID != nil || s.InheritPermissions != nil {
+		if err := q.accessChanged(ctx); err != nil {
+			return false, err
+		}
+	}
 	set := resourceSetter(s)
 	w := models.UpdateWhere.Resources
 	mods := []bob.Mod[*dialect.UpdateQuery]{set.UpdateMod(), w.ID.EQ(id)}
@@ -276,6 +288,9 @@ func resourceSetter(s resources.Set) *models.ResourceSetter {
 }
 
 func (q Queries) DeleteResource(ctx context.Context, id string) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.Resources.Delete(models.DeleteWhere.Resources.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -304,6 +319,9 @@ func (q Queries) IsAncestor(ctx context.Context, id, ancestor string) (bool, err
 }
 
 func (q Queries) InheritScope(ctx context.Context, id, scopeID string) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := q.exec.ExecContext(ctx, `WITH RECURSIVE sub(id) AS (SELECT id FROM resources WHERE parent_id = ? AND inherit_permissions UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id = sub.id WHERE c.inherit_permissions) UPDATE resources SET scope_id = ? WHERE id IN (SELECT id FROM sub)`, id, scopeID)
 	return dberr.Translate(err)
 }
@@ -354,6 +372,9 @@ func resourceRecord(r *models.Resource) (resources.Resource, error) {
 }
 
 func (q Queries) ClearWorkspace(ctx context.Context, workspaceID, actor string, at time.Time) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	sub := "SELECT id FROM resources WHERE workspace_id = ?"
 	runs := "SELECT id FROM workflow_runs WHERE workspace_id = ?"
 	views := "SELECT id FROM sync_views WHERE container_id IN (" + sub + ")"

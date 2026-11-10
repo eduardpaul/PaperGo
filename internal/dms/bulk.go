@@ -160,6 +160,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	if !contentKind(r.Kind) || r.ContainerID == nil || *r.ContainerID != collectionID {
 		return result, invalid("bulk targets must be items or folders in this collection")
 	}
+	s.batchTouches(r)
 	switch op.Action {
 	case "archive", "unarchive":
 		updated, e := s.SetArchived(ctx, subject, op.ID, op.Version, op.Action == "archive")

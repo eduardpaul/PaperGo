@@ -59,17 +59,26 @@ func directoryBool(ctx context.Context, exec bob.Executor, query string, args ..
 	return rows[0], nil
 }
 func (q Queries) InsertDirectoryUser(ctx context.Context, u directory.User) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityUsers.Insert(&models.IdentityUserSetter{ID: omit.From(u.ID), CreatedAt: omit.From(u.CreatedAt), DisplayName: omit.From(u.DisplayName), Email: omit.From(u.Email), Active: omit.From(u.Active), Service: omit.From(u.Service), SyncHash: omit.From(u.SyncHash), PasswordHash: omit.From(u.PasswordHash)}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) UpdateDirectoryUser(ctx context.Context, u directory.User) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	set := &models.IdentityUserSetter{DisplayName: omit.From(u.DisplayName), Email: omit.From(u.Email), SyncHash: omit.From(u.SyncHash)}
 	_, err := models.IdentityUsers.Update(set.UpdateMod(), models.UpdateWhere.IdentityUsers.ID.EQ(u.ID), models.UpdateWhere.IdentityUsers.DeletedAt.IsNull()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) SetDirectoryUserActive(ctx context.Context, id string, active bool) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	set := &models.IdentityUserSetter{Active: omit.From(active)}
 	n, err := models.IdentityUsers.Update(set.UpdateMod(), models.UpdateWhere.IdentityUsers.ID.EQ(id), models.UpdateWhere.IdentityUsers.DeletedAt.IsNull()).Exec(ctx, q.exec)
 	if err != nil {
@@ -82,6 +91,9 @@ func (q Queries) SetDirectoryUserActive(ctx context.Context, id string, active b
 }
 
 func (q Queries) SetDirectoryPassword(ctx context.Context, id, hash string) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	set := &models.IdentityUserSetter{PasswordHash: omit.From(hash)}
 	_, err := models.IdentityUsers.Update(set.UpdateMod(), models.UpdateWhere.IdentityUsers.ID.EQ(id), models.UpdateWhere.IdentityUsers.PasswordHash.EQ(""), models.UpdateWhere.IdentityUsers.DeletedAt.IsNull()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
@@ -94,6 +106,9 @@ func (q Queries) UserHasHome(ctx context.Context, id string) (bool, error) {
 	return directoryBool(ctx, q.exec, `SELECT EXISTS(SELECT 1 FROM resources WHERE personal_owner_id=$1 AND deleted_at IS NULL)`, id)
 }
 func (q Queries) DeleteDirectoryUserData(ctx context.Context, id string, now time.Time) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	if e := directoryExec(ctx, q.exec, `DELETE FROM identity_preferences WHERE owner_type=$1 AND owner_id=$2`, directory.OwnerUser, id); e != nil {
 		return e
 	}
@@ -141,6 +156,9 @@ func (q Queries) UpdateDirectoryGroup(ctx context.Context, g directory.Group, ve
 }
 
 func (q Queries) DeleteDirectoryGroup(ctx context.Context, id string, version int) (bool, error) {
+	if err := q.accessChanged(ctx); err != nil {
+		return false, err
+	}
 	ok, e := directoryChanged(ctx, q.exec, `DELETE FROM identity_groups WHERE id=$1 AND version=$2`, id, version)
 	if e != nil || !ok {
 		return ok, e
@@ -173,11 +191,17 @@ func (q Queries) DirectoryMemberships(ctx context.Context, f directory.Membershi
 	}, args...)
 }
 func (q Queries) InsertDirectoryMembership(ctx context.Context, m directory.Membership) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityMemberships.Insert(&models.IdentityMembershipSetter{ID: omit.From(m.ID), GroupID: omit.From(m.GroupID), PrincipalType: omit.From(string(m.Principal.Type)), PrincipalID: omit.From(m.Principal.ID)}, im.OnConflict("group_id", "principal_type", "principal_id").DoNothing()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) DeleteDirectoryMembership(ctx context.Context, id string, p directory.Principal) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityMemberships.Delete(models.DeleteWhere.IdentityMemberships.GroupID.EQ(id), models.DeleteWhere.IdentityMemberships.PrincipalType.EQ(string(p.Type)), models.DeleteWhere.IdentityMemberships.PrincipalID.EQ(p.ID)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -195,17 +219,26 @@ func (q Queries) DirectoryRoles(ctx context.Context) ([]directory.Role, error) {
 }
 
 func (q Queries) InsertDirectoryRole(ctx context.Context, r directory.Role) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityRoles.Insert(&models.IdentityRoleSetter{ID: omit.From(r.ID), Name: omit.From(r.Name), Description: omit.From(r.Description), Scopes: omit.From(types.NewJSON(r.Scopes)), Builtin: omit.From(r.Builtin), Version: omit.From(int64(1))}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) UpdateDirectoryRole(ctx context.Context, r directory.Role, version int) (bool, error) {
+	if err := q.accessChanged(ctx); err != nil {
+		return false, err
+	}
 	set := &models.IdentityRoleSetter{Name: omit.From(r.Name), Description: omit.From(r.Description), Scopes: omit.From(types.NewJSON(r.Scopes)), Version: omit.From(int64(version + 1))}
 	n, err := models.IdentityRoles.Update(set.UpdateMod(), models.UpdateWhere.IdentityRoles.ID.EQ(r.ID), models.UpdateWhere.IdentityRoles.Version.EQ(int64(version)), models.UpdateWhere.IdentityRoles.Builtin.EQ(false)).Exec(ctx, q.exec)
 	return n == 1, dberr.Translate(err)
 }
 
 func (q Queries) DeleteDirectoryRole(ctx context.Context, id string, version int) (bool, error) {
+	if err := q.accessChanged(ctx); err != nil {
+		return false, err
+	}
 	n, err := models.IdentityRoles.Delete(models.DeleteWhere.IdentityRoles.ID.EQ(id), models.DeleteWhere.IdentityRoles.Version.EQ(int64(version)), models.DeleteWhere.IdentityRoles.Builtin.EQ(false)).Exec(ctx, q.exec)
 	return n == 1, dberr.Translate(err)
 }
@@ -223,11 +256,17 @@ func (q Queries) RolePrincipals(ctx context.Context, id string) ([]directory.Pri
 }
 
 func (q Queries) InsertDirectoryAssignment(ctx context.Context, id string, p directory.Principal) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityAssignments.Insert(&models.IdentityAssignmentSetter{ID: omit.From(uuid.NewString()), RoleID: omit.From(id), PrincipalType: omit.From(string(p.Type)), PrincipalID: omit.From(p.ID)}, im.OnConflict("role_id", "principal_type", "principal_id").DoNothing()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) DeleteDirectoryAssignment(ctx context.Context, id string, p directory.Principal) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.IdentityAssignments.Delete(models.DeleteWhere.IdentityAssignments.RoleID.EQ(id), models.DeleteWhere.IdentityAssignments.PrincipalType.EQ(string(p.Type)), models.DeleteWhere.IdentityAssignments.PrincipalID.EQ(p.ID)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }

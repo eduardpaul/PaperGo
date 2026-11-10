@@ -47,8 +47,9 @@ Each domain lives in its own package and is split in two:
 - Some statements are built as text for the store's engine rather than from
   models, because their shape depends on the request. `dialect/` writes the
   expressions that differ between engines and numbers placeholders for
-  PostgreSQL. `access/` writes permission checks for a principal. `content/`
-  compiles browse, filter, search and link queries over resources.
+  PostgreSQL. `access/` writes permission checks for a principal and keeps
+  the access revision. `content/` compiles browse, filter, search and link
+  queries over resources.
   `portable/` reads and writes the rows of portable packages for every
   package table, with values that read the same on both engines.
 - `dberr/` defines the sentinel errors domains and drivers share.
@@ -143,6 +144,19 @@ and leases. Raw SQL inside DAL must support the selected engine.
 
 Use `dberr.Translate`, `dberr.IsNotFound`, `dberr.IsConstraintError` and
 `errors.Is` with the sentinel errors defined in `dberr`.
+
+## Access revision
+
+`content` keeps a reader's permission decisions for a collection between
+queries. They are valid for one state of what they read: `grants`,
+`identity_users`, `identity_memberships`, `identity_roles`,
+`identity_assignments` and the `scope_id` of resources. `access_revisions`
+names that state with a random token. A driver function that writes any of
+those calls `q.accessChanged(ctx)` in the same transaction, and
+`TestDriverAccessWritesReplaceTheRevision` fails for one that does not;
+`portable` does the same for the package tables among them. Creating an
+inheriting resource leaves the token alone: it joins a scope its parent
+already has.
 
 ## Resource projections
 

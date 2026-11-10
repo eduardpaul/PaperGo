@@ -40,46 +40,71 @@ type seekArm struct {
 	aclArgs []any
 }
 
-// arms lists the surfaces that can hold matches. For auto, a collection's
-// few ACL scopes, found by a loose index scan, decide whether any item is
-// draft-readable (head arm) or readable without drafts (published arm); an
-// arm that cannot match would otherwise scan its whole index to return
-// nothing.
+// arms lists the surfaces that can hold matches. The collection's ACL scopes
+// decide which rows the reader reads with drafts (head arm) and which
+// without (published arm), so a page tests each row's scope against a list
+// instead of probing grants for it; an arm that cannot match would scan its
+// whole index to return nothing, and is left out. A collection with too
+// many scopes checks each row.
 func (r *Repo) arms(ctx context.Context, q *Query) ([]seekArm, error) {
-	draft, draftArgs := r.acl.Resource("r.id", q.reader, access.ReadDraft)
-	read, readArgs := r.acl.Resource("r.id", q.reader, access.Read)
-	if !q.publishes {
-		// One surface: head readers need drafts, everyone else read access.
-		if q.surface == "head" {
-			return []seekArm{{"published", draft, draftArgs}}, nil
-		}
-		return []seekArm{{"published", read, readArgs}}, nil
-	}
-	switch q.surface {
-	case "head":
-		return []seekArm{{"head", draft, draftArgs}}, nil
-	case "published":
-		return []seekArm{{"published", read, readArgs}}, nil
-	}
-	scopeDraft, scopeDraftArgs := r.acl.Resource("scopes.id", q.reader, access.ReadDraft)
-	scopeRead, scopeReadArgs := r.acl.Resource("scopes.id", q.reader, access.Read)
-	args := append([]any{q.collection, q.collection}, scopeDraftArgs...)
-	args = append(append(args, scopeReadArgs...), scopeDraftArgs...)
-	var heads, published bool
-	if err := r.scan(ctx, []any{&heads, &published}, `WITH RECURSIVE scopes(id) AS (
- SELECT min(scope_id) FROM resources WHERE container_id=?
- UNION ALL SELECT (SELECT min(scope_id) FROM resources WHERE container_id=? AND scope_id>scopes.id) FROM scopes WHERE scopes.id IS NOT NULL)
-SELECT `+r.d.AnyTrue(scopeDraft)+`,`+r.d.AnyTrue(scopeRead+` AND NOT `+scopeDraft)+` FROM scopes WHERE id IS NOT NULL`, args...); err != nil {
+	scopes, err := r.Scopes(ctx, q.collection, q.reader)
+	if err != nil {
 		return nil, err
 	}
-	arms := []seekArm{}
-	if heads {
-		arms = append(arms, seekArm{"head", draft, draftArgs})
+	var draft, read, rest string
+	var draftArgs, readArgs, restArgs []any
+	heads, others := true, true
+	if scopes == nil {
+		draft, draftArgs = r.acl.Resource("r.id", q.reader, access.ReadDraft)
+		read, readArgs = r.acl.Resource("r.id", q.reader, access.Read)
+		rest, restArgs = read+" AND NOT "+draft, append(append([]any{}, readArgs...), draftArgs...)
+		if q.publishes && q.surface != "head" && q.surface != "published" {
+			if heads, others, err = r.armsHeld(ctx, q); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		draft, draftArgs = r.drafts(scopes)
+		read, readArgs = r.readable(scopes)
+		rest, restArgs = r.published(scopes)
 	}
-	if published {
-		arms = append(arms, seekArm{"published", read + " AND NOT " + draft, append(append([]any{}, readArgs...), draftArgs...)})
+	arms := []seekArm{}
+	add := func(surface, acl string, args []any) {
+		if acl != "FALSE" {
+			arms = append(arms, seekArm{surface, acl, args})
+		}
+	}
+	switch {
+	case !q.publishes && q.surface == "head":
+		// One surface: head readers need drafts, everyone else read access.
+		add("published", draft, draftArgs)
+	case !q.publishes || q.surface == "published":
+		add("published", read, readArgs)
+	case q.surface == "head":
+		add("head", draft, draftArgs)
+	default:
+		if heads {
+			add("head", draft, draftArgs)
+		}
+		if others {
+			add("published", rest, restArgs)
+		}
 	}
 	return arms, nil
+}
+
+// armsHeld reports, for a collection whose rows are checked one by one,
+// whether any scope is read with drafts and whether any is read without.
+func (r *Repo) armsHeld(ctx context.Context, q *Query) (heads, others bool, err error) {
+	draft, draftArgs := r.acl.Content("scopes.id", q.collection, q.reader, access.ReadDraft)
+	read, readArgs := r.acl.Content("scopes.id", q.collection, q.reader, access.Read)
+	args := append([]any{q.collection, q.collection}, draftArgs...)
+	args = append(append(args, readArgs...), draftArgs...)
+	err = r.scan(ctx, []any{&heads, &others}, `WITH RECURSIVE scopes(id) AS (
+ SELECT min(scope_id) FROM resources WHERE container_id=?
+ UNION ALL SELECT (SELECT min(scope_id) FROM resources WHERE container_id=? AND scope_id>scopes.id) FROM scopes WHERE scopes.id IS NOT NULL)
+SELECT `+r.d.AnyTrue(draft)+`,`+r.d.AnyTrue(read+` AND NOT `+draft)+` FROM scopes WHERE id IS NOT NULL`, args...)
+	return heads, others, err
 }
 
 // seekPage returns up to n rows after the cursor in the order of
@@ -165,7 +190,7 @@ func (r *Repo) seekArms(ctx context.Context, q *Query, arms []seekArm, n int, he
 		text, args := head(a)
 		var b strings.Builder
 		b.WriteString(text)
-		b.WriteString(" AND r.container_id=? AND r.kind IN ('item','folder')")
+		b.WriteString(" AND r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL")
 		b.WriteString(q.conds)
 		b.WriteString(" AND ")
 		b.WriteString(a.acl)

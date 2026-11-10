@@ -62,6 +62,8 @@ type Store struct {
 	tx      *sql.Tx
 	txExec  bob.Executor
 	dialect Dialect
+	// scopes keeps permission scope decisions between content queries.
+	scopes *content.ScopeCache
 }
 
 // queries is every domain contract a driver implements.
@@ -146,7 +148,7 @@ func (s *Store) Catalog() *catalog.Repo {
 // Content runs content queries, inside the store's transaction when WithTx
 // was used.
 func (s *Store) Content() *content.Repo {
-	return content.NewRepo(s.exec(), s.sqlDialect())
+	return content.NewRepo(s.exec(), s.sqlDialect(), s.scopes)
 }
 
 // Portable returns the package row repository, bound to the store's
@@ -273,6 +275,7 @@ func NewStore(sqlDB *sql.DB) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
+		scopes:  content.NewScopeCache(),
 	}
 }
 
@@ -282,6 +285,7 @@ func NewStoreWithDialect(sqlDB *sql.DB, dialect Dialect) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
+		scopes:  content.NewScopeCache(),
 	}
 }
 
@@ -298,6 +302,7 @@ func (s *Store) WithTx(tx *sql.Tx) *Store {
 		tx:      tx,
 		txExec:  bob.NewTx(tx),
 		dialect: s.dialect,
+		scopes:  s.scopes,
 	}
 }
 

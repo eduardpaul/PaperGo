@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stephenafamo/bob"
+	"papergo/internal/dal/access"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/dialect"
 	"papergo/internal/dal/grants"
@@ -33,6 +34,18 @@ var Tables = []string{
 	"resources", "schema_revisions", "schema_templates", "list_views", "smart_folders",
 	"blobs", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
 	"workflows", "workflow_versions", "workflow_triggers", "apps", "app_versions", "group_inboxes",
+}
+
+// accessTables hold what permission decisions read; a write to one replaces
+// the access revision.
+var accessTables = []string{"identity_users", "identity_roles", "identity_memberships", "identity_assignments", "resources", "grants"}
+
+// written notes a write to a table.
+func (r *Repo) written(ctx context.Context, table string) error {
+	if !slices.Contains(accessTables, table) {
+		return nil
+	}
+	return access.Changed(ctx, r.exec, r.d)
 }
 
 // DataTables hold content. A configuration package carries none of their rows.
@@ -528,6 +541,9 @@ func (r *Repo) Insert(ctx context.Context, table string, row Row) error {
 			return err
 		}
 	}
+	if err := r.written(ctx, table); err != nil {
+		return err
+	}
 	marks := strings.TrimPrefix(strings.Repeat(",?", len(cols)), ",")
 	_, err = r.exec.ExecContext(ctx, r.d.Rebind("INSERT INTO "+quote(table)+" ("+list(cols)+") VALUES ("+marks+")"), args...)
 	return dberr.Translate(err)
@@ -556,6 +572,9 @@ func (r *Repo) Update(ctx context.Context, table string, match, set Row) error {
 		}
 		parts[i] = quote(name) + " = ?"
 	}
+	if err := r.written(ctx, table); err != nil {
+		return err
+	}
 	condition, conditionArgs, err := r.where(cols, match)
 	if err != nil {
 		return err
@@ -583,6 +602,9 @@ func (r *Repo) MergeUser(ctx context.Context, row Row) error {
 			return err
 		}
 		args = append(args, v)
+	}
+	if err := r.written(ctx, "identity_users"); err != nil {
+		return err
 	}
 	password := ""
 	if row["deleted_at"] != nil {

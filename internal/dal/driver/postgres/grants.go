@@ -79,6 +79,9 @@ func (q Queries) Grants(ctx context.Context, f grants.Filter) ([]grants.Grant, e
 }
 
 func (q Queries) InsertGrant(ctx context.Context, g grants.Grant) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.Grants.Insert(&models.GrantSetter{
 		ID: omit.From(g.ID), CreatedAt: omit.From(g.CreatedAt), PrincipalType: omit.From(string(g.PrincipalType)), PrincipalID: omit.From(g.PrincipalID),
 		Action: omit.From(string(g.Action)), Effect: omit.From("allow"), ResourceID: omit.From(g.ResourceID),
@@ -87,17 +90,26 @@ func (q Queries) InsertGrant(ctx context.Context, g grants.Grant) error {
 }
 
 func (q Queries) SetGrantAction(ctx context.Context, id string, action grants.Action) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	set := &models.GrantSetter{Action: omit.From(string(action))}
 	_, err := models.Grants.Update(set.UpdateMod(), models.UpdateWhere.Grants.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) DeleteGrant(ctx context.Context, id string) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	_, err := models.Grants.Delete(models.DeleteWhere.Grants.ID.EQ(id)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
 func (q Queries) DeleteGrants(ctx context.Context, f grants.Filter) error {
+	if err := q.accessChanged(ctx); err != nil {
+		return err
+	}
 	w := models.DeleteWhere.Grants
 	query := models.Grants.Delete()
 	if f.ResourceID != "" {
