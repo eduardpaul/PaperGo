@@ -554,7 +554,7 @@ func canonicalPath(path string) (string, error) {
 			return resolved, nil
 		}
 		if !os.IsNotExist(err) {
-			return "", err
+			return "", ExplainPermission(err)
 		}
 		suffix = append(suffix, filepath.Base(abs))
 		abs = filepath.Dir(abs)

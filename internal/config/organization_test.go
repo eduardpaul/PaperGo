@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -59,6 +60,25 @@ func TestPermissionErrorsSayWhoNeedsAccess(t *testing.T) {
 	err := ExplainPermission(&fs.PathError{Op: "open", Path: path, Err: fs.ErrPermission})
 	if !errors.Is(err, fs.ErrPermission) || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "PaperGo runs as user") {
 		t.Fatalf("%v", err)
+	}
+	// A data directory PaperGo cannot open is explained by the directory,
+	// which it can look at, when it checks where the search store goes.
+	if os.Getuid() != 0 {
+		data := filepath.Join(t.TempDir(), "data")
+		if err := os.Mkdir(data, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(data, "papergo.db"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(data, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(data, 0o700) })
+		err := distinctSearchPath(filepath.Join(data, "papergo.db"), filepath.Join(data, "search.db"))
+		if !errors.Is(err, fs.ErrPermission) || !strings.Contains(err.Error(), ", in "+data+", owned by") || !strings.Contains(err.Error(), "PaperGo runs as user") {
+			t.Fatalf("a data directory PaperGo cannot open: %v", err)
+		}
 	}
 	other := &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
 	if ExplainPermission(other) != error(other) {

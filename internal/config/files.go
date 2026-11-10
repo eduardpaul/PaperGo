@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 )
 
 // ExplainPermission adds to a permission error on a file or directory who
@@ -24,9 +25,20 @@ func explainPermission(path string, err error) error {
 	if !errors.Is(err, fs.ErrPermission) {
 		return err
 	}
+	// The path itself, or the nearest folder above it that can be read: a
+	// file in a folder PaperGo cannot open cannot be looked at either.
 	owner := ""
-	if info, e := os.Stat(path); e == nil {
-		owner = describeFile(info)
+	for at := path; ; at = filepath.Dir(at) {
+		if info, e := os.Stat(at); e == nil {
+			owner = describeFile(info)
+			if at != path {
+				owner = ", in " + at + owner
+			}
+			break
+		}
+		if filepath.Dir(at) == at {
+			break
+		}
 	}
 	user, group, known := runningAs()
 	if !known {
