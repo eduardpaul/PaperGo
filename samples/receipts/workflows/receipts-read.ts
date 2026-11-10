@@ -72,10 +72,16 @@ const sources = ["upload", "restore", "webdav"];
 // receipts' lines.
 const linesFolder = "Receipt lines";
 
+// The solution's fields start with its key: receipts_store, receipts_total…
+// The model's answer and this script name them without it; fields() adds it
+// where values are written.
+const fields = (values: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(values).map(([key, value]) => ["receipts_" + key, value]));
+
 // update sets values of the item at version, the receipt as it was when its
 // text was read, and returns its new version. A newer file or edit fails it.
 async function update(api: PaperGoClient, id: string, version: number, values: Record<string, unknown>): Promise<number> {
-  const item = await api.v1.resources.byId(id).patch({ values: json(values) }, { headers: { "If-Match": `"${version}"` } });
+  const item = await api.v1.resources.byId(id).patch({ values: json(fields(values)) }, { headers: { "If-Match": `"${version}"` } });
   return item!.version!;
 }
 
@@ -205,7 +211,7 @@ export default workflow<unknown, unknown, Params>({
       .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.version! - a.version!)[0];
     if (!photo) {
       // One that never had a photo is not waiting to be read: it is for a person.
-      if (item.values?.additionalData?.status === "New") await update(api, id, item.version!, { status: "Needs review", problem: "Not a photo" });
+      if (item.values?.additionalData?.receipts_status === "New") await update(api, id, item.version!, { status: "Needs review", problem: "Not a photo" });
       return { status: "No photo" };
     }
     let version = item.version!;
@@ -216,9 +222,9 @@ export default workflow<unknown, unknown, Params>({
       // An answer is cached by its request, so reading a receipt in review
       // again says why this run asks: the same request would get the answer
       // that sent it to review.
-      const again = item.values?.additionalData?.status === "Needs review";
+      const again = item.values?.additionalData?.receipts_status === "Needs review";
       // While it is read it waits to be read, whatever it was before.
-      if (item.values?.additionalData?.status !== "New") version = await update(api, id, version, { status: "New", problem: null });
+      if (item.values?.additionalData?.receipts_status !== "New") version = await update(api, id, version, { status: "New", problem: null });
       const answer = await ctx.wait((await api.v1.ai.completions.post({
         prompt, itemId: id, imageBlobId: photo.id, execution: "batch", queue: "shared", outputSchema: json(schema),
         input: again ? `An earlier answer could not be used; read the receipt again carefully. (${ctx.run.id})` : undefined,
@@ -247,7 +253,7 @@ export default workflow<unknown, unknown, Params>({
           // Each line also carries its receipt's currency and date, so
           // spending can be summed by category and period.
           kind: "item", name: lineName(i + 1, line.description), contentTypeId: ctx.params.line_type,
-          values: json({ ...line, currency: receipt.currency, purchase_date: receipt.purchase_date }),
+          values: json(fields({ ...line, currency: receipt.currency, purchase_date: receipt.purchase_date })),
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }

@@ -1,6 +1,8 @@
 package solutions
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -166,5 +168,37 @@ func TestRequiredCapabilities(t *testing.T) {
 	p.svc.Capabilities["ai.batch"] = true
 	if status, err = p.svc.Status(p.ctx, admin, p.ws, "tank"); err != nil || !status.OK {
 		t.Fatalf("status with the capability: %+v %v", status, err)
+	}
+}
+
+// The samples are solutions: their folders have no problems, both install
+// into one workspace, and applying them again changes nothing.
+func TestSamplesInstallIntoOneWorkspace(t *testing.T) {
+	p := newPlace(t)
+	want := map[string][3]int{"diesel": {4, 1, 15}, "receipts": {2, 1, 11}}
+	for _, name := range []string{"diesel", "receipts"} {
+		files := os.DirFS(filepath.Join("..", "..", "samples", name))
+		s, problems := Load(files)
+		if problems = append(problems, Check(p.ctx, s)...); len(problems) > 0 {
+			t.Fatalf("%s has problems:\n%s", name, problems)
+		}
+		if got := [3]int{len(s.Workflows), len(s.Apps), len(s.Manifest.Fields)}; got != want[name] {
+			t.Fatalf("%s: %d workflows, %d apps, %d fields", name, got[0], got[1], got[2])
+		}
+		r, err := p.svc.Apply(p.ctx, admin, p.ws, s, Options{})
+		if err != nil || !r.Applied {
+			t.Fatalf("%s: %v\n%s", name, err, said(r))
+		}
+		again, err := p.svc.Apply(p.ctx, admin, p.ws, s, Options{})
+		if err != nil || !again.Applied || len(again.Changes) != 0 || len(again.Customized) != 0 {
+			t.Fatalf("%s applied again: %v\n%s\n%v", name, err, said(again), again.Customized)
+		}
+		status, err := p.svc.Status(p.ctx, admin, p.ws, name)
+		if err != nil || !status.OK {
+			t.Fatalf("%s status: %+v %v", name, status, err)
+		}
+	}
+	if list, err := p.svc.List(p.ctx, admin, p.ws); err != nil || len(list) != 2 {
+		t.Fatalf("installed: %+v %v", list, err)
 	}
 }

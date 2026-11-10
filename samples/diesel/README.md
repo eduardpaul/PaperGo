@@ -1,10 +1,17 @@
 # Diesel tracker
 
-A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, how warm it is inside and out, and when to order. It is a workspace package with a list, four workflows and an [app](../../docs/apps.md), the dashboard. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
+A heating-oil tank, read with a dipstick: how much is left, what it is worth, how fast it goes with the heating on and off, how warm it is inside and out, and when to order. It is a [solution](../../docs/solutions.md): a list, four workflows and an [app](../../docs/apps.md), the dashboard, installed together into a workspace. The [use case analysis](../../docs/plans/use-case-diesel-analysis.md) explains the design.
 
 ## Install
 
-1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`diesel.zip`](diesel.zip), choose **Try it**, then **Import**. This creates the **Diesel tracker** workspace, which has:
+1. **Apply the solution** to a workspace that exists, as someone who manages it and has `solution.manage`:
+
+   ```sh
+   papergo solution plan ./samples/diesel --workspace Home     # what it would do
+   papergo solution apply ./samples/diesel --workspace Home
+   ```
+
+   This creates, in that workspace:
    - the **Diesel** list, with four content types:
      - **Reading**: when, the stick reading from the mouth in cm, and the litres, fill and check the levels workflow works out;
      - **Purchase**: when, litres, total price in EUR, price per litre, supplier;
@@ -14,8 +21,9 @@ A heating-oil tank, read with a dipstick: how much is left, what it is worth, ho
    - the four workflows below;
    - the **Diesel dashboard** app, published, with its parameters set to the **Diesel** list and its **Reading**, **Purchase**, **Heating** and **Temperature** types. It appears in the sidebar under the list.
 
-   The importer becomes the author of the workflows and the app.
-2. **Search off.** In the **Diesel** list's settings, set **Search** to **Off: names only**. Readings and temperatures are found by date on the dashboard and in the views, not by searching their values, and a sensor filing a temperature every hour would otherwise index each one.
+   Whoever applies it becomes the author of the workflows and the app. The **Diesel** list is created with search off: readings and temperatures are found by date on the dashboard and in the views, not by searching their values, and a sensor filing a temperature every hour would otherwise index each one.
+
+   To use a list you already have, bind it: `--bind tank=<its name>`. The solution adds its content types and views there and leaves the list's name and settings.
 
 To try it with real data, run **Load diesel sample data** once from **Workspace settings → Workflows**. It files eighteen months of a 750 L tank into the empty list: four fills, nineteen readings, three heating changes and eighteen temperatures taken with the readings. The tank's figures are real; the temperatures are illustrative.
 
@@ -30,15 +38,26 @@ To try it with real data, run **Load diesel sample data** once from **Workspace 
 
 ## Settings
 
-After importing, set these in **Workspace settings → Workflows**:
+The solution asks two settings when it is applied, and keeps them:
+
+| Setting | Default | Reaches |
+| --- | --- | --- |
+| `capacity_l` | 750 | the Diesel levels workflow and the dashboard |
+| `time_zone` | the organization's time zone | the measuring reminder |
+
+```sh
+papergo solution apply ./samples/diesel --workspace Home --set capacity_l=1000
+```
+
+The rest are parameters of the workflows, in `workflows/*.json` or **Workspace settings → Workflows**:
 
 | Workflow | Parameter | Ships as |
 | --- | --- | --- |
-| Diesel levels | `capacity_l`, `useful_height_cm`, `stick_length_cm` | 750, 125 and 200: 6 L a centimetre, with a 75 cm margin above the diesel |
+| Diesel levels | `useful_height_cm`, `stick_length_cm` | 125 and 200: with 750 L, 6 L a centimetre and a 75 cm margin above the diesel |
 | | `measure` | `from_top`: the stick measures from the mouth down to the diesel; `depth` reads its wet length |
 | | `orientation` | `upright` or `horizontal` (a cylinder on its side) |
 | | `tolerance_l` | 5 |
-| Diesel measuring reminder | `every_days`, `assignees`, `time_zone` | 15, `["role:owners"]`, `UTC`; set your time zone and who measures |
+| Diesel measuring reminder | `every_days`, `assignees` | 15, `["role:owners"]`; set who measures |
 | Diesel refill | `threshold_l`, `buyers` | 200, `["role:owners"]` |
 
 - **The app's parameters:** the tank's capacity, when to order (200 L), the reserve (25 %), the litres a day with the heating off (1.5), on (4.5) and on in the coldest months (7.5), and those months (December to February).
@@ -68,6 +87,7 @@ Converting readings again after the tank's settings change is **Run once** of Di
 
 ## Sources
 
-[`resources.json`](resources.json), the workflow scripts with their settings (`diesel-*.ts` and `diesel-*.json`), and the app, [`diesel-app.tsx`](diesel-app.tsx) with its settings [`diesel-app.json`](diesel-app.json), are the editable sources.
-- The [sample package test](../../internal/httpapi/samplepackages_test.go) imports the ZIP. It rebuilds it with `-update-sample-packages`.
+[`solution.json`](solution.json) (fields, content types, the list and its views, the settings), the workflow scripts with their settings in [`workflows/`](workflows), and the app in [`apps/`](apps) are the editable sources: the folder is the solution.
+- `papergo solution pack ./samples/diesel` checks it and writes `diesel-1.0.0.zip`.
+- The [solutions test](../../internal/solutions/lifecycle_test.go) installs it beside Receipts in one workspace.
 - The [diesel test](../../internal/scriptrun/diesel_test.go) runs the workflows end to end on the sample data.

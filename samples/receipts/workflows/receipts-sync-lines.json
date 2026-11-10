@@ -1,13 +1,14 @@
 {
   "name": "Sync receipt lines",
   "description": "Keeps a receipt's lines in step with its status, currency and date, and with its deletion.",
-  "script": "sync-receipt-lines.ts",
+  "script": "receipts-sync-lines.ts",
   "parameters": {
-    "library": "$LIBRARY",
-    "receipt_type": "$RECEIPT_TYPE",
-    "line_type": "$LINE_TYPE"
+    "library": "$collection:receipts",
+    "receipt_type": "$type:receipts_receipt",
+    "line_type": "$type:receipts_line"
   },
   "automatic_enabled": true,
   "manual_enabled": false,
-  "state": "published"
+  "state": "published",
+  "key": "receipts-sync-lines"
 }

@@ -54,7 +54,7 @@ const contains = "contains receipt line";
 const section = { marginBottom: 12 };
 
 // The workflow that reads a receipt, by the key the package gives it.
-const readWorkflow = "read-receipts";
+const readWorkflow = "receipts-read";
 
 const words = {
   en: {
@@ -271,15 +271,15 @@ function Desk({ w }: { w: Words }) {
   const replaced = useRef(new Map<number, string>());
 
   // Receipts only: the folders of their lines have no status.
-  const receipts = { contentTypeId: p.receipt, filter: { field: "status", op: "present" } };
+  const receipts = { contentTypeId: p.receipt, filter: { field: "receipts_status", op: "present" } };
   // How many receipts wait for someone, whatever their date; those that have
   // not been read may have none.
-  const counts = useAggregates(p.library, { query: receipts, groups: [{ field: "status" }], aggregates: [{ op: "count", field: "status" }] }, { live: true });
+  const counts = useAggregates(p.library, { query: receipts, groups: [{ field: "receipts_status" }], aggregates: [{ op: "count", field: "receipts_status" }] }, { live: true });
   const count = (status: string) => counts.data.find((g) => g.keys[0]?.value === status)?.count ?? 0;
   // The table lists the latest receipts, or those that need review, however old.
   const [reviewing, setReviewing] = useState(false);
   const onlyReview = reviewing && count("Needs review") > 0;
-  const listed = onlyReview ? { contentTypeId: p.receipt, filter: { field: "status", op: "eq", value: "Needs review" } } : receipts;
+  const listed = onlyReview ? { contentTypeId: p.receipt, filter: { field: "receipts_status", op: "eq", value: "Needs review" } } : receipts;
   const latest = useQuery(p.library, { ...listed, sort: [{ field: "$created_at", direction: "desc" }] }, { live: true, top: 20 });
 
   // What read receipts of the period cost, by currency; the categories are
@@ -288,17 +288,17 @@ function Desk({ w }: { w: Words }) {
   const [period, setPeriod] = useState<Period>("month");
   const zone = ctx.user.preferences.time_zone;
   const from = since(zone, period);
-  const inPeriod = from ? [{ field: "purchase_date", op: "gte", value: from }] : [];
+  const inPeriod = from ? [{ field: "receipts_purchase_date", op: "gte", value: from }] : [];
   const spent = useAggregates(
     p.library,
-    { query: { contentTypeId: p.receipt, filter: { and: [{ field: "status", op: "eq", value: "Read" }, ...inPeriod] } }, groups: [{ field: "currency" }], aggregates: [{ op: "sum", field: "total", as: "spent" }], sort: [{ field: "$count", direction: "desc" }] },
+    { query: { contentTypeId: p.receipt, filter: { and: [{ field: "receipts_status", op: "eq", value: "Read" }, ...inPeriod] } }, groups: [{ field: "receipts_currency" }], aggregates: [{ op: "sum", field: "receipts_total", as: "spent" }], sort: [{ field: "$count", direction: "desc" }] },
     { live: true },
   );
   const main = spent.data[0];
   const currency = main ? String(main.keys[0]?.value ?? "") : "";
   const byCategory = useAggregates(
     currency ? p.library : undefined,
-    { query: { contentTypeId: p.line, filter: { and: [{ field: "status", op: "eq", value: "Read" }, { field: "currency", op: "eq", value: currency }, ...inPeriod] } }, groups: [{ field: "category" }], aggregates: [{ op: "sum", field: "amount", as: "spent" }], sort: [{ field: "spent", direction: "desc" }] },
+    { query: { contentTypeId: p.line, filter: { and: [{ field: "receipts_status", op: "eq", value: "Read" }, { field: "receipts_currency", op: "eq", value: currency }, ...inPeriod] } }, groups: [{ field: "receipts_category" }], aggregates: [{ op: "sum", field: "receipts_amount", as: "spent" }], sort: [{ field: "spent", direction: "desc" }] },
     { live: true },
   );
   const categoryTotal = byCategory.data.reduce((sum, g) => sum + Number(g.values.spent ?? 0), 0);
@@ -395,10 +395,10 @@ function Desk({ w }: { w: Words }) {
         const v = r.values;
         return {
           id: r.id,
-          receipt: String(v.store ?? r.name),
-          date: v.purchase_date ? f.date(String(v.purchase_date)) : f.date(r.created_at),
-          total: v.total !== undefined && v.total !== null ? f.currency(String(v.total), String(v.currency ?? "EUR")) : "–",
-          status: statusName(v.status),
+          receipt: String(v.receipts_store ?? r.name),
+          date: v.receipts_purchase_date ? f.date(String(v.receipts_purchase_date)) : f.date(r.created_at),
+          total: v.receipts_total !== undefined && v.receipts_total !== null ? f.currency(String(v.receipts_total), String(v.receipts_currency ?? "EUR")) : "–",
+          status: statusName(v.receipts_status),
         };
       }),
     // statusName follows the words.
@@ -569,13 +569,13 @@ function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; recei
     };
   }, [ctx, id]);
   if (!receipt) return null;
-  const currency = String(receipt.values.currency ?? "EUR");
+  const currency = String(receipt.values.receipts_currency ?? "EUR");
   const money = (v: unknown) => (v === undefined || v === null ? "–" : f.currency(String(v), currency));
   // A unit price can be finer than the currency, as fuel's 1.459 a litre.
   const price = (v: unknown) => (/\.\d\d0*[1-9]/.test(String(v)) ? `${f.number(String(v), 4)} ${currency}` : money(v));
   const sorted = lines ?? [];
-  const status = String(receipt.values.status ?? "");
-  const problem = String(receipt.values.problem ?? "");
+  const status = String(receipt.values.receipts_status ?? "");
+  const problem = String(receipt.values.receipts_problem ?? "");
   const statusName = { New: w.statusNew, Read: w.statusRead, "Needs review": w.statusReview }[status] ?? status;
   // An action that ends closes the dialog; the table follows the receipt.
   const act = async (action: () => Promise<unknown>) => {
@@ -600,12 +600,12 @@ function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; recei
   return (
     <Modal
       open
-      title={String(receipt.values.store ?? receipt.name)}
+      title={String(receipt.values.receipts_store ?? receipt.name)}
       onClose={onClose}
       actions={<><Button onClick={onClose}>{w.close}</Button><Button variant="primary" onClick={() => { onClose(); open({ itemId: receipt.id }); }}>{w.open}</Button></>}
     >
       <p className="pg-stat-hint">
-        {[statusName, receipt.values.purchase_date ? f.date(String(receipt.values.purchase_date)) : undefined, receipt.values.total !== undefined ? money(receipt.values.total) : undefined].filter(Boolean).join(" · ")}
+        {[statusName, receipt.values.receipts_purchase_date ? f.date(String(receipt.values.receipts_purchase_date)) : undefined, receipt.values.receipts_total !== undefined ? money(receipt.values.receipts_total) : undefined].filter(Boolean).join(" · ")}
       </p>
       {status === "Needs review" && (
         <Notice tone="warning" title={w.problems[problem] ?? w.reviewHint}>
@@ -642,11 +642,11 @@ function ReceiptDialog({ w, receipt, open, replace, onClose }: { w: Words; recei
           ]}
           rows={sorted.map((l) => ({
             id: l.id,
-            description: String(l.values.description ?? ""),
-            category: w.categories[String(l.values.category ?? "")] ?? String(l.values.category ?? ""),
-            quantity: l.values.quantity === undefined ? "–" : f.number(String(l.values.quantity), 4),
-            unit: price(l.values.unit_price),
-            amount: money(l.values.amount),
+            description: String(l.values.receipts_description ?? ""),
+            category: w.categories[String(l.values.receipts_category ?? "")] ?? String(l.values.receipts_category ?? ""),
+            quantity: l.values.receipts_quantity === undefined ? "–" : f.number(String(l.values.receipts_quantity), 4),
+            unit: price(l.values.receipts_unit_price),
+            amount: money(l.values.receipts_amount),
           }))}
         />
       </div>

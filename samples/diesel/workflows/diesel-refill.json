@@ -4,9 +4,9 @@
   "description": "Asks the buyers to fill the tank when a reading falls below threshold_l; the purchase answers it.",
   "script": "diesel-refill.ts",
   "parameters": {
-    "list": "$LIST",
-    "reading_type": "$READING_TYPE",
-    "purchase_type": "$PURCHASE_TYPE",
+    "list": "$collection:tank",
+    "reading_type": "$type:diesel_reading",
+    "purchase_type": "$type:diesel_purchase",
     "threshold_l": 200,
     "buyers": [
       "role:owners"

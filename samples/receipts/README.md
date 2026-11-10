@@ -1,6 +1,6 @@
-# Receipts package
+# Receipts
 
-A library of receipts and the products on them, a workflow that reads each receipt photo and keeps the receipt as a PDF, another that keeps the lines in step with their receipt, and an [app](../../docs/apps.md), the **Receipts desk**, for taking those photos with a phone. Install the workspace by importing the included package. PaperGo has no receipt routes, tables, or upload-time processing: the workflows are ordinary TypeScript scripts, [`read-receipts.ts`](read-receipts.ts) and [`sync-receipt-lines.ts`](sync-receipt-lines.ts), and the app an ordinary React screen, [`receipts-app.tsx`](receipts-app.tsx); you can open and change them in their editors.
+A library of receipts and the products on them, a workflow that reads each receipt photo and keeps the receipt as a PDF, another that keeps the lines in step with their receipt, and an [app](../../docs/apps.md), the **Receipts desk**, for taking those photos with a phone. It is a [solution](../../docs/solutions.md), applied to a workspace that exists. PaperGo has no receipt routes, tables, or upload-time processing: the workflows are ordinary TypeScript scripts, [`read-receipts.ts`](read-receipts.ts) and [`sync-receipt-lines.ts`](sync-receipt-lines.ts), and the app an ordinary React screen, [`receipts-app.tsx`](receipts-app.tsx); you can open and change them in their editors.
 
 ## From photo to lines
 
@@ -16,15 +16,21 @@ A refused answer, an amount or date that cannot be read exactly, a line that can
 
 ## Install
 
-1. **The workspace.** As an organization administrator, open **Administration → Export and import**, select [`receipts.zip`](receipts.zip), choose **Try it**, then **Import**. This creates the **Receipts desk** workspace with:
+1. **Apply the [solution](../../docs/solutions.md)** to a workspace that exists, as someone who manages it and has `solution.manage`:
+
+   ```sh
+   papergo solution apply ./samples/receipts --workspace Home
+   ```
+
+   This creates, in that workspace:
    - the empty **Receipts** library, which accepts both content types (**Receipt** for uploads by default, and **Receipt line**), with their fields, saved views (Receipts, Needs review and Lines) and relationship policy;
-   - the **Read receipts** and **Sync receipt lines** workflows, their parameters pointing at the imported library and its two content types;
+   - the **Read receipts** and **Sync receipt lines** workflows, their parameters pointing at the library and its two content types;
    - the **Receipts desk** app, published, with its parameters set to the same library and types. It appears in the sidebar under the library, and in **Apps**. On a phone, its **Take a photo** and **Choose photos** buttons sit at the bottom of the screen.
 
-   No script, token, ID editing or pre-existing workspace is needed. To install another independent copy, enter a different workspace name when importing. Import does not call the model.
-2. **OCR and the batch model.** Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
+   Applying does not call the model. It installs beside other solutions, such as the [diesel tracker](../diesel/README.md), in the same workspace.
+2. **OCR and the batch model.** The solution requires OCR and names a batch provider as what it works in part without, so its status says when one is missing. Keeping receipts as PDFs needs [OCR](../../docs/ocr.md) (`ONNXRUNTIME_LIB` and `OCR_MODELS`); without it, every receipt ends **Needs review** with its photo. Reading them needs the batch model below.
 
-The importer becomes the author of the workflows and the app, and the workspace's owner. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. `resources.json`, `read-receipts.ts` with `read-receipts.json`, `sync-receipt-lines.ts` with `sync-receipt-lines.json`, and `receipts-app.tsx` with `receipts-app.json` are the editable sources for the package; the [sample package test](../../internal/httpapi/samplepackages_test.go) checks the ZIP through the import API and can rebuild it during development, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflows end to end, and the [app compile test](../../internal/appcode/compile_test.go) compiles the app.
+Whoever applies it becomes the author of the workflows and the app. Runs use that author's permissions. The app acts as whoever opens it, who needs write access to the library to upload. [`solution.json`](solution.json), the workflows in [`workflows/`](workflows) and the app in [`apps/`](apps) are the editable sources: the folder is the solution. Its fields start with its key (`receipts_store`, `receipts_total`); the model's answer names them without it, and the scripts add it where values are written. The [solutions test](../../internal/solutions/lifecycle_test.go) installs it, the [receipts test](../../internal/scriptrun/receipts_test.go) runs the workflows end to end, and the [app compile test](../../internal/appcode/compile_test.go) compiles the app.
 
 ## The desk
 

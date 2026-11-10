@@ -1,12 +1,12 @@
 {
-  "key": "read-receipts",
+  "key": "receipts-read",
   "name": "Read receipts",
   "description": "Reads a receipt photo and files the purchase lines.",
-  "script": "read-receipts.ts",
+  "script": "receipts-read.ts",
   "parameters": {
-    "library": "$LIBRARY",
-    "receipt_type": "$RECEIPT_TYPE",
-    "line_type": "$LINE_TYPE"
+    "library": "$collection:receipts",
+    "receipt_type": "$type:receipts_receipt",
+    "line_type": "$type:receipts_line"
   },
   "automatic_enabled": true,
   "manual_enabled": true,

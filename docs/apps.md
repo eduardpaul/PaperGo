@@ -140,4 +140,4 @@ The complete contract is in [OpenAPI](../api/openapi.json).
 
 ## Samples
 
-The [diesel tracker](../samples/diesel/README.md) is a complete app: a workspace package with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures. The [receipts desk](../samples/receipts-package/README.md) uploads receipt photos from a phone, shrunk on the phone to what the model reads, for a workflow that reads their lines and keeps each receipt as a PDF.
+The [diesel tracker](../samples/diesel/README.md) is a complete app: a [solution](solutions.md) with a list, four workflows and a dashboard that estimates and forecasts a heating-oil tank from its dipstick readings, purchases and heating seasons, beside the indoor and outdoor temperatures. The [receipts desk](../samples/receipts-package/README.md) uploads receipt photos from a phone, shrunk on the phone to what the model reads, for a workflow that reads their lines and keeps each receipt as a PDF.

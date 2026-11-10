@@ -166,12 +166,12 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 		for _, lt := range listTypes {
 			types[lt.Key] = lt
 		}
-		if types["receipt"] == nil || !types["receipt"].IsDefault || types["receipt_line"] == nil {
+		if types["receipts_receipt"] == nil || !types["receipts_receipt"].IsDefault || types["receipts_line"] == nil {
 			t.Fatal("receipts library types", listTypes)
 		}
 		// The workflow names the catalog type; the library accepts it.
-		file := map[string]string{"Read receipts": "receipts-package/read-receipts.json", "Sync receipt lines": "receipts-package/sync-receipt-lines.json"}[w.Name]
-		source = sampleWorkflowSource(t, file, "$LIBRARY", ids["Receipts"], "$RECEIPT_TYPE", *types["receipt"].ParentID, "$LINE_TYPE", *types["receipt_line"].ParentID)
+		file := map[string]string{"Read receipts": "receipts/workflows/receipts-read.json", "Sync receipt lines": "receipts/workflows/receipts-sync-lines.json"}[w.Name]
+		source = sampleWorkflowSource(t, file, receiptsBindings(ids["Receipts"], *types["receipts_receipt"].ParentID, *types["receipts_line"].ParentID)...)
 		views, err := s.Views(t.Context(), "organization-admin", ids["Receipts"], "", 100)
 		if err != nil {
 			t.Fatal(err)
@@ -186,7 +186,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 			t.Fatal("missing default sample view", views)
 		}
 	case "Diesel levels", "Diesel measuring reminder", "Diesel refill", "Load diesel sample data":
-		file := map[string]string{"Diesel levels": "diesel/diesel-levels.json", "Diesel measuring reminder": "diesel/diesel-measure-reminder.json", "Diesel refill": "diesel/diesel-refill.json", "Load diesel sample data": "diesel/diesel-sample-data.json"}[w.Name]
+		file := map[string]string{"Diesel levels": "diesel/workflows/diesel-levels.json", "Diesel measuring reminder": "diesel/workflows/diesel-measure-reminder.json", "Diesel refill": "diesel/workflows/diesel-refill.json", "Load diesel sample data": "diesel/workflows/diesel-sample-data.json"}[w.Name]
 		source = sampleWorkflowSource(t, file, dieselBindings(ids["Diesel"], dieselTypes(t, s, ids["Diesel"]))...)
 	case "Index receipts":
 		source = sampleWorkflowSource(t, "workflows/index-receipts.json", "$LIBRARY", ids["Receipt summaries"])
@@ -279,7 +279,7 @@ func receiptsAppBindings(t *testing.T, s *dms.Service, workspace string) []strin
 	for _, lt := range listTypes {
 		types[lt.Key] = *lt.ParentID
 	}
-	return []string{"$LIBRARY", library.ID, "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"]}
+	return receiptsBindings(library.ID, types["receipts_receipt"], types["receipts_line"])
 }
 
 // checkImportedSampleApps checks that an imported sample carries its apps
@@ -329,18 +329,26 @@ func checkImportedSampleApps(t *testing.T, s *dms.Service, workspace string, fil
 }
 
 // receiptsApps are the receipts sample's apps, by their settings files.
-var receiptsApps = []string{"receipts-package/receipts-app.json"}
+var receiptsApps = []string{"receipts/apps/receipts-desk.json"}
+
+// receiptsBindings bind the references of the receipts sample's parameters
+// to a library and the catalog types of receipts and their lines.
+func receiptsBindings(library, receipt, line string) []string {
+	return []string{"$collection:receipts", library, "$type:receipts_receipt", receipt, "$type:receipts_line", line}
+}
 
 // dieselApps are the diesel sample's apps, by their settings files.
-var dieselApps = []string{"diesel/diesel-app.json"}
+var dieselApps = []string{"diesel/apps/diesel-dashboard.json"}
 
 // dieselWorkflows are the diesel sample's workflows, by their settings files.
-var dieselWorkflows = []string{"diesel/diesel-levels.json", "diesel/diesel-measure-reminder.json", "diesel/diesel-refill.json", "diesel/diesel-sample-data.json"}
+var dieselWorkflows = []string{"diesel/workflows/diesel-levels.json", "diesel/workflows/diesel-measure-reminder.json", "diesel/workflows/diesel-refill.json", "diesel/workflows/diesel-sample-data.json"}
 
 // dieselBindings bind the placeholders of the diesel workflows' parameters
 // to its list and catalog types.
 func dieselBindings(list string, types map[string]string) []string {
-	return []string{"$LIST", list, "$READING_TYPE", types["diesel_reading"], "$PURCHASE_TYPE", types["diesel_purchase"], "$HEATING_TYPE", types["diesel_heating"], "$TEMPERATURE_TYPE", types["diesel_temperature"]}
+	// A reference stands for an ID; a setting for its default, as JSON.
+	return []string{"$collection:tank", list, "$type:diesel_reading", types["diesel_reading"], "$type:diesel_purchase", types["diesel_purchase"], "$type:diesel_heating", types["diesel_heating"], "$type:diesel_temperature", types["diesel_temperature"],
+		`"$setting:capacity_l"`, "750", `"$setting:time_zone"`, `"UTC"`}
 }
 
 // buildSampleSpec creates a sample's catalog fields and types, workspace,
@@ -350,9 +358,10 @@ func dieselBindings(list string, types map[string]string) []string {
 func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[string]string, map[string]string) {
 	t.Helper()
 	var spec struct {
-		Workspace dms.CreateResource `json:"workspace"`
-		Fields    []dms.CreateField  `json:"fields"`
-		Types     []struct {
+		Name, Description string
+		Workspace         dms.CreateResource `json:"-"`
+		Fields            []dms.CreateField  `json:"fields"`
+		Types             []struct {
 			Key, Name string
 			Fields    []string
 		} `json:"content_types"`
@@ -365,7 +374,7 @@ func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[str
 				Default bool `json:"is_default"`
 			} `json:"views"`
 		} `json:"collections"`
-		Relationship *dms.RelationshipTypeInput `json:"relationship"`
+		Relationships []dms.RelationshipTypeInput `json:"relationship_types"`
 	}
 	raw, err := os.ReadFile(file)
 	if err != nil {
@@ -401,14 +410,14 @@ func buildSampleSpec(t *testing.T, s *dms.Service, file string) (string, map[str
 	}
 	slices.SortFunc(keys, func(a, b string) int { return len(b) - len(a) })
 	for _, key := range keys {
-		replace = append(replace, "$"+key, types[key])
+		replace = append(replace, "$type:"+key, types[key])
 	}
-	if spec.Relationship != nil {
-		if _, err := s.CreateRelationshipType(t.Context(), "organization-admin", *spec.Relationship); err != nil {
+	for _, relationship := range spec.Relationships {
+		if _, err := s.CreateRelationshipType(t.Context(), "organization-admin", relationship); err != nil {
 			t.Fatal(err)
 		}
 	}
-	spec.Workspace.Kind = "workspace"
+	spec.Workspace = dms.CreateResource{Kind: "workspace", Name: spec.Name, Description: spec.Description}
 	ws, err := s.Create(t.Context(), "organization-admin", "", spec.Workspace)
 	if err != nil {
 		t.Fatal(err)
@@ -478,17 +487,17 @@ func buildSamplePackage(t *testing.T, kind, path string) {
 	case "receipts":
 		var collections map[string]string
 		var types map[string]string
-		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts-package/resources.json")
-		bindings := []string{"$LIBRARY", collections["Receipts"], "$RECEIPT_TYPE", types["receipt"], "$LINE_TYPE", types["receipt_line"]}
-		sampleWorkflow(t, wf, workspace, "receipts-package/read-receipts.json", bindings...)
-		sampleWorkflow(t, wf, workspace, "receipts-package/sync-receipt-lines.json", bindings...)
+		workspace, collections, types = buildSampleSpec(t, s, "../../samples/receipts/solution.json")
+		bindings := receiptsBindings(collections["Receipts"], types["receipts_receipt"], types["receipts_line"])
+		sampleWorkflow(t, wf, workspace, "receipts/workflows/receipts-read.json", bindings...)
+		sampleWorkflow(t, wf, workspace, "receipts/workflows/receipts-sync-lines.json", bindings...)
 		for _, file := range receiptsApps {
 			SaveSampleApp(t, s, workspace, "", 0, sampleAppSource(t, file, bindings...))
 		}
 	case "diesel":
 		var collections map[string]string
 		var types map[string]string
-		workspace, collections, types = buildSampleSpec(t, s, "../../samples/diesel/resources.json")
+		workspace, collections, types = buildSampleSpec(t, s, "../../samples/diesel/solution.json")
 		for _, file := range dieselWorkflows {
 			sampleWorkflow(t, wf, workspace, file, dieselBindings(collections["Diesel"], types)...)
 		}
@@ -594,9 +603,9 @@ func TestSampleWorkspacePackages(t *testing.T) {
 		Workflows        int
 		Apps             []string
 		AppBindings      func(*testing.T, *dms.Service, string) []string
-	}{{"receipts-package/receipts.zip", "Receipts desk", "receipts", 2, receiptsApps, receiptsAppBindings}, {"diesel/diesel.zip", "Diesel tracker", "diesel", 4, dieselApps, dieselAppBindings}, {"workflows/workflows.zip", "Workflow samples", "workflows", 4, nil, nil}} {
+	}{{"../dms/testdata/sample-receipts.zip", "Receipts desk", "receipts", 2, receiptsApps, receiptsAppBindings}, {"../dms/testdata/sample-diesel.zip", "Diesel tracker", "diesel", 4, dieselApps, dieselAppBindings}, {"../../samples/workflows/workflows.zip", "Workflow samples", "workflows", 4, nil, nil}} {
 		t.Run(sample.Name, func(t *testing.T) {
-			path := filepath.Join("../../samples", sample.Path)
+			path := sample.Path
 			if *updateSamplePackages {
 				buildSamplePackage(t, sample.Kind, path)
 			}
@@ -637,7 +646,7 @@ func TestSampleWorkspacePackages(t *testing.T) {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)
 					}
 					raw := string(mustJSON(t, w.Definition)) + string(mustJSON(t, w.Parameters))
-					for _, placeholder := range []string{"$LIBRARY", "$RECEIPT_TYPE", "$LINE_TYPE", "$TERM_SET", "$FIELD", "$LIST", "$READING_TYPE", "$PURCHASE_TYPE", "$HEATING_TYPE", "$TEMPERATURE_TYPE", sampleSubject} {
+					for _, placeholder := range []string{"$LIBRARY", "$TERM_SET", "$FIELD", "$collection:", "$type:", "$setting:", sampleSubject} {
 						if strings.Contains(raw, placeholder) {
 							t.Fatal("unbound sample", placeholder)
 						}

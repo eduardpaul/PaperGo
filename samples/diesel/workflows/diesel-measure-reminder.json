@@ -4,13 +4,13 @@
   "description": "Asks someone to measure the tank when the last reading is older than every_days; a reading filed any other way closes the task.",
   "script": "diesel-measure-reminder.ts",
   "parameters": {
-    "list": "$LIST",
-    "reading_type": "$READING_TYPE",
+    "list": "$collection:tank",
+    "reading_type": "$type:diesel_reading",
     "every_days": 15,
     "assignees": [
       "role:owners"
     ],
-    "time_zone": "UTC",
+    "time_zone": "$setting:time_zone",
     "stick_length_cm": 200
   },
   "automatic_enabled": true,

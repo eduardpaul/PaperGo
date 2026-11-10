@@ -2,11 +2,11 @@
   "key": "receipts-desk",
   "name": "Receipts desk",
   "description": "Take receipt photos with a phone, shrunk on the phone to what the model reads, and see what was spent and on which categories.",
-  "source": "receipts-app.tsx",
+  "source": "receipts-desk.tsx",
   "parameters": {
-    "library": "$LIBRARY",
-    "receipt": "$RECEIPT_TYPE",
-    "line": "$LINE_TYPE"
+    "library": "$collection:receipts",
+    "receipt": "$type:receipts_receipt",
+    "line": "$type:receipts_line"
   },
   "state": "published"
 }

@@ -1,6 +1,6 @@
 # Solutions (plan)
 
-Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Step 5 is done too. Steps 0, 1b, 4 and 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
+Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Steps 0, 4 and 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
 
 ## Why
 
@@ -243,7 +243,7 @@ Fields and content types are organization catalog objects shared by installation
 
 PaperGo has no releases to stay compatible with, so nothing is kept beside the new way:
 
-- **Sample ZIPs and the test-only builder.** `samples/diesel` and `samples/receipts-package` become solution folders; `diesel.zip`, `receipts.zip` and `buildSampleSpec` go. The sample test packs and applies the folders through the same code as everyone.
+- **Sample ZIPs.** `samples/diesel` and `samples/receipts` are solution folders, checked, packed and applied through the same code as everyone's. The ZIPs are no longer samples: the portability tests keep workspace packages built from the folders as their fixtures.
 - **Workspace packages stay, for another job.** They copy a whole workspace with its content, history and permissions between instances. They stop being the way to distribute something to install.
 - **Sample READMEs lose their manual steps.** "Turn search off", "set your time zone", "set the capacity here and there" become the manifest's `search`, a setting defaulting to the organization's time zone, and one setting used twice.
 
@@ -260,7 +260,7 @@ The order puts the smallest things that remove the most scripting first.
 
 **Step 1: the folder and `pack`** (done). The manifest's JSON Schema, reference checking, compiling. Tests: `internal/solutions`, which also packs the Diesel sample's sources laid out as a solution. Core change: `workflow.Check`, the workflow compiler without a database.
 
-**Step 1b: the samples as solution folders.** With step 2, since a folder cannot be installed before: `samples/diesel` and `samples/receipts-package` become solutions, Receipts' bare keys get its prefix, and the ZIPs and the test-only builder go.
+**Step 1b: the samples as solution folders** (done). `samples/diesel` and `samples/receipts` are solutions; Receipts' keys carry its prefix. The workspace packages the portability tests import are built from them into `internal/dms/testdata`, by the sample package test with `-update-sample-packages`.
 
 **Step 2: plan, apply, the installation record and status** (done), for creation and additive change, in the API and the command line. Slots are created or bound. Tests: applying each sample twice changes nothing the second time; a retyped field, a removed choice and a removed field are refused; a new optional field leaves stored items as they were; both samples install into one workspace; a second solution uses and extends the first one's list, and the first cannot then drop a field the second expects.
 

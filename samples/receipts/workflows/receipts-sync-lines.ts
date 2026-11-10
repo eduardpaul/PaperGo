@@ -16,7 +16,7 @@ interface Params {
 const linesFolder = "Receipt lines";
 
 // The fields a line copies from its receipt.
-const copied = ["status", "currency", "purchase_date"];
+const copied = ["receipts_status", "receipts_currency", "receipts_purchase_date"];
 
 // subfolder finds the live folder named name in parent.
 async function subfolder(api: PaperGoClient, parent: string, name: string): Promise<models.Resource | undefined> {

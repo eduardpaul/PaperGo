@@ -1,0 +1,329 @@
+{
+  "key": "diesel",
+  "name": "Diesel tracker",
+  "description": "Dipstick readings, purchases and heating of a diesel tank, with what is left, what it costs and when to buy.",
+  "version": "1.0.0",
+  "settings": {
+    "type": "object",
+    "properties": {
+      "capacity_l": {
+        "type": "number",
+        "title": "Tank capacity (L)",
+        "default": 750
+      },
+      "time_zone": {
+        "type": "string",
+        "title": "Time zone of the measuring reminder",
+        "default": "=organization.time_zone"
+      }
+    }
+  },
+  "fields": [
+    {
+      "key": "diesel_measured_at",
+      "label": "Measured at",
+      "type": "datetime",
+      "required": true,
+      "indexed": true
+    },
+    {
+      "key": "diesel_stick_cm",
+      "label": "Stick reading (cm)",
+      "type": "decimal",
+      "scale": 1,
+      "required": true,
+      "indexed": true,
+      "options": {
+        "minimum": "0",
+        "description": "The length of the stick from the filling mouth down to the diesel."
+      }
+    },
+    {
+      "key": "diesel_level_liters",
+      "label": "Litres",
+      "type": "decimal",
+      "scale": 1,
+      "indexed": true,
+      "options": {
+        "description": "Worked out from the stick by the Diesel levels workflow."
+      }
+    },
+    {
+      "key": "diesel_fill_percent",
+      "label": "Fill %",
+      "type": "decimal",
+      "scale": 1,
+      "indexed": true
+    },
+    {
+      "key": "diesel_flag",
+      "label": "Check",
+      "type": "choice",
+      "indexed": true,
+      "choices": [
+        "ok",
+        "check",
+        "reviewed"
+      ],
+      "options": {
+        "description": "check: higher than the last reading and what was bought since. Set reviewed once it is confirmed."
+      }
+    },
+    {
+      "key": "diesel_purchased_at",
+      "label": "Bought at",
+      "type": "datetime",
+      "required": true,
+      "indexed": true
+    },
+    {
+      "key": "diesel_bought_liters",
+      "label": "Litres bought",
+      "type": "decimal",
+      "scale": 1,
+      "required": true,
+      "indexed": true,
+      "options": {
+        "minimum": "0"
+      }
+    },
+    {
+      "key": "diesel_total_price",
+      "label": "Total price",
+      "type": "currency",
+      "required": true,
+      "indexed": true,
+      "options": {
+        "currency_code": "EUR",
+        "minimum": "0"
+      }
+    },
+    {
+      "key": "diesel_price_per_liter",
+      "label": "Price per litre",
+      "type": "decimal",
+      "scale": 3,
+      "indexed": true
+    },
+    {
+      "key": "diesel_supplier",
+      "label": "Supplier",
+      "type": "text",
+      "options": {
+        "max_length": 200
+      }
+    },
+    {
+      "key": "diesel_heating_at",
+      "label": "Changed at",
+      "type": "datetime",
+      "required": true,
+      "indexed": true
+    },
+    {
+      "key": "diesel_heating",
+      "label": "Heating",
+      "type": "choice",
+      "required": true,
+      "indexed": true,
+      "choices": [
+        "on",
+        "off"
+      ]
+    },
+    {
+      "key": "diesel_temperature_at",
+      "label": "Taken at",
+      "type": "datetime",
+      "required": true,
+      "indexed": true
+    },
+    {
+      "key": "diesel_indoor_c",
+      "label": "Indoor (°C)",
+      "type": "decimal",
+      "scale": 1,
+      "indexed": true,
+      "options": {
+        "description": "Inside the house."
+      }
+    },
+    {
+      "key": "diesel_outdoor_c",
+      "label": "Outdoor (°C)",
+      "type": "decimal",
+      "scale": 1,
+      "indexed": true,
+      "options": {
+        "description": "Outside, in the shade."
+      }
+    }
+  ],
+  "content_types": [
+    {
+      "key": "diesel_reading",
+      "name": "Reading",
+      "fields": [
+        "diesel_measured_at",
+        "diesel_stick_cm",
+        "diesel_level_liters",
+        "diesel_fill_percent",
+        "diesel_flag"
+      ]
+    },
+    {
+      "key": "diesel_purchase",
+      "name": "Purchase",
+      "fields": [
+        "diesel_purchased_at",
+        "diesel_bought_liters",
+        "diesel_total_price",
+        "diesel_price_per_liter",
+        "diesel_supplier"
+      ]
+    },
+    {
+      "key": "diesel_heating",
+      "name": "Heating",
+      "fields": [
+        "diesel_heating_at",
+        "diesel_heating"
+      ]
+    },
+    {
+      "key": "diesel_temperature",
+      "name": "Temperature",
+      "fields": [
+        "diesel_temperature_at",
+        "diesel_indoor_c",
+        "diesel_outdoor_c"
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "key": "tank",
+      "kind": "list",
+      "name": "Diesel",
+      "content_types": [
+        "diesel_reading",
+        "diesel_purchase",
+        "diesel_heating",
+        "diesel_temperature"
+      ],
+      "search": false,
+      "views": [
+        {
+          "key": "readings",
+          "name": "Readings",
+          "layout": "table",
+          "is_default": true,
+          "columns": [
+            "$name",
+            "diesel_measured_at",
+            "diesel_stick_cm",
+            "diesel_level_liters",
+            "diesel_fill_percent",
+            "diesel_flag"
+          ],
+          "query": {
+            "content_type_id": "$type:diesel_reading",
+            "sort": [
+              {
+                "field": "diesel_measured_at",
+                "direction": "desc"
+              }
+            ]
+          }
+        },
+        {
+          "key": "purchases",
+          "name": "Purchases",
+          "layout": "table",
+          "columns": [
+            "$name",
+            "diesel_purchased_at",
+            "diesel_bought_liters",
+            "diesel_total_price",
+            "diesel_price_per_liter",
+            "diesel_supplier"
+          ],
+          "query": {
+            "content_type_id": "$type:diesel_purchase",
+            "sort": [
+              {
+                "field": "diesel_purchased_at",
+                "direction": "desc"
+              }
+            ]
+          }
+        },
+        {
+          "key": "heating",
+          "name": "Heating",
+          "layout": "table",
+          "columns": [
+            "$name",
+            "diesel_heating_at",
+            "diesel_heating"
+          ],
+          "query": {
+            "content_type_id": "$type:diesel_heating",
+            "sort": [
+              {
+                "field": "diesel_heating_at",
+                "direction": "desc"
+              }
+            ]
+          }
+        },
+        {
+          "key": "temperatures",
+          "name": "Temperatures",
+          "layout": "table",
+          "columns": [
+            "$name",
+            "diesel_temperature_at",
+            "diesel_indoor_c",
+            "diesel_outdoor_c"
+          ],
+          "query": {
+            "content_type_id": "$type:diesel_temperature",
+            "sort": [
+              {
+                "field": "diesel_temperature_at",
+                "direction": "desc"
+              }
+            ]
+          }
+        },
+        {
+          "key": "needs-a-look",
+          "name": "Needs a look",
+          "layout": "table",
+          "columns": [
+            "$name",
+            "diesel_measured_at",
+            "diesel_stick_cm",
+            "diesel_level_liters",
+            "diesel_flag"
+          ],
+          "query": {
+            "content_type_id": "$type:diesel_reading",
+            "filter": {
+              "field": "diesel_flag",
+              "op": "eq",
+              "value": "check"
+            },
+            "sort": [
+              {
+                "field": "diesel_measured_at",
+                "direction": "desc"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

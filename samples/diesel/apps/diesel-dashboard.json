@@ -1,0 +1,15 @@
+{
+  "key": "diesel-dashboard",
+  "name": "Diesel dashboard",
+  "description": "How full the tank is, when to order, what the diesel costs, and the indoor and outdoor temperatures beside the heating.",
+  "source": "diesel-dashboard.tsx",
+  "parameters": {
+    "list": "$collection:tank",
+    "reading": "$type:diesel_reading",
+    "purchase": "$type:diesel_purchase",
+    "heating": "$type:diesel_heating",
+    "temperature": "$type:diesel_temperature",
+    "capacity_l": "$setting:capacity_l"
+  },
+  "state": "published"
+}
