@@ -4,7 +4,7 @@ A **solution** is the definitions of lists, workflows and apps that belong toget
 
 A solution is **applied** to a workspace that exists: PaperGo creates what the solution declares and the workspace lacks, updates what the solution changed since it was last applied, and leaves everything else, stored items first of all. Applying the same solution again changes nothing. A workspace holds any number of solutions, and two can work on the same list.
 
-`papergo solution` checks, packs, plans, applies, pulls and removes solutions, and **Workspace settings → Solutions** installs, updates and removes them in the web app. Languages are [planned](plans/solutions.md).
+`papergo solution` checks, packs, plans, applies, pulls and removes solutions, and **Workspace settings → Solutions** installs, updates and removes them in the web app.
 
 ## The folder
 
@@ -15,6 +15,7 @@ diesel/
   workflows/levels.ts
   apps/dashboard.json      an app's settings, naming dashboard.tsx beside it
   apps/dashboard.tsx
+  locales/es.json          its display names in another language
 ```
 
 Other files, such as a README, are left out of the package.
@@ -86,6 +87,24 @@ A solution cannot know the IDs its lists and types will have, so it names them:
 
 References stand in parameters, in a view's query and in a lookup field's `lookup_container_id`. An ID anywhere in a solution, its scripts included, is a problem: a script reads IDs from its parameters.
 
+### Languages
+
+`locales/<language>.json` gives the solution's display names in a language, by key; the file is named after the language (`es.json`, `pt-BR.json`). What it leaves out keeps the solution's own text.
+
+```json
+{ "name": "Gasóleo",
+  "settings": { "capacity_l": { "title": "Capacidad del depósito (L)" } },
+  "fields": { "diesel_stick_cm": { "label": "Lectura de la varilla (cm)", "description": "…" } },
+  "content_types": { "diesel_reading": "Medición" },
+  "collections": { "tank": { "name": "Gasóleo", "views": { "readings": "Mediciones" } } },
+  "workflows": { "diesel-levels": { "name": "Niveles de gasóleo" } },
+  "apps": { "diesel-dashboard": { "name": "Panel del gasóleo", "description": "…" } } }
+```
+
+A first installation takes the organization's [language](preferences.md) when the solution has it (`es` also serves `es-MX`), and the solution's own text otherwise. An installation keeps its language; `--language <code>` changes it, and `--language none` returns to the solution's own text. Names are what PaperGo shows: a list's name, a field's label, a view's name. Keys, references and the values of a choice field have no language, since workflows and apps match on them; an app shows them in the viewer's language itself.
+
+Pulling an installation in a language writes what people renamed in PaperGo into that language's file, and leaves the solution's own text as it was.
+
 ## Checking and packing
 
 ```sh
@@ -109,6 +128,7 @@ It checks:
 - every reference: that what it names is declared, and, for an app, that a parameter the app's form declares as a collection or content type picker gets a reference of that kind;
 - content types against fields, collections against content types, a view's columns against the fields of its collection, and a view's query against the properties a saved view has;
 - a collection of another solution: that what it expects is not the solution's own, and that it extends only types it expects, with its own fields;
+- each locale: that it names only settings, fields, content types, collections, views, workflows and apps the solution has;
 - each workflow, compiled as saving it would, with its parameters: its triggers, forms and concurrency;
 - each app, compiled as saving it would, and a published app's parameters against its form.
 
@@ -184,6 +204,7 @@ A collection of another solution (`use`) is found through that solution's instal
    - its settings, with the values it would use;
    - for each list or library it owns, whether to create it or use one the workspace has;
    - for each object edited in PaperGo that the solution changes too, whether to keep the edit or take the solution's;
+   - the language of its names, when it has them in several;
    - whether to install it paused, and whether to delete what its version no longer has.
 3. **Apply.** A choice changed after the review asks for another review first, so what is applied is what was shown. What cannot be applied says why, and nothing is applied.
 
@@ -223,7 +244,7 @@ receipts 1.0.0 needs attention:
 | GET | `/v1/workspaces/{id}/solutions/{key}/package` | Pull: the installation as a packed solution |
 | DELETE | `/v1/workspaces/{id}/solutions/{key}` | Remove it |
 
-Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused`, `prune` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
+Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at most 16 MiB) and the choices as JSON in the `options` query parameter: `settings`, `bindings` (slot key to collection ID), `paused`, `prune`, `language` and `decisions` (`"<kind>:<key>"` to `keep` or `replace`). Reading needs read access to the workspace.
 
 A workspace's installations are kept with the workspace and go with it.
 
@@ -231,4 +252,4 @@ An [app](apps.md) may read these routes as its viewer, to say that its solution 
 
 ## Editors
 
-`papergo solution schema`, `schema workflow` and `schema app` print the JSON Schemas of `solution.json` and of the two settings files, for completion and checking while typing.
+`papergo solution schema`, `schema workflow`, `schema app` and `schema locale` print the JSON Schemas of `solution.json`, of the two settings files and of a locale, for completion and checking while typing.

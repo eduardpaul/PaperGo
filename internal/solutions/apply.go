@@ -41,7 +41,15 @@ type Options struct {
 	// Prune deletes the workflows, apps and views the solution's version no
 	// longer declares. Collections, content types and fields always stay.
 	Prune bool `json:"prune,omitempty"`
+	// Language is the language of the display names to install, of those
+	// the solution has; "none" is the solution's own text. Left out, an
+	// installation keeps its language, and a first one takes the
+	// organization's when the solution has it.
+	Language string `json:"language,omitempty"`
 }
+
+// LanguageNone asks for the solution's own text, whatever the organization's language.
+const LanguageNone = "none"
 
 // Decisions for an object that was edited in PaperGo and that the solution
 // now changes too.
@@ -120,6 +128,10 @@ type Result struct {
 	// the organization where it says so, and Settings the values used.
 	SettingsForm map[string]any `json:"settings_form,omitempty"`
 	Settings     map[string]any `json:"settings"`
+	// Language is the language of the display names used, of Languages,
+	// those the solution has; empty for the solution's own text.
+	Language  string   `json:"language,omitempty"`
+	Languages []string `json:"languages"`
 }
 
 // Service plans, applies and reads the solutions of workspaces.
@@ -181,7 +193,7 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		ids: map[string]string{}, fieldIDs: map[string]string{}, typeIDs: map[string]string{},
 		preferences: map[string]string{"time_zone": preferences.TimeZone, "language": preferences.Language, "default_currency": preferences.DefaultCurrency,
 			"number_format": preferences.NumberFormat, "date_format": preferences.DateFormat, "time_format": preferences.TimeFormat},
-		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}}}
+		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}, Languages: sol.Languages()}}
 	required, optional := s.lacks(sol.Manifest)
 	for _, name := range required {
 		r.refuse("solution", sol.Manifest.Key, "needs %s, which this PaperGo does not provide", name)
@@ -217,6 +229,9 @@ type run struct {
 	papergo     string
 	preferences map[string]string
 	result      Result
+	// base is the solution as its files say; sol is base in the
+	// installation's language.
+	base Solution
 
 	installed installed
 	previous  *Installation
@@ -261,7 +276,10 @@ func (r *run) reconcile() error {
 		r.previous = &previous
 		r.result.From = previous.Version
 	}
-	r.next = Installation{Key: m.Key, Name: m.Name, Version: m.Version, Bindings: map[string]string{}, AppliedBy: r.subject, AppliedAt: time.Now().UTC().Truncate(time.Second)}
+	r.localize()
+	m = r.sol.Manifest
+	r.result.Name = m.Name
+	r.next = Installation{Key: m.Key, Name: m.Name, Version: m.Version, Language: r.result.Language, Bindings: map[string]string{}, AppliedBy: r.subject, AppliedAt: time.Now().UTC().Truncate(time.Second)}
 	if r.previous != nil {
 		r.next.Paused = r.previous.Paused
 	}
@@ -296,13 +314,15 @@ func (r *run) reconcile() error {
 			r.next.Objects = append(r.next.Objects, o)
 		}
 	}
-	r.next.Settings, r.next.Manifest = r.settings, m
+	// The installation keeps the solution as its files say, with its
+	// locales: what it is checked against, and what a pull starts from.
+	r.next.Settings, r.next.Manifest, r.next.Locales = r.settings, r.base.Manifest, r.base.Locales
 	r.next.Components = map[string]Component{}
-	for _, w := range r.sol.Workflows {
-		r.next.Components[KindWorkflow+":"+w.Key] = Component{File: w.File, Source: w.Script, Parameters: w.Parameters, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled}
+	for _, w := range r.base.Workflows {
+		r.next.Components[KindWorkflow+":"+w.Key] = Component{File: w.File, Source: w.Script, Name: w.Name, Description: w.Description, Parameters: w.Parameters, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled}
 	}
-	for _, a := range r.sol.Apps {
-		r.next.Components[KindApp+":"+a.Key] = Component{File: a.File, Source: a.SourceFile, Parameters: a.Parameters}
+	for _, a := range r.base.Apps {
+		r.next.Components[KindApp+":"+a.Key] = Component{File: a.File, Source: a.SourceFile, Name: a.Name, Description: a.Description, Parameters: a.Parameters}
 	}
 	r.installed.Installations[m.Key] = r.next
 	if err := writeInstalled(r.ctx, r.t, r.workspaceID, r.subject, r.installed); err != nil {
@@ -313,6 +333,35 @@ func (r *run) reconcile() error {
 		return err
 	}
 	return r.t.Record(r.ctx, r.subject, "solution.apply", workspace, map[string]any{"solution": m.Key, "version": m.Version, "from": r.result.From, "changes": len(r.result.Changes)})
+}
+
+// localize puts the solution in the installation's language: the one
+// asked for, else the one it was installed in, else the organization's
+// when the solution has it.
+func (r *run) localize() {
+	r.base = r.sol
+	wanted := r.opts.Language
+	switch {
+	case wanted == LanguageNone:
+		return
+	case wanted != "":
+		if r.base.language(wanted) == "" {
+			r.refuse("solution", r.sol.Manifest.Key, "has no display names in %q; it has %s", wanted, orNone(r.base.Languages()))
+			return
+		}
+	case r.previous != nil:
+		wanted = r.previous.Language
+	default:
+		wanted = r.preferences["language"]
+	}
+	r.sol, r.result.Language = r.base.Localized(wanted)
+}
+
+func orNone(list []string) string {
+	if len(list) == 0 {
+		return "none"
+	}
+	return strings.Join(list, ", ")
 }
 
 // checkVersion refuses a solution written for another PaperGo.

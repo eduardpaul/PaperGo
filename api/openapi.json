@@ -36488,6 +36488,10 @@
           "prune": {
             "type": "boolean",
             "description": "Delete the workflows, apps and views the solution's version no longer declares. Collections, content types and fields always stay."
+          },
+          "language": {
+            "type": "string",
+            "description": "The language of the display names to install, of those the solution has; \"none\" is the solution's own text. Left out, an installation keeps its language and a first one takes the organization's when the solution has it."
           }
         }
       },
@@ -36557,7 +36561,8 @@
           "customized",
           "warnings",
           "slots",
-          "settings"
+          "settings",
+          "languages"
         ],
         "properties": {
           "solution": {
@@ -36616,6 +36621,17 @@
           "settings": {
             "type": "object",
             "description": "The settings values used."
+          },
+          "language": {
+            "type": "string",
+            "description": "The language of the display names used; absent for the solution's own text."
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The languages the solution has display names in."
           }
         }
       },
@@ -36770,6 +36786,14 @@
           "components": {
             "type": "object",
             "description": "The settings files of the workflows and apps as they were applied, by \"<kind>:<key>\"."
+          },
+          "language": {
+            "type": "string",
+            "description": "The language its display names were installed in."
+          },
+          "locales": {
+            "type": "object",
+            "description": "The solution's display names in other languages, by language."
           }
         }
       },

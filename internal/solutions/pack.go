@@ -73,6 +73,13 @@ func (s Solution) files() (map[string][]byte, error) {
 		files[a.File] = settings
 		files[path.Join(path.Dir(a.File), a.SourceFile)] = []byte(a.Source)
 	}
+	for language, l := range s.Locales {
+		text, err := indented(l)
+		if err != nil {
+			return nil, err
+		}
+		files[LocalesDir+"/"+language+".json"] = text
+	}
 	return files, nil
 }
 

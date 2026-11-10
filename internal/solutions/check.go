@@ -46,6 +46,7 @@ func Check(ctx context.Context, s Solution) Problems {
 	c.manifest()
 	c.workflows()
 	c.apps()
+	c.locales()
 	return c.problems
 }
 

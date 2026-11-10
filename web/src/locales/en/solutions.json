@@ -55,7 +55,12 @@
     "prune": "Delete the workflows, apps and views this version no longer has",
     "applied_one": "Applied: {{count}} change.",
     "applied_other": "Applied: {{count}} changes.",
-    "stale": "You changed a choice. Review again to see what applying does now."
+    "stale": "You changed a choice. Review again to see what applying does now.",
+    "language": "Language of names",
+    "languageHint": "The solution has its names in these languages. Keys and choice values have no language.",
+    "languageKeep": "As now: {{language}}",
+    "languageOwn": "As now: the solution's own text",
+    "languageNone": "The solution's own text"
   },
   "action": {
     "create": "Create",

@@ -37,9 +37,11 @@ interface Choices {
   decisions: Record<string, Decision>;
   paused: boolean;
   prune: boolean;
+  /** Empty keeps the installation's language, or takes the organization's on a first installation. */
+  language: string;
 }
 
-const noChoices: Choices = { settings: {}, bindings: {}, decisions: {}, paused: false, prune: false };
+const noChoices: Choices = { settings: {}, bindings: {}, decisions: {}, paused: false, prune: false, language: '' };
 
 function optionsOf(choices: Choices): SolutionOptions {
   const bindings = Object.fromEntries(Object.entries(choices.bindings).filter(([, id]) => id));
@@ -49,6 +51,7 @@ function optionsOf(choices: Choices): SolutionOptions {
     decisions: choices.decisions,
     paused: choices.paused,
     prune: choices.prune || undefined,
+    language: choices.language || undefined,
   };
 }
 
@@ -254,6 +257,20 @@ function Plan({
         {t('plan.heading', { name: result.name, version: result.version })}{' '}
         <span className="font-normal text-muted">· {result.from ? t('plan.from', { version: result.from }) : t('plan.first')}</span>
       </p>
+
+      {result.languages.length > 0 && (
+        <SettingRow id="solution-language" label={t('plan.language')} hint={t('plan.languageHint')}>
+          <Select id="solution-language" value={choices.language} onChange={(event) => change({ language: event.target.value })}>
+            <option value="">{result.language ? t('plan.languageKeep', { language: result.language }) : t('plan.languageOwn')}</option>
+            {result.languages.map((language) => (
+              <option key={language} value={language}>
+                {language}
+              </option>
+            ))}
+            <option value="none">{t('plan.languageNone')}</option>
+          </Select>
+        </SettingRow>
+      )}
 
       {settings.length > 0 && (
         <div>

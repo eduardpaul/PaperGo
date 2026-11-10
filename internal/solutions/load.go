@@ -107,6 +107,21 @@ func Load(files fs.FS) (Solution, Problems) {
 		a.Source = loadSource(files, file, "source", a.SourceFile, &problems)
 		s.Apps = append(s.Apps, a)
 	}
+	for _, file := range settingsFiles(files, LocalesDir, &problems) {
+		language := strings.TrimSuffix(path.Base(file), ".json")
+		if !languageCode.MatchString(language) {
+			problems.add(file, "", "is named after its language, such as es.json or pt-BR.json")
+			continue
+		}
+		var l Locale
+		if !loadSettings(files, file, &l, &problems) {
+			continue
+		}
+		if s.Locales == nil {
+			s.Locales = map[string]Locale{}
+		}
+		s.Locales[language] = l
+	}
 	return s, problems
 }
 

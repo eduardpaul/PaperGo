@@ -72,7 +72,7 @@ func (s *Service) Remove(ctx context.Context, subject, workspaceID, key string) 
 		if !ok {
 			return dms.ErrNotFound
 		}
-		out = Result{Solution: in.Key, Name: in.Name, Version: in.Version, From: in.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}}
+		out = Result{Solution: in.Key, Name: in.Name, Version: in.Version, From: in.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}, Languages: []string{}}
 		for _, other := range r.keys() {
 			if other == key {
 				continue

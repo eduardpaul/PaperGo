@@ -169,6 +169,7 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	flags.Var(&bind, "bind", "An existing list or library for a slot, as slot=name or slot=ID; repeat for more")
 	flags.Var(&decide, "decide", "What to do with an object edited in PaperGo that the solution changes too, as kind:key=keep or kind:key=replace")
 	prune := flags.Bool("prune", false, "Delete the workflows, apps and views this version no longer declares")
+	language := flags.String("language", "", "The language of the display names to install, of those the solution has; none for its own text")
 	paused := flags.Bool("paused", false, "Keep the solution's workflows from starting on their own")
 	resume := flags.Bool("resume", false, "Let the workflows of a paused solution start again")
 	folder, rest := leading(args)
@@ -240,7 +241,7 @@ func applyCommand(ctx context.Context, command string, args []string, out io.Wri
 	if *paused || *resume {
 		o.Paused = paused
 	}
-	o.Prune = *prune
+	o.Prune, o.Language = *prune, *language
 	options, err := json.Marshal(o)
 	if err != nil {
 		return err
@@ -270,6 +271,9 @@ func report(out io.Writer, r Result, plan bool) {
 	from := "first installation"
 	if r.From != "" {
 		from = "installed: " + r.From
+	}
+	if r.Language != "" {
+		from += ", in " + r.Language
 	}
 	fmt.Fprintf(out, "%s %s (%s)\n", r.Solution, r.Version, from)
 	for _, c := range r.Changes {

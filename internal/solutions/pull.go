@@ -64,6 +64,16 @@ func (s *Service) Pull(ctx context.Context, subject, workspaceID, key string) (S
 		if out.Apps, err = p.apps(); err != nil {
 			return Solution{}, err
 		}
+		out.Locales = map[string]Locale{}
+		for language, l := range in.Locales {
+			out.Locales[language] = l
+		}
+		if in.Language != "" {
+			delocalize(&out, &in)
+		}
+		if len(out.Locales) == 0 {
+			out.Locales = nil
+		}
 		return out, nil
 	})
 }
@@ -246,4 +256,104 @@ func (p *puller) apps() ([]App, error) {
 		out = append(out, a)
 	}
 	return out, nil
+}
+
+// delocalize moves what was read from a workspace installed in a language
+// to where it belongs in the files: the display names go to that
+// language's locale, and the solution keeps its own text.
+func delocalize(out *Solution, in *Installation) {
+	l := Locale{Settings: in.Locales[in.Language].Settings, Fields: map[string]FieldText{}, ContentTypes: map[string]string{},
+		Collections: map[string]CollectionText{}, Workflows: map[string]ComponentText{}, Apps: map[string]ComponentText{}}
+	other := func(live, own string) string {
+		if live == own {
+			return ""
+		}
+		return live
+	}
+	base, m := in.Manifest, &out.Manifest
+	l.Name, l.Description = other(m.Name, base.Name), other(m.Description, base.Description)
+	m.Name, m.Description = base.Name, base.Description
+	for i := range m.Fields {
+		for _, own := range base.Fields {
+			if own.Key != m.Fields[i].Key {
+				continue
+			}
+			if text := (FieldText{other(m.Fields[i].Label, own.Label), other(m.Fields[i].Options.Description, own.Options.Description)}); text != (FieldText{}) {
+				l.Fields[own.Key] = text
+			}
+			m.Fields[i].Label, m.Fields[i].Options.Description = own.Label, own.Options.Description
+		}
+	}
+	for i := range m.ContentTypes {
+		for _, own := range base.ContentTypes {
+			if own.Key != m.ContentTypes[i].Key {
+				continue
+			}
+			if name := other(m.ContentTypes[i].Name, own.Name); name != "" {
+				l.ContentTypes[own.Key] = name
+			}
+			m.ContentTypes[i].Name = own.Name
+		}
+	}
+	for i := range m.Collections {
+		for _, own := range base.Collections {
+			if own.Key != m.Collections[i].Key {
+				continue
+			}
+			text := CollectionText{Name: other(m.Collections[i].Name, own.Name), Views: map[string]string{}}
+			m.Collections[i].Name = own.Name
+			for j := range m.Collections[i].Views {
+				for _, view := range own.Views {
+					if view.Key != m.Collections[i].Views[j].Key {
+						continue
+					}
+					if name := other(m.Collections[i].Views[j].Name, view.Name); name != "" {
+						text.Views[view.Key] = name
+					}
+					m.Collections[i].Views[j].Name = view.Name
+				}
+			}
+			if len(text.Views) == 0 {
+				text.Views = nil
+			}
+			if text.Name != "" || text.Views != nil {
+				l.Collections[own.Key] = text
+			}
+		}
+	}
+	for i := range out.Workflows {
+		w := &out.Workflows[i]
+		if own, ok := in.Components[KindWorkflow+":"+w.Key]; ok && own.Name != "" {
+			if text := (ComponentText{other(w.Name, own.Name), other(w.Description, own.Description)}); text != (ComponentText{}) {
+				l.Workflows[w.Key] = text
+			}
+			w.Name, w.Description = own.Name, own.Description
+		}
+	}
+	for i := range out.Apps {
+		a := &out.Apps[i]
+		if own, ok := in.Components[KindApp+":"+a.Key]; ok && own.Name != "" {
+			if text := (ComponentText{other(a.Name, own.Name), other(a.Description, own.Description)}); text != (ComponentText{}) {
+				l.Apps[a.Key] = text
+			}
+			a.Name, a.Description = own.Name, own.Description
+		}
+	}
+	// An empty map says nothing; leave it out of the file.
+	if len(l.Fields) == 0 {
+		l.Fields = nil
+	}
+	if len(l.ContentTypes) == 0 {
+		l.ContentTypes = nil
+	}
+	if len(l.Collections) == 0 {
+		l.Collections = nil
+	}
+	if len(l.Workflows) == 0 {
+		l.Workflows = nil
+	}
+	if len(l.Apps) == 0 {
+		l.Apps = nil
+	}
+	out.Locales[in.Language] = l
 }

@@ -79,3 +79,5 @@ workers:
 ```
 
 The `shared` queue is installation-wide, so other workflows can batch with these receipts. A run waits for its answer without holding a worker. A request that is still open after `AI_BATCH_DEADLINE` (default 72h) fails, which marks the receipt **Needs review**. Repeating the workflow on a receipt that was read reuses the cached answer at once.
+
+The sample has its names in Spanish too, in [`locales/es.json`](locales/es.json): a Spanish organization gets them, and `--language es` installs them anywhere.

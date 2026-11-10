@@ -7,7 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {} };
+const result = { solution: 'tank', name: 'Tank', version: '1.1.0', applied: false, changes: [], customized: [], warnings: [], slots: [], settings: {}, languages: [] };
 
 it('sends the packed solution with the choices, and returns a refused apply as its result', async () => {
   setToken('token');

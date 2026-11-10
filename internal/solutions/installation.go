@@ -48,6 +48,9 @@ type Installation struct {
 	Settings map[string]any `json:"settings"`
 	// Bindings are the slots bound by hand, to the collection chosen.
 	Bindings map[string]string `json:"bindings,omitempty"`
+	// Language is the language its display names were installed in, of
+	// the solution's locales; empty for the solution's own text.
+	Language string `json:"language,omitempty"`
 	// Paused keeps the solution's workflows from starting on their own.
 	Paused    bool      `json:"paused"`
 	AppliedBy string    `json:"applied_by"`
@@ -60,12 +63,16 @@ type Installation struct {
 	// were applied, by "<kind>:<key>": where each came from and the
 	// parameters it named, references included.
 	Components map[string]Component `json:"components,omitempty"`
+	// Locales are the solution's display names in other languages.
+	Locales map[string]Locale `json:"locales,omitempty"`
 }
 
 // Component is the settings file of a workflow or an app as it was applied.
 type Component struct {
 	File             string         `json:"file"`
 	Source           string         `json:"source"`
+	Name             string         `json:"name,omitempty"`
+	Description      string         `json:"description,omitempty"`
 	Parameters       map[string]any `json:"parameters,omitempty"`
 	AutomaticEnabled *bool          `json:"automatic_enabled,omitempty"`
 	ManualEnabled    *bool          `json:"manual_enabled,omitempty"`

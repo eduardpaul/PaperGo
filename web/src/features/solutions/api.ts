@@ -60,6 +60,9 @@ export interface SolutionResult {
   slots: SolutionSlot[];
   settings_form?: { properties?: Record<string, SettingSchema> };
   settings: Record<string, unknown>;
+  /** The language of the display names used, of languages; absent for the solution's own text. */
+  language?: string;
+  languages: string[];
 }
 
 export interface SettingSchema {
@@ -78,6 +81,8 @@ export interface SolutionOptions {
   paused?: boolean;
   prune?: boolean;
   decisions?: Record<string, Decision>;
+  /** A language the solution has names in, or "none" for its own text. */
+  language?: string;
 }
 
 export const solutionKeys = {

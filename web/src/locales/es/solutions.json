@@ -56,7 +56,12 @@
     "applied_one": "Aplicada: {{count}} cambio.",
     "applied_many": "Aplicada: {{count}} cambios.",
     "applied_other": "Aplicada: {{count}} cambios.",
-    "stale": "Has cambiado una opción. Revisa de nuevo para ver qué haría aplicar ahora."
+    "stale": "Has cambiado una opción. Revisa de nuevo para ver qué haría aplicar ahora.",
+    "language": "Idioma de los nombres",
+    "languageHint": "La solución tiene sus nombres en estos idiomas. Las claves y los valores de las opciones no tienen idioma.",
+    "languageKeep": "Como ahora: {{language}}",
+    "languageOwn": "Como ahora: el texto propio de la solución",
+    "languageNone": "El texto propio de la solución"
   },
   "action": {
     "create": "Crear",

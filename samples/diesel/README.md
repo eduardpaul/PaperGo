@@ -91,3 +91,5 @@ Converting readings again after the tank's settings change is **Run once** of Di
 - `papergo solution pack ./samples/diesel` checks it and writes `diesel-1.0.0.zip`.
 - The [solutions test](../../internal/solutions/lifecycle_test.go) installs it beside Receipts in one workspace.
 - The [diesel test](../../internal/scriptrun/diesel_test.go) runs the workflows end to end on the sample data.
+
+The sample has its names in Spanish too, in [`locales/es.json`](locales/es.json): a Spanish organization gets them, and `--language es` installs them anywhere.

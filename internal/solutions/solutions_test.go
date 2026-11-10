@@ -269,6 +269,7 @@ func TestSchemasMatchTheFiles(t *testing.T) {
 		of     any
 	}{
 		{"solution", solution, Manifest{}}, {"workflow", read("workflow"), Workflow{}}, {"app", read("app"), App{}},
+		{"locale", read("locale"), Locale{}},
 		{"field", defs["field"].(map[string]any), Field{}}, {"content_type", defs["content_type"].(map[string]any), ContentType{}},
 		{"relationship_type", defs["relationship_type"].(map[string]any), RelationshipType{}}, {"collection", defs["collection"].(map[string]any), Collection{}},
 		{"view", defs["view"].(map[string]any), View{}}, {"use", defs["use"].(map[string]any), Use{}},

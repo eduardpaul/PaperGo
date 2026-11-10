@@ -170,4 +170,6 @@ type Solution struct {
 	Manifest  Manifest
 	Workflows []Workflow
 	Apps      []App
+	// Locales are its display names in other languages, by language.
+	Locales map[string]Locale
 }
