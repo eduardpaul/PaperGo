@@ -126,15 +126,19 @@ func (s *Service) Status(ctx context.Context, subject, workspaceID, key string) 
 		}
 		workflows, applications := &workflow.Service{DMS: t}, &apps.Service{DMS: t}
 		for _, o := range in.Objects {
+			if o.Retired {
+				continue // no longer part of the solution: it needs nothing of it
+			}
 			switch o.Kind {
 			case KindWorkflow:
 				w, err := workflows.Get(ctx, subject, o.ID)
+				declared := in.Components[KindWorkflow+":"+o.Key].AutomaticEnabled
 				if err != nil {
 					say("workflow %s cannot be read; it may have been deleted", o.Key)
 				} else if w.State != "published" {
 					say("workflow %s is %s, so it does not run", o.Key, w.State)
-				} else if !w.AutomaticEnabled && !in.Paused && len(w.Definition.Triggers) > 0 && !w.ManualEnabled {
-					say("workflow %s is turned off", o.Key)
+				} else if declared != nil && *declared && !w.AutomaticEnabled && !in.Paused {
+					say("workflow %s no longer starts on its own: its automatic starts were turned off", o.Key)
 				}
 			case KindApp:
 				a, err := applications.Get(ctx, subject, o.ID)

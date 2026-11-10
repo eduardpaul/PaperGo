@@ -148,6 +148,60 @@ func TestPullReturnsWhatIsLive(t *testing.T) {
 	}
 }
 
+// Status says what keeps a solution from working, and nothing of what is
+// no longer part of it.
+func TestStatusOfWorkflows(t *testing.T) {
+	p := newPlace(t)
+	automatic := edit("workflows/levels.json", `"state": "published"`, `"state": "published", "automatic_enabled": true`)
+	p.applied(automatic, Options{})
+	status := func() Status {
+		t.Helper()
+		s, err := p.svc.Status(p.ctx, admin, p.ws, "tank")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if s := status(); !s.OK {
+		t.Fatalf("status: %+v", s)
+	}
+	// Automatic starts turned off in PaperGo: the workflow still runs by hand, and no longer on its own.
+	wf := &workflow.Service{DMS: p.dms}
+	id := p.installation("tank").object(KindWorkflow, "tank-levels").ID
+	w, err := wf.Get(p.ctx, admin, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	if _, err := wf.Update(p.ctx, admin, id, w.Version, workflow.Save{Name: w.Name, Source: w.Source, Parameters: w.Parameters, State: w.State, AutomaticEnabled: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(); s.OK || len(s.Problems) != 1 || !strings.Contains(s.Problems[0], "workflow tank-levels no longer starts on its own") {
+		t.Fatalf("status of a workflow turned off: %+v", s)
+	}
+	// A paused installation has them off on purpose.
+	paused := true
+	p.applied(automatic, Options{Paused: &paused, Decisions: map[string]string{"workflow:tank-levels": DecisionReplace}})
+	if s := status(); !s.OK {
+		t.Fatalf("status of a paused installation: %+v", s)
+	}
+
+	// A workflow the solution no longer has, deleted by hand, is not missed.
+	without := tank()
+	delete(without, "workflows/levels.json")
+	delete(without, "workflows/levels.ts")
+	p.applied(without, Options{})
+	if w, err = wf.Get(p.ctx, admin, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := wf.Delete(p.ctx, admin, id, w.Version); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(); !s.OK {
+		t.Fatalf("status after deleting a retired workflow: %+v", s)
+	}
+}
+
 // A solution says what it needs of the deployment: without what it cannot
 // work without it is refused, and status says what it works in part without.
 func TestRequiredCapabilities(t *testing.T) {
