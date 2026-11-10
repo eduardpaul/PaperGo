@@ -31,7 +31,7 @@ func (s *Service) Pull(ctx context.Context, subject, workspaceID, key string) (S
 		if err := json.Unmarshal(raw, &m); err != nil {
 			return Solution{}, err
 		}
-		p := puller{ctx: ctx, t: t, subject: subject, in: &in, refs: map[string]string{}}
+		p := puller{ctx: ctx, t: t, subject: subject, workspaceID: workspaceID, in: &in, refs: map[string]string{}}
 		for _, o := range in.Objects {
 			switch o.Kind {
 			case KindCollection:
@@ -82,7 +82,9 @@ type puller struct {
 	ctx     context.Context
 	t       *dms.Service
 	subject string
-	in      *Installation
+	// workspaceID is the workspace the installation is in.
+	workspaceID string
+	in          *Installation
 	// refs are the references the IDs of the installation stand for.
 	refs map[string]string
 }
@@ -140,6 +142,15 @@ func (p *puller) collections(m *Manifest) error {
 		if o.Role == RoleOwns {
 			if c, err := p.t.Get(p.ctx, p.subject, o.ID); err == nil {
 				slot.Name, slot.WebDAVEnabled = c.Name, c.WebdavEnabled
+				if slot.Search != nil {
+					on, _, ok, err := indexedForSearch(p.ctx, p.t, p.subject, p.workspaceID, c.ID)
+					if err != nil {
+						return err
+					}
+					if ok {
+						slot.Search = &on
+					}
+				}
 			}
 		}
 		for j := range slot.Views {

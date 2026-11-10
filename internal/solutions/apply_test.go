@@ -17,6 +17,21 @@ import (
 
 const admin = "organization-admin"
 
+// The tests run with a search index, as a deployment with search does: a
+// role and the default built-in that fills it in every collection.
+func init() {
+	workflow.RegisterRole(&workflow.Role{Key: searchIndex, Name: "Search index"})
+	workflow.RegisterBuiltIn(&workflow.BuiltIn{Key: searchIndex, Name: "Index for search", Role: searchIndex, Default: true, System: true,
+		ParametersSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Source: `import { workflow } from "@papergo/workflow";
+export default workflow<unknown, unknown, { collection: string }>({
+  triggers: (p) => [{ type: "item.created", collection_id: p.collection }],
+  concurrency: "coalesce",
+  run: () => ({}),
+});
+`})
+}
+
 // place is a workspace to install solutions into, with the services tests
 // read the result through.
 type place struct {
@@ -268,6 +283,37 @@ func TestApplyKeepsWhatWasAddedInPaperGo(t *testing.T) {
 	}
 	// A choice the solution itself drops is still refused.
 	has(t, p.apply(edit("solution.json", `["ok", "check"]`, `["ok", "reviewed"]`), Options{}), "REFUSED field tank_flag: would lose the choices check")
+}
+
+// A collection's search setting is the solution's like its name: turned
+// on in PaperGo, it stays, and a pull brings it to the files.
+func TestApplyKeepsAnEditedSearchSetting(t *testing.T) {
+	p := newPlace(t)
+	has(t, p.applied(tank(), Options{}), "update collection readings search")
+	list := p.installation("tank").object(KindCollection, "readings").ID
+	indexed := func() (bool, int) {
+		t.Helper()
+		on, version, ok, err := indexedForSearch(p.ctx, p.dms, admin, p.ws, list)
+		if err != nil || !ok {
+			t.Fatalf("search: %v %v", ok, err)
+		}
+		return on, version
+	}
+	on, version := indexed()
+	if on {
+		t.Fatal("the solution's list is indexed, and it says search: false")
+	}
+	if _, err := (&workflow.Service{DMS: p.dms}).UpdateBuiltIn(p.ctx, admin, p.ws, searchIndex, workflow.SetBuiltIn{CollectionID: list, AutomaticEnabled: true, Version: version}); err != nil {
+		t.Fatal(err)
+	}
+	same := p.applied(tank(), Options{})
+	if on, _ = indexed(); !on || len(same.Changes) != 0 || len(same.Customized) != 1 || same.Customized[0] != "collection:readings" {
+		t.Fatalf("search turned on in PaperGo was turned off again: %v\n%s\n%v", on, said(same), same.Customized)
+	}
+	pulled, err := p.svc.Pull(p.ctx, admin, p.ws, "tank")
+	if err != nil || pulled.Manifest.Collections[0].Search == nil || !*pulled.Manifest.Collections[0].Search {
+		t.Fatalf("pull did not bring the search setting: %+v %v", pulled.Manifest.Collections[0], err)
+	}
 }
 
 // What was edited in PaperGo stays, and is asked about when the solution

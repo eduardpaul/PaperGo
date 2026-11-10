@@ -779,37 +779,10 @@ func (r *run) collections() error {
 		} else if err := r.foreign(slot, c); err != nil {
 			return err
 		}
-		// WebDAV is a library's setting; a list has none.
-		state := func(name string, webdav bool) map[string]any {
-			if slot.Kind == "library" {
-				return map[string]any{"name": name, "webdav_enabled": webdav}
-			}
-			return map[string]any{"name": name}
-		}
-		want, lives := state(slot.Name, slot.WebDAVEnabled), state(c.Name, c.WebdavEnabled)
-		kept := ""
-		if role == RoleOwns {
-			var action int
-			if action, kept = r.decide(KindCollection, slot.Key, want, lives, true); action == doUpdate {
-				in := dms.UpdateResource{Name: &slot.Name}
-				if slot.Kind == "library" {
-					in.WebDAVEnabled = &slot.WebDAVEnabled
-				}
-				updated, err := r.t.Update(r.ctx, r.subject, c.ID, c.Version, in)
-				if err != nil {
-					return failed(KindCollection, slot.Key, err)
-				}
-				r.change("update", KindCollection, slot.Key, differences(lives, want))
-				lives = state(updated.Name, updated.WebdavEnabled)
-			}
-			if slot.Search != nil {
-				if err := r.search(slot, c.ID); err != nil {
-					return err
-				}
-			}
-			r.note(KindCollection, slot.Key, c.ID, role, want, lives, kept)
-		} else {
+		if role != RoleOwns {
 			r.note(KindCollection, slot.Key, c.ID, role, nil, nil, "")
+		} else if err := r.settleCollection(slot, c); err != nil {
+			return err
 		}
 		if err := r.views(slot, c.ID); err != nil {
 			return err
@@ -1001,36 +974,90 @@ func expected(ctx context.Context, t *dms.Service, subject string, slot Collecti
 	return problems, byKey, nil
 }
 
-// search turns the indexing of a collection's items on or off: the
-// search.index provider of the collection.
-func (r *run) search(slot Collection, collectionID string) error {
-	svc := &workflow.Service{DMS: r.t}
-	states, err := svc.ListBuiltIns(r.ctx, r.subject, r.workspaceID)
+// settleCollection keeps a collection the installation owns as the
+// solution says: its name, a library's WebDAV setting, and whether its
+// items are indexed for search when the solution says so.
+func (r *run) settleCollection(slot Collection, c *resources.Resource) error {
+	// WebDAV is a library's setting; a list has none. Search is part of the
+	// state when the solution names it and this PaperGo has search.
+	state := func(name string, webdav bool, search *bool) map[string]any {
+		out := map[string]any{"name": name}
+		if slot.Kind == "library" {
+			out["webdav_enabled"] = webdav
+		}
+		if search != nil {
+			out["search"] = *search
+		}
+		return out
+	}
+	wanted := slot.Search
+	var indexed *bool
+	var searchVersion int
+	if wanted != nil {
+		on, version, ok, err := indexedForSearch(r.ctx, r.t, r.subject, r.workspaceID, c.ID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			indexed, searchVersion = &on, version
+		} else {
+			r.warn("%s: this PaperGo runs without search, so its search setting was left", slot.Key)
+			wanted = nil
+		}
+	}
+	want, lives := state(slot.Name, slot.WebDAVEnabled, wanted), state(c.Name, c.WebdavEnabled, indexed)
+	action, kept := r.decide(KindCollection, slot.Key, want, lives, true)
+	if action == doUpdate {
+		if c.Name != slot.Name || (slot.Kind == "library" && c.WebdavEnabled != slot.WebDAVEnabled) {
+			in := dms.UpdateResource{Name: &slot.Name}
+			if slot.Kind == "library" {
+				in.WebDAVEnabled = &slot.WebDAVEnabled
+			}
+			updated, err := r.t.Update(r.ctx, r.subject, c.ID, c.Version, in)
+			if err != nil {
+				return failed(KindCollection, slot.Key, err)
+			}
+			c = updated
+		}
+		if wanted != nil && *indexed != *wanted {
+			svc := &workflow.Service{DMS: r.t}
+			if _, err := svc.UpdateBuiltIn(r.ctx, r.subject, r.workspaceID, searchIndex, workflow.SetBuiltIn{CollectionID: c.ID, AutomaticEnabled: *wanted, Version: searchVersion}); err != nil {
+				return failed(KindCollection, slot.Key, err)
+			}
+			indexed = wanted
+		}
+		r.change("update", KindCollection, slot.Key, differences(lives, want))
+		lives = state(c.Name, c.WebdavEnabled, indexed)
+	}
+	r.note(KindCollection, slot.Key, c.ID, RoleOwns, want, lives, kept)
+	return nil
+}
+
+// searchIndex is the built-in workflow that indexes a collection's items
+// for search.
+const searchIndex = "search.index"
+
+// indexedForSearch reads whether a collection's items are indexed for
+// search, and the version to change that at. ok is false when this PaperGo
+// runs without search.
+func indexedForSearch(ctx context.Context, t *dms.Service, subject, workspaceID, collectionID string) (on bool, version int, ok bool, err error) {
+	states, err := (&workflow.Service{DMS: t}).ListBuiltIns(ctx, subject, workspaceID)
 	if err != nil {
-		return err
+		return false, 0, false, err
 	}
 	for _, b := range states {
-		if b.BuiltIn == nil || b.Key != "search.index" {
+		if b.BuiltIn == nil || b.Key != searchIndex {
 			continue
 		}
-		in := workflow.SetBuiltIn{CollectionID: collectionID, AutomaticEnabled: *slot.Search}
-		on := true // a collection without a provider of its own is indexed
+		on = true // a collection without a provider of its own is indexed
 		for _, w := range b.Workflows {
 			if w.CollectionID != nil && *w.CollectionID == collectionID {
-				on, in.Version = w.AutomaticEnabled, w.Version
+				on, version = w.AutomaticEnabled, w.Version
 			}
 		}
-		if on == *slot.Search {
-			return nil
-		}
-		if _, err := svc.UpdateBuiltIn(r.ctx, r.subject, r.workspaceID, b.Key, in); err != nil {
-			return failed(KindCollection, slot.Key, err)
-		}
-		r.change("update", KindCollection, slot.Key, fmt.Sprintf("search %s", map[bool]string{true: "on", false: "off"}[*slot.Search]))
-		return nil
+		return on, version, true, nil
 	}
-	r.warn("%s: this PaperGo runs without search, so its search setting was left", slot.Key)
-	return nil
+	return false, 0, false, nil
 }
 
 func viewState(name string, columns []string, query, settings any, layout string, isDefault bool) map[string]any {

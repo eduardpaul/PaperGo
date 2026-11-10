@@ -63,7 +63,7 @@ func TestSolutionRoutes(t *testing.T) {
 
 	var result Result
 	w := call(h, "POST", base+"/plan", packed(t, tank()))
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Applied || len(result.Changes) != 7 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Applied || len(result.Changes) != 8 {
 		t.Fatalf("plan: %d %s", w.Code, w.Body)
 	}
 	if w = call(h, "GET", base, nil); w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"value":[]}` {
@@ -71,7 +71,7 @@ func TestSolutionRoutes(t *testing.T) {
 	}
 	options := url.QueryEscape(`{"settings": {"capacity_l": 1000}, "paused": true}`)
 	w = call(h, "POST", base+"/apply?options="+options, packed(t, tank()))
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || !result.Applied || len(result.Changes) != 7 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || !result.Applied || len(result.Changes) != 8 {
 		t.Fatalf("apply: %d %s", w.Code, w.Body)
 	}
 	if w = call(h, "POST", base+"/apply?options="+url.QueryEscape(`{"colour": "red"}`), packed(t, tank())); w.Code != 422 || !strings.Contains(w.Body.String(), "options") {

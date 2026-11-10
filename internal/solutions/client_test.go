@@ -59,7 +59,7 @@ func TestCommandsTalkToAServer(t *testing.T) {
 		t.Fatalf("list: %v\n%s", err, out)
 	}
 	out, err = run("plan", dir)
-	if err != nil || !strings.Contains(out, "tank 1.0.0 (first installation)") || !strings.Contains(out, "create  field tank_flag: choice") || !strings.Contains(out, "plan: 7 change(s); nothing was changed") {
+	if err != nil || !strings.Contains(out, "tank 1.0.0 (first installation)") || !strings.Contains(out, "create  field tank_flag: choice") || !strings.Contains(out, "plan: 8 change(s); nothing was changed") {
 		t.Fatalf("plan: %v\n%s", err, out)
 	}
 	out, err = run("apply", dir, "--set", "capacity_l=900", "--set", "time_zone=Europe/Madrid", "--bind", "readings=depósito", "--paused")
