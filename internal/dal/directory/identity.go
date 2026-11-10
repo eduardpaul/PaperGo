@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,6 +84,7 @@ type IdentityQueries interface {
 	DirectoryRoles(context.Context) ([]Role, error)
 	InsertDirectoryRole(context.Context, Role) error
 	UpdateDirectoryRole(context.Context, Role, int) (bool, error)
+	UpdateBuiltinRoleScopes(context.Context, string, []string, int) (bool, error)
 	DeleteDirectoryRole(context.Context, string, int) (bool, error)
 	RolePrincipals(context.Context, string) ([]Principal, error)
 	InsertDirectoryAssignment(context.Context, string, Principal) error
@@ -357,6 +359,31 @@ func (r *Repo) CreateRole(ctx context.Context, role Role) (Role, error) {
 }
 func (r *Repo) SaveRole(ctx context.Context, role Role, version int) error {
 	return r.change(ctx, func(q Queries) error { ok, e := q.UpdateDirectoryRole(ctx, role, version); return concurrent(ok, e) })
+}
+
+// SyncBuiltinRole gives a built-in role the scopes this build grants it,
+// when they differ from what it holds. Built-in roles change only this way.
+func (r *Repo) SyncBuiltinRole(ctx context.Context, id string, scopes []string) error {
+	return r.change(ctx, func(q Queries) error {
+		roles, err := q.DirectoryRoles(ctx)
+		if err != nil {
+			return err
+		}
+		for _, role := range roles {
+			if role.ID != id {
+				continue
+			}
+			if !role.Builtin {
+				return fmt.Errorf("%w: role %s is not built in", dberr.ErrInvalidReference, id)
+			}
+			if slices.Equal(role.Scopes, scopes) {
+				return nil
+			}
+			ok, err := q.UpdateBuiltinRoleScopes(ctx, id, scopes, role.Version)
+			return concurrent(ok, err)
+		}
+		return dberr.ErrNotFound
+	})
 }
 func (r *Repo) DeleteRole(ctx context.Context, id string, version int) error {
 	return r.change(ctx, func(q Queries) error { ok, e := q.DeleteDirectoryRole(ctx, id, version); return concurrent(ok, e) })

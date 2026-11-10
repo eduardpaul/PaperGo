@@ -6,7 +6,7 @@ Every setting has a key in `config.yaml` and an environment variable. PaperGo re
 2. `config.yaml` in the working directory, or the file `PAPERGO_CONFIG` names.
 3. Environment variables.
 
-A YAML file sets only what it names, so a mounted `config.yaml` keeps the image's defaults for everything it leaves out: one that sets only `server.port` still binds to the image's `0.0.0.0`. Unknown keys, duplicate keys and more than one YAML document are refused, and a YAML value is checked as its environment variable is. The server, `papergo admin health`, `backup`, `restore`, `initialize` and `workers` all read the same sources.
+A YAML file sets only what it names, so a mounted `config.yaml` keeps the image's defaults for everything it leaves out: one that sets only `server.port` still binds to the image's `0.0.0.0`. Unknown keys, duplicate keys and more than one YAML document are refused, and a YAML value is checked as its environment variable is. The server and `papergo admin health`, `backup`, `restore`, `initialize` and `workers` load the same configuration, so a setting the server refuses also stops an admin command, which says so; `--help` works without it.
 
 ## Settings
 

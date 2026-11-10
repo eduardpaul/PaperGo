@@ -114,6 +114,10 @@ gets the latest, and each migration moves it on by one. Both engines have the
 same file names, numbered from `0001` without gaps. A missing, misnumbered or
 unmatched file fails every test.
 
+Scopes are not schema: a new or removed scope needs no migration. Every start
+gives the built-in Administrator and Member roles the scopes of the running
+build ([identity](identity.md)).
+
 ### Changing the schema
 
 1. Edit both schema masters and regenerate the Bob models

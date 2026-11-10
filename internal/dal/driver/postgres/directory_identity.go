@@ -231,6 +231,20 @@ func (q Queries) UpdateDirectoryRole(ctx context.Context, r directory.Role, vers
 	return n == 1, dberr.Translate(err)
 }
 
+// UpdateBuiltinRoleScopes sets a built-in role's scopes, at version.
+func (q Queries) UpdateBuiltinRoleScopes(ctx context.Context, id string, scopes []string, version int) (bool, error) {
+	raw, err := json.Marshal(scopes)
+	if err != nil {
+		return false, err
+	}
+	if err := q.accessChangedIf(ctx, `EXISTS(SELECT 1 FROM identity_roles WHERE id=? AND scopes<>CAST(? AS jsonb))`, id, string(raw)); err != nil {
+		return false, err
+	}
+	set := &models.IdentityRoleSetter{Scopes: omit.From(types.NewJSON(scopes)), Version: omit.From(int64(version + 1))}
+	n, err := models.IdentityRoles.Update(set.UpdateMod(), models.UpdateWhere.IdentityRoles.ID.EQ(id), models.UpdateWhere.IdentityRoles.Version.EQ(int64(version)), models.UpdateWhere.IdentityRoles.Builtin.EQ(true)).Exec(ctx, q.exec)
+	return n == 1, dberr.Translate(err)
+}
+
 func (q Queries) DeleteDirectoryRole(ctx context.Context, id string, version int) (bool, error) {
 	if err := q.accessChanged(ctx); err != nil {
 		return false, err

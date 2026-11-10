@@ -302,26 +302,35 @@ func TestMCPYAML(t *testing.T) {
 	}
 }
 
-// Probes find the server where Load would make it listen.
+// The listen address follows the same sources as the rest: the admin
+// health probe reads it with Load.
 func TestListenAddress(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	t.Setenv("PAPERGO_CONFIG", "")
 	t.Setenv("HTTP_ADDR", "")
-	if got, err := ListenAddress(); err != nil || got != "127.0.0.1:8080" {
-		t.Fatalf("default %q %v", got, err)
+	address := func() string {
+		t.Helper()
+		c, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Address
+	}
+	if got := address(); got != "127.0.0.1:8080" {
+		t.Fatalf("default %q", got)
 	}
 	path := filepath.Join(dir, "papergo.yaml")
 	if err := os.WriteFile(path, []byte("server:\n  bind: 0.0.0.0\n  port: 9090\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PAPERGO_CONFIG", path)
-	if got, err := ListenAddress(); err != nil || got != "0.0.0.0:9090" {
-		t.Fatalf("config.yaml %q %v", got, err)
+	if got := address(); got != "0.0.0.0:9090" {
+		t.Fatalf("config.yaml %q", got)
 	}
 	t.Setenv("HTTP_ADDR", "127.0.0.1:7070")
-	if got, err := ListenAddress(); err != nil || got != "127.0.0.1:7070" {
-		t.Fatalf("environment %q %v", got, err)
+	if got := address(); got != "127.0.0.1:7070" {
+		t.Fatalf("environment %q", got)
 	}
 }
 
@@ -485,7 +494,7 @@ func TestConfigurationDocsListEverySetting(t *testing.T) {
 }
 
 // The admin commands find the data where the server keeps it.
-func TestLoadStorageReadsYAML(t *testing.T) {
+func TestLoadReadsDataPathsFromYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "papergo.yaml")
 	if err := os.WriteFile(path, []byte("server:\n  data_dir: /srv/papergo\nstorage:\n  blob_path: /mnt/blobs\n"), 0o600); err != nil {
@@ -495,12 +504,12 @@ func TestLoadStorageReadsYAML(t *testing.T) {
 	for _, key := range []string{"DATABASE_PATH", "BLOB_PATH", "SEARCH_DATABASE_PATH", "DATABASE_URL"} {
 		t.Setenv(key, "")
 	}
-	s, err := LoadStorage()
-	if err != nil || s.DatabasePath != filepath.Join("/srv/papergo", "papergo.db") || s.BlobPath != "/mnt/blobs" || s.SearchPath != filepath.Join("/srv/papergo", "search.db") || !s.SearchPathSet {
-		t.Fatalf("%+v %v", s, err)
+	c, err := Load()
+	if err != nil || c.DatabasePath != filepath.Join("/srv/papergo", "papergo.db") || c.BlobPath != "/mnt/blobs" || c.SearchPath != filepath.Join("/srv/papergo", "search.db") || !c.SearchPathSet {
+		t.Fatalf("%s %s %s %v %v", c.DatabasePath, c.BlobPath, c.SearchPath, c.SearchPathSet, err)
 	}
 	t.Setenv("DATABASE_PATH", filepath.Join(dir, "env.db"))
-	if s, err = LoadStorage(); err != nil || s.DatabasePath != filepath.Join(dir, "env.db") {
-		t.Fatalf("environment %+v %v", s, err)
+	if c, err = Load(); err != nil || c.DatabasePath != filepath.Join(dir, "env.db") {
+		t.Fatalf("environment %s %v", c.DatabasePath, err)
 	}
 }

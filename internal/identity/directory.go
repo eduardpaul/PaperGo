@@ -134,7 +134,8 @@ func (d Directory) write(ctx context.Context, actor, scope string, fn func(*sql.
 // Initialize provisions built-in roles, the configured first administrator
 // (by subject or by group) and the organization's preference defaults
 // exactly once. A later configuration change never creates another
-// administrator or changes the preferences.
+// administrator or changes the preferences. On every later start it gives
+// the built-in roles the scopes this build grants them.
 func (d Directory) Initialize(ctx context.Context, administrator, adminGroup string, preferences map[string]string) error {
 	if administrator != "" {
 		if err := ValidateSubject(administrator); err != nil {
@@ -156,17 +157,18 @@ func (d Directory) Initialize(ctx context.Context, administrator, adminGroup str
 		if err != nil {
 			return err
 		}
+		roles := builtinRoles()
 		if initialized {
+			// A build's scope catalog can differ from the one the roles
+			// were made with: the built-in roles follow it.
+			for _, r := range roles {
+				if err := repo.SyncBuiltinRole(ctx, r.ID, r.Scopes); err != nil {
+					return fmt.Errorf("update the %s role's scopes: %w", r.Name, err)
+				}
+			}
 			return nil
 		}
-		all, member := []string{}, []string{}
-		for _, scope := range Catalog {
-			all = append(all, scope.Name)
-			if scope.GrantedToMembers {
-				member = append(member, scope.Name)
-			}
-		}
-		for _, r := range []Role{{ID: AdministratorRole, Name: "Administrator", Scopes: all, Builtin: true}, {ID: MemberRole, Name: "Member", Scopes: member, Builtin: true}} {
+		for _, r := range roles {
 			if _, err := repo.CreateRole(ctx, r); err != nil {
 				return err
 			}
@@ -186,6 +188,20 @@ func (d Directory) Initialize(ctx context.Context, administrator, adminGroup str
 		}
 		return repo.SetAssignment(ctx, AdministratorRole, Principal{Type: directory.PrincipalGroup, ID: g.ID}, false)
 	})
+}
+
+// builtinRoles are the built-in roles as this build defines them: the
+// Administrator holds every scope of the catalog, the Member those granted
+// to members.
+func builtinRoles() []Role {
+	all, member := []string{}, []string{}
+	for _, scope := range Catalog {
+		all = append(all, scope.Name)
+		if scope.GrantedToMembers {
+			member = append(member, scope.Name)
+		}
+	}
+	return []Role{{ID: AdministratorRole, Name: "Administrator", Scopes: all, Builtin: true}, {ID: MemberRole, Name: "Member", Scopes: member, Builtin: true}}
 }
 
 // EnsureUser enrolls a locally managed identity with the Member role on first use.

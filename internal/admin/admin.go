@@ -3,6 +3,7 @@
 package admin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -56,11 +57,11 @@ func healthCommand(ctx context.Context, args []string, out io.Writer) error {
 		return errors.New("health requires a timeout greater than zero and at most one minute, and no positional arguments")
 	}
 	if *address == "" {
-		listen, err := config.ListenAddress()
+		c, err := configured()
 		if err != nil {
 			return err
 		}
-		if *address, err = readinessURL(listen); err != nil {
+		if *address, err = readinessURL(c.Address); err != nil {
 			return err
 		}
 	}
@@ -82,58 +83,60 @@ func healthCommand(ctx context.Context, args []string, out io.Writer) error {
 // initializeCommand creates or upgrades a database without starting the
 // server.
 func initializeCommand(ctx context.Context, args []string, out io.Writer) error {
-	stored, err := config.LoadStorage()
-	if err != nil {
-		return err
-	}
 	flags := flag.NewFlagSet("initialize", flag.ContinueOnError)
 	flags.SetOutput(out)
-	path := stored.DatabasePath
-	flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
+	path := flags.String("database", "", "SQLite database path (default: the configured one); DATABASE_URL selects PostgreSQL")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("initialize accepts no positional arguments")
 	}
-	if stored.DatabaseURL != "" {
-		return database.InitializePostgres(ctx, stored.DatabaseURL)
+	c, err := configured()
+	if err != nil {
+		return err
 	}
-	return database.Initialize(ctx, path)
+	if c.DatabaseURL != "" {
+		return database.InitializePostgres(ctx, c.DatabaseURL)
+	}
+	return database.Initialize(ctx, cmp.Or(*path, c.DatabasePath))
 }
 
 // archiveCommand backs up or restores the SQLite database, its files and
 // search store: args[0] is backup or restore.
 func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
-	stored, err := config.LoadStorage()
-	if err != nil {
-		return err
-	}
-	if stored.DatabaseURL != "" {
-		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
-	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
 	var in backup.Options
-	flags.StringVar(&in.DatabasePath, "database", stored.DatabasePath, "SQLite database path")
-	flags.StringVar(&in.BlobPath, "blobs", stored.BlobPath, "Local blob directory")
+	flags.StringVar(&in.DatabasePath, "database", "", "SQLite database path (default: the configured one)")
+	flags.StringVar(&in.BlobPath, "blobs", "", "Local blob directory (default: the configured one)")
 	flags.StringVar(&in.ArchivePath, "file", "", "Backup archive path")
-	flags.StringVar(&in.SearchPath, "search", stored.SearchPath, "SQLite search file; restore removes it and a reindex rebuilds it")
+	flags.StringVar(&in.SearchPath, "search", "", "SQLite search file (default: the configured one, else beside the database); restore removes it and a reindex rebuilds it")
 	if args[0] == "restore" {
 		flags.BoolVar(&in.Force, "force", false, "Replace existing data after validating the complete archive")
 	}
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
-	// Unless configured, the search file follows the database chosen.
-	searchExplicit := stored.SearchPathSet
-	flags.Visit(func(f *flag.Flag) { searchExplicit = searchExplicit || f.Name == "search" })
-	if !searchExplicit {
-		in.SearchPath = filepath.Join(filepath.Dir(in.DatabasePath), "search.db")
-	}
 	if flags.NArg() != 0 || in.ArchivePath == "" {
 		return errors.New("--file is required; positional arguments are not supported")
 	}
+	c, err := configured()
+	if err != nil {
+		return err
+	}
+	if c.DatabaseURL != "" {
+		return errors.New(args[0] + " archives the SQLite database; DATABASE_URL selects PostgreSQL, which its own tools back up")
+	}
+	// Unless configured, the search file follows the database chosen.
+	switch {
+	case in.SearchPath != "":
+	case c.SearchPathSet || in.DatabasePath == "":
+		in.SearchPath = c.SearchPath
+	default:
+		in.SearchPath = filepath.Join(filepath.Dir(in.DatabasePath), "search.db")
+	}
+	in.DatabasePath, in.BlobPath = cmp.Or(in.DatabasePath, c.DatabasePath), cmp.Or(in.BlobPath, c.BlobPath)
 	if args[0] == "backup" {
 		err = backup.Create(ctx, in)
 	} else {
@@ -144,6 +147,16 @@ func archiveCommand(ctx context.Context, args []string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "%s completed: %s\n", args[0], in.ArchivePath)
 	return nil
+}
+
+// configured is the server's configuration, as the server reads it: the
+// admin commands act on what it names.
+func configured() (config.Config, error) {
+	c, err := config.Load()
+	if err != nil {
+		return c, fmt.Errorf("read the configuration: %w", err)
+	}
+	return c, nil
 }
 
 // readinessURL is the readiness check of a server listening on listen. A

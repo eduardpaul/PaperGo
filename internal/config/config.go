@@ -31,6 +31,9 @@ type Config struct {
 	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
 	// by default search.db next to the database.
 	SearchPath string
+	// SearchPathSet is true when SEARCH_DATABASE_PATH was configured, rather
+	// than following the database.
+	SearchPathSet bool
 	// SearchStore is the search extension's store (SEARCH_STORE): sqlite,
 	// postgres, or none to run without search. Unset, it follows the
 	// database: postgres with DATABASE_URL, else sqlite.
@@ -173,73 +176,6 @@ func executableDirectory() (string, error) {
 	return filepath.Dir(executable), nil
 }
 
-// settingsFromLayers reads and merges the YAML layers Load reads, for the
-// commands that need a few settings without the whole configuration.
-func settingsFromLayers() (func(key, fallback string) string, error) {
-	directory, err := executableDirectory()
-	if err != nil {
-		return nil, err
-	}
-	layers, err := readLayers(os.Getenv, directory)
-	if err != nil {
-		return nil, err
-	}
-	file, err := parseLayers(layers)
-	if err != nil {
-		return nil, err
-	}
-	_, value := sources(os.Getenv, file)
-	return value, nil
-}
-
-// ListenAddress is the address the server listens on (HTTP_ADDR, or
-// server.bind and server.port in YAML), read as Load reads it but without
-// the rest of the configuration, for probes of a running server.
-func ListenAddress() (string, error) {
-	value, err := settingsFromLayers()
-	if err != nil {
-		return "", err
-	}
-	return value("HTTP_ADDR", defaultAddress), nil
-}
-
-// Storage is where PaperGo keeps its data.
-type Storage struct {
-	DatabasePath string
-	// DatabaseURL is a PostgreSQL connection URL (DATABASE_URL); see Config.
-	DatabaseURL string
-	BlobPath    string
-	SearchPath  string
-	// SearchPathSet is true when SEARCH_DATABASE_PATH was configured, rather
-	// than following the database.
-	SearchPathSet bool
-}
-
-// LoadStorage reads where PaperGo keeps its data, as Load reads it but
-// without the rest of the configuration, for the admin commands.
-func LoadStorage() (Storage, error) {
-	value, err := settingsFromLayers()
-	if err != nil {
-		return Storage{}, err
-	}
-	return storageFrom(value)
-}
-
-func storageFrom(value func(key, fallback string) string) (Storage, error) {
-	s := Storage{DatabasePath: value("DATABASE_PATH", "data/papergo.db"), DatabaseURL: value("DATABASE_URL", ""), BlobPath: value("BLOB_PATH", "data/blobs")}
-	if s.DatabaseURL != "" {
-		if u, err := url.Parse(s.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
-			return s, fmt.Errorf("DATABASE_URL must be a postgres:// URL")
-		}
-	}
-	s.SearchPath = value("SEARCH_DATABASE_PATH", "")
-	s.SearchPathSet = s.SearchPath != ""
-	if !s.SearchPathSet {
-		s.SearchPath = filepath.Join(filepath.Dir(s.DatabasePath), "search.db")
-	}
-	return s, nil
-}
-
 // sources are the two ways the configuration is read: lookup returns a
 // setting's environment variable when it is non-empty, else its YAML
 // value; value adds a fallback.
@@ -283,11 +219,17 @@ func loadLayers(getenv func(string) string, directory string, layers ...string) 
 	}
 	lookup, value := sources(getenv, file)
 	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
-	storage, err := storageFrom(value)
-	if err != nil {
-		return c, err
+	c.DatabasePath, c.DatabaseURL, c.BlobPath = value("DATABASE_PATH", "data/papergo.db"), lookup("DATABASE_URL"), value("BLOB_PATH", "data/blobs")
+	if c.DatabaseURL != "" {
+		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
+			return c, fmt.Errorf("DATABASE_URL must be a postgres:// URL")
+		}
 	}
-	c.DatabasePath, c.DatabaseURL, c.BlobPath, c.SearchPath = storage.DatabasePath, storage.DatabaseURL, storage.BlobPath, storage.SearchPath
+	c.SearchPath = lookup("SEARCH_DATABASE_PATH")
+	c.SearchPathSet = c.SearchPath != ""
+	if !c.SearchPathSet {
+		c.SearchPath = filepath.Join(filepath.Dir(c.DatabasePath), "search.db")
+	}
 	// The search store follows the database unless chosen.
 	c.SearchStore = SearchSQLite
 	if c.DatabaseURL != "" {

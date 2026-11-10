@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -11,7 +12,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"papergo/internal/config"
 	"papergo/internal/dal/database"
 	"papergo/internal/worker"
 )
@@ -23,14 +23,9 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return usage
 	}
-	stored, err := config.LoadStorage()
-	if err != nil {
-		return err
-	}
 	flags := flag.NewFlagSet("workers "+args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
-	path := stored.DatabasePath
-	flags.StringVar(&path, "database", path, "SQLite database path; DATABASE_URL selects PostgreSQL")
+	path := flags.String("database", "", "SQLite database path (default: the configured one); DATABASE_URL selects PostgreSQL")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -41,7 +36,11 @@ func workersCommand(ctx context.Context, args []string, out io.Writer) error {
 	default:
 		return usage
 	}
-	db, closeDB, err := openDatabase(ctx, stored.DatabaseURL, path)
+	c, err := configured()
+	if err != nil {
+		return err
+	}
+	db, closeDB, err := openDatabase(ctx, c.DatabaseURL, cmp.Or(*path, c.DatabasePath))
 	if err != nil {
 		return err
 	}

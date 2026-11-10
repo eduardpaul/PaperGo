@@ -10,6 +10,7 @@ import (
 	"papergo/internal/dal/directory"
 	"papergo/internal/identity"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -593,5 +594,63 @@ func TestInitializeSeedsOrganizationPreferencesOnce(t *testing.T) {
 	fresh := identity.Directory{DB: daltest.EmptyDatabase(t).SQL}
 	if err = fresh.Initialize(ctx, "admin", "", map[string]string{"time_zone": "Mars/Olympus"}); err == nil {
 		t.Fatal("an invalid preference was seeded")
+	}
+}
+
+// A database made by a build with fewer scopes gets this build's scopes
+// on the built-in roles at the next start, and only those roles change.
+func TestInitializeGivesBuiltinRolesTheCurrentScopes(t *testing.T) {
+	ctx := context.Background()
+	db := daltest.EmptyDatabase(t)
+	d := identity.Directory{DB: db.SQL}
+	if err := d.Initialize(ctx, "admin", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	custom, err := d.SaveRole(ctx, "admin", "", 0, identity.RoleInput{Name: "Readers", Scopes: []string{"item.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{identity.AdministratorRole, identity.MemberRole} {
+		if _, err = db.SQL.ExecContext(ctx, `UPDATE identity_roles SET scopes = '["item.read"]' WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), "admin", "solution.manage"); !errors.Is(err, identity.ErrForbidden) {
+		t.Fatalf("the older role still grants a newer scope: %v", err)
+	}
+	if err = d.Initialize(ctx, "admin", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	roles, err := dal.NewStore(db.SQL).Directory().Roles(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range roles {
+		switch r.ID {
+		case identity.AdministratorRole:
+			if len(r.Scopes) != len(identity.Catalog) || r.Version != 2 {
+				t.Fatalf("administrator scopes %v version %d", r.Scopes, r.Version)
+			}
+		case identity.MemberRole:
+			if !slices.Contains(r.Scopes, "comment.write") || slices.Contains(r.Scopes, "role.manage") {
+				t.Fatalf("member scopes %v", r.Scopes)
+			}
+		case custom.ID:
+			if !slices.Equal(r.Scopes, []string{"item.read"}) {
+				t.Fatalf("a custom role changed: %v", r.Scopes)
+			}
+		}
+	}
+	for _, scope := range []string{"solution.manage", "role.manage", "app.manage"} {
+		if err = identity.RequireScope(ctx, dal.NewStore(db.SQL), "admin", scope); err != nil {
+			t.Fatalf("administrator lacks %s after the start: %v", scope, err)
+		}
+	}
+	// An unchanged catalog changes nothing.
+	if err = d.Initialize(ctx, "admin", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := dal.NewStore(db.SQL).Directory().Role(ctx, identity.AdministratorRole); r.Version != 2 {
+		t.Fatalf("a start without catalog changes rewrote the role: version %d", r.Version)
 	}
 }
