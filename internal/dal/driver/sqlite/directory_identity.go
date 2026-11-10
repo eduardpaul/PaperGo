@@ -223,7 +223,7 @@ func (q Queries) UpdateDirectoryRole(ctx context.Context, r directory.Role, vers
 	if err != nil {
 		return false, err
 	}
-	if err := q.accessChangedIf(ctx, `EXISTS(SELECT 1 FROM identity_roles WHERE id=? AND scopes<>?)`, r.ID, string(scopes)); err != nil {
+	if err := q.accessChangedIf(ctx, `EXISTS(SELECT 1 FROM identity_roles WHERE id=? AND json(scopes)<>json(?))`, r.ID, string(scopes)); err != nil {
 		return false, err
 	}
 	set := &models.IdentityRoleSetter{Name: omit.From(r.Name), Description: omit.From(r.Description), Scopes: omit.From(types.NewJSON(r.Scopes)), Version: omit.From(int64(version + 1))}

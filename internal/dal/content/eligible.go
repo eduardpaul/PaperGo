@@ -11,9 +11,10 @@ import (
 	"papergo/internal/dal/access"
 )
 
-// MaxScopes bounds the per-scope decisions; a collection with more ACL scopes
-// is checked row by row.
-var MaxScopes = 4096
+// MaxScopes is how many ACL scopes of a collection a store decides one by
+// one unless it sets another limit; a collection with more is checked row by
+// row.
+const MaxScopes = 4096
 
 // inlineScopes is how many scopes a statement names as placeholders; longer
 // lists travel as one JSON array.
@@ -49,13 +50,26 @@ type keptScopes struct {
 // organization's and that of the collection's workspace. A store and its
 // transactions share one.
 type ScopeCache struct {
+	// limit is how many scopes of a collection are decided.
+	limit   int
 	mu      sync.Mutex
 	size    int
 	entries map[scopeKey]keptScopes
 }
 
-// NewScopeCache returns an empty cache.
-func NewScopeCache() *ScopeCache { return &ScopeCache{entries: map[scopeKey]keptScopes{}} }
+// NewScopeCache returns an empty cache for decisions about collections of
+// up to limit ACL scopes.
+func NewScopeCache(limit int) *ScopeCache {
+	return &ScopeCache{limit: limit, entries: map[scopeKey]keptScopes{}}
+}
+
+// maxScopes is how many ACL scopes of a collection the repository decides.
+func (r *Repo) maxScopes() int {
+	if r.scopes == nil {
+		return MaxScopes
+	}
+	return r.scopes.limit
+}
 
 // get returns the decision made for key under the access revision token.
 func (c *ScopeCache) get(token string, key scopeKey) (*Scopes, bool) {
@@ -120,7 +134,7 @@ func (r *Repo) Scopes(ctx context.Context, collectionID string, reader access.Pr
 	// the collection's own scope and for rows without one.
 	draftSQL, draftArgs := r.acl.Content("decided.id", collectionID, reader, access.ReadDraft)
 	readSQL, readArgs := r.acl.Content("decided.id", collectionID, reader, access.Read)
-	args := []any{collectionID, collectionID, MaxScopes + 1, collectionID, collectionID}
+	args := []any{collectionID, collectionID, r.maxScopes() + 1, collectionID, collectionID}
 	args = append(append(args, draftArgs...), readArgs...)
 	out := &Scopes{}
 	listed := 0
@@ -150,7 +164,7 @@ SELECT id,(SELECT count(*) FROM listed),EXISTS(SELECT 1 FROM resources WHERE con
 	if err != nil {
 		return nil, err
 	}
-	if listed > MaxScopes {
+	if listed > r.maxScopes() {
 		out = nil
 	}
 	if cached {

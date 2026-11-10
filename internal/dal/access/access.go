@@ -205,6 +205,10 @@ func (d Dialect) Content(scopeColumn, collectionID string, p Principal, action A
 	// resource, and never a workspace.
 	module, moduleArgs := d.module("'item'", p, action)
 	args := append([]any{collectionID}, moduleArgs...)
+	// within tests the collection row, so it is asked for Write whatever
+	// the action: for Read it would also pass a listed collection's
+	// workspace, an exception that holds for the workspace row and never
+	// for content.
 	limit, limitArgs := within("acl", p, Write)
 	args = append(args, limitArgs...)
 	args = append(args, collectionID, p.Subject)

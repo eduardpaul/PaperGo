@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"papergo/internal/dal/content"
@@ -279,7 +280,8 @@ func TestScopeDecisionsAreKeptUntilAccessChanges(t *testing.T) {
 }
 
 // A collection with many scopes names them in one list, and one with more
-// than MaxScopes checks each row; both list what deciding every row lists.
+// than its store's scope limit checks each row; both list what deciding every
+// row lists, for people and for access tokens.
 func TestManyScopesMatchRowChecks(t *testing.T) {
 	s, w, c := fixture(t)
 	ctx := testContext
@@ -306,11 +308,15 @@ func TestManyScopesMatchRowChecks(t *testing.T) {
 	check := func(step string) {
 		t.Helper()
 		wantView(t, s, step, "reader", c.ID, want...)
-		for _, surface := range []string{"head", "published"} {
-			for _, subject := range []string{"alice", "reader"} {
+		for _, surface := range []string{"auto", "head", "published"} {
+			for _, subject := range []string{"alice", "reader", "reader token"} {
+				ctx := ctx
+				if subject == "reader token" {
+					ctx = identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: "reader", ID: "token", Scopes: []string{"item.read"}})
+				}
 				var views [2]int
 				for i, rowACL := range []bool{false, true} {
-					q, err := s.Query(ctx, subject, c.ID, QueryRequest{Surface: surface, IncludeTotal: true, Limit: 200, rowACL: rowACL})
+					q, err := s.Query(ctx, strings.TrimSuffix(subject, " token"), c.ID, QueryRequest{Surface: surface, IncludeTotal: true, Limit: 200, rowACL: rowACL})
 					if err != nil {
 						t.Fatal(step, surface, subject, err)
 					}
@@ -325,10 +331,8 @@ func TestManyScopesMatchRowChecks(t *testing.T) {
 		}
 	}
 	check("listed scopes")
-	limit := content.MaxScopes
-	t.Cleanup(func() { content.MaxScopes = limit })
-	content.MaxScopes = 8
-	// Decisions kept under the larger limit are made again after a change.
+	// A store that decides at most eight scopes checks each row.
+	s.DAL = s.DAL.WithScopeLimit(8)
 	publishedItem(t, s, c.ID, "Late")
 	setGrants(t, s, create(t, s, c.ID, "item", "Hidden", nil).ID, Permission{"user", "alice", "manage", "allow"})
 	want = append(want, "Late")
@@ -492,4 +496,37 @@ func TestKeptScopeDecisionsFollowAScopeWithoutGrants(t *testing.T) {
 		t.Fatal("the counts still hold the row", after)
 	}
 	wantView(t, s, "a scope without grants", "reader", c.ID, "Other")
+}
+
+// A request made with an access token reads what its holder reads, within
+// the token's scopes, whether its rows are matched by scope or checked one
+// by one.
+func TestTokenReadersListWhatRowChecksList(t *testing.T) {
+	s, w, c := fixture(t)
+	ctx := testContext
+	if err := s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 30; i++ {
+		publishedItem(t, s, c.ID, fmt.Sprintf("Item %02d", i))
+	}
+	token := identity.WithAccessToken(ctx, identity.AccessTokenIdentity{Subject: "reader", ID: "token", Scopes: []string{"item.read"}})
+	for _, surface := range []string{"auto", "head", "published"} {
+		var listed [2]int
+		for i, rowACL := range []bool{false, true} {
+			q, err := s.Query(token, "reader", c.ID, QueryRequest{Surface: surface, IncludeTotal: true, Limit: 50, rowACL: rowACL})
+			if err != nil {
+				t.Fatal(surface, err)
+			}
+			if listed[i] = len(q.Data); counted(q.Total) != listed[i] {
+				t.Fatal(surface, rowACL, "total", counted(q.Total), "page", listed[i])
+			}
+		}
+		if want := 30; surface != "head" && listed != [2]int{want, want} {
+			t.Fatal(surface, "listed", listed, "want", want)
+		}
+		if listed[0] != listed[1] {
+			t.Fatal(surface, "matched by scope", listed[0], "row checks", listed[1])
+		}
+	}
 }

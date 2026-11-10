@@ -275,7 +275,7 @@ func NewStore(sqlDB *sql.DB) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
-		scopes:  content.NewScopeCache(),
+		scopes:  content.NewScopeCache(content.MaxScopes),
 	}
 }
 
@@ -285,8 +285,17 @@ func NewStoreWithDialect(sqlDB *sql.DB, dialect Dialect) *Store {
 		db:      bob.NewDB(sqlDB),
 		sqlDB:   sqlDB,
 		dialect: dialect,
-		scopes:  content.NewScopeCache(),
+		scopes:  content.NewScopeCache(content.MaxScopes),
 	}
+}
+
+// WithScopeLimit returns a Store that decides up to limit ACL scopes of a
+// collection one by one and checks the rows of collections with more, keeping
+// its decisions apart from s's.
+func (s *Store) WithScopeLimit(limit int) *Store {
+	out := *s
+	out.scopes = content.NewScopeCache(limit)
+	return &out
 }
 
 // WithTx returns a Store bound to an existing *sql.Tx transaction.
