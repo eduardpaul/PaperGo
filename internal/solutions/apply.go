@@ -197,7 +197,7 @@ func (s *Service) run(ctx context.Context, subject, workspaceID string, sol Solu
 		return Result{}, err
 	}
 	r := &run{ctx: ctx, subject: subject, workspaceID: workspaceID, sol: sol, opts: o, papergo: s.PaperGo,
-		ids: map[string]string{}, fieldIDs: map[string]string{}, typeIDs: map[string]string{},
+		ids: map[string]string{}, fieldIDs: map[string]string{}, typeIDs: map[string]string{}, lookups: map[string]bool{},
 		preferences: map[string]string{"time_zone": preferences.TimeZone, "language": preferences.Language, "default_currency": preferences.DefaultCurrency,
 			"number_format": preferences.NumberFormat, "date_format": preferences.DateFormat, "time_format": preferences.TimeFormat},
 		result: Result{Solution: sol.Manifest.Key, Name: sol.Manifest.Name, Version: sol.Manifest.Version, Changes: []Change{}, Refusals: []Refusal{}, Customized: []string{}, Warnings: []string{}, Slots: []Slot{}, Settings: map[string]any{}, SettingsGiven: []string{}, Languages: sol.Languages()}}
@@ -248,6 +248,8 @@ type run struct {
 	fieldIDs map[string]string
 	typeIDs  map[string]string
 	settings map[string]any
+	// lookups are the lookup fields, by key: they wait for the collections.
+	lookups map[string]bool
 	// given are the settings given by hand, now or in an earlier apply.
 	given map[string]any
 }
@@ -298,7 +300,11 @@ func (r *run) reconcile() error {
 	r.result.Paused = r.next.Paused
 	r.checkVersion()
 	r.settle()
-	for _, step := range []func() error{r.fields, r.relationshipTypes, r.contentTypes, r.collections, r.workflows, r.apps} {
+	// A lookup field needs the collection it looks up, which needs its
+	// content types, which need their other fields: such fields come after
+	// the collections, and their types are completed then.
+	early, late := func() error { return r.contentTypes(false) }, func() error { return r.contentTypes(true) }
+	for _, step := range []func() error{r.fields, r.relationshipTypes, early, r.collections, r.lookupFields, late, r.extensionsAndViews, r.workflows, r.apps} {
 		if err := step(); err != nil {
 			return err
 		}
@@ -511,7 +517,26 @@ func fieldState(label string, required, indexed bool, choices []string, f catalo
 	return state
 }
 
+// fields settles the solution's fields, but for its lookup fields.
 func (r *run) fields() error {
+	for _, f := range r.sol.Manifest.Fields {
+		if f.Options.LookupContainerID != "" {
+			r.lookups[f.Key] = true
+		}
+	}
+	return r.settleFields(false)
+}
+
+// lookupFields settles the lookup fields, once the collections they look
+// up are there.
+func (r *run) lookupFields() error {
+	if len(r.lookups) == 0 {
+		return nil
+	}
+	return r.settleFields(true)
+}
+
+func (r *run) settleFields(lookups bool) error {
 	all, err := r.t.CatalogFields(r.ctx, r.subject)
 	if err != nil {
 		return err
@@ -522,11 +547,14 @@ func (r *run) fields() error {
 		byKey[f.Key] = append(byKey[f.Key], f)
 	}
 	for _, f := range r.sol.Manifest.Fields {
+		if r.lookups[f.Key] != lookups {
+			continue
+		}
 		options := f.Options
 		if ref := options.LookupContainerID; ref != "" {
-			id, ok := r.existingCollection(strings.TrimPrefix(ref, RefCollection))
+			id, ok := r.ids[ref]
 			if !ok {
-				r.refuse(KindField, f.Key, "looks up a collection this apply creates; apply the solution without the field first, or bind the collection")
+				r.refuse(KindField, f.Key, "looks up the collection %s, which could not be installed", strings.TrimPrefix(ref, RefCollection))
 				continue
 			}
 			options.LookupContainerID = id
@@ -558,6 +586,11 @@ func (r *run) fields() error {
 		// The field's state is the solution's part of it: its choices, of
 		// those the field has.
 		lives := fieldState(live.Label, live.Required, live.Indexed, present(f.Choices, live.Choices), live.Type, live.Options)
+		if live.Options.LookupContainerID != options.LookupContainerID {
+			r.refuse(KindField, f.Key, "looks up another collection than %s now stands for: a lookup field keeps the collection it was made for", strings.TrimPrefix(f.Options.LookupContainerID, RefCollection))
+			r.note(KindField, f.Key, live.ID, RoleOwns, want, lives, "")
+			continue
+		}
 		if live.Type != f.Type || live.Scale != f.Scale || live.Options.Multiple != f.Options.Multiple {
 			r.refuse(KindField, f.Key, "is a %s field (scale %d) and the solution says %s (scale %d): a field's type cannot change once it holds values", live.Type, live.Scale, f.Type, f.Scale)
 			r.note(KindField, f.Key, live.ID, RoleOwns, want, lives, "")
@@ -634,7 +667,11 @@ func (r *run) relationshipTypes() error {
 	return nil
 }
 
-func (r *run) contentTypes() error {
+// contentTypes settles the solution's content types. Early, before the
+// collections, a type with lookup fields is only made sure to be there,
+// with its other fields; late, once those fields are, such types are
+// settled like the rest were.
+func (r *run) contentTypes(late bool) error {
 	all, err := r.t.CatalogContentTypes(r.ctx, r.subject)
 	if err != nil {
 		return err
@@ -653,16 +690,35 @@ func (r *run) contentTypes() error {
 		keyOf[f.ID] = f.Key
 	}
 	for _, t := range r.sol.Manifest.ContentTypes {
-		ids, ready := make([]string, 0, len(t.Fields)), true
+		ids, ready, waits := make([]string, 0, len(t.Fields)), true, false
 		for _, key := range t.Fields {
 			id, ok := r.fieldIDs[key]
-			ids, ready = append(ids, id), ready && ok
+			switch {
+			case ok:
+				ids = append(ids, id)
+			case r.lookups[key] && !late:
+			default:
+				ready = false
+			}
+			waits = waits || r.lookups[key]
 		}
-		if !ready {
-			continue // one of its fields was refused
+		if !ready || (late && !waits) {
+			continue // one of its fields was refused, or it was settled early
+		}
+		live := byKey[t.Key]
+		if waits && !late {
+			if live == nil {
+				created, err := r.t.CreateContentType(r.ctx, r.subject, dms.ContentTypeInput{Key: t.Key, Name: t.Name, FieldIds: ids})
+				if err != nil {
+					return failed(KindContentType, t.Key, err)
+				}
+				r.change("create", KindContentType, t.Key, fmt.Sprintf("%d field(s)", len(ids)))
+				live = created
+			}
+			r.typeIDs[t.Key], r.ids[RefType+t.Key] = live.ID, live.ID
+			continue
 		}
 		want := map[string]any{"name": t.Name, "fields": t.Fields}
-		live := byKey[t.Key]
 		if live == nil {
 			created, err := r.t.CreateContentType(r.ctx, r.subject, dms.ContentTypeInput{Key: t.Key, Name: t.Name, FieldIds: ids})
 			if err != nil {
@@ -724,25 +780,6 @@ func (r *run) contentTypes() error {
 	return nil
 }
 
-// existingCollection is the collection a slot stands for when it already
-// exists: bound by hand, or installed before.
-func (r *run) existingCollection(slot string) (string, bool) {
-	if id := r.opts.Bindings[slot]; id != "" {
-		return id, true
-	}
-	if r.previous != nil {
-		if id := r.previous.Bindings[slot]; id != "" {
-			return id, true
-		}
-		if o := r.previous.object(KindCollection, slot); o != nil {
-			if _, err := r.t.Get(r.ctx, r.subject, o.ID); err == nil {
-				return o.ID, true
-			}
-		}
-	}
-	return "", false
-}
-
 func (r *run) collections() error {
 	for _, slot := range r.sol.Manifest.Collections {
 		before := r.previous.object(KindCollection, slot.Key)
@@ -784,7 +821,24 @@ func (r *run) collections() error {
 		} else if err := r.settleCollection(slot, c); err != nil {
 			return err
 		}
-		if err := r.views(slot, c.ID); err != nil {
+	}
+	return nil
+}
+
+// extensionsAndViews gives each collection what needs every field of the
+// solution to be there: its fields on another's types, and its views.
+func (r *run) extensionsAndViews() error {
+	for _, slot := range r.sol.Manifest.Collections {
+		id, ok := r.ids[RefCollection+slot.Key]
+		if !ok {
+			continue // refused
+		}
+		if !slot.Owned() {
+			if err := r.extend(slot, id); err != nil {
+				return err
+			}
+		}
+		if err := r.views(slot, id); err != nil {
 			return err
 		}
 	}
@@ -894,10 +948,9 @@ func (r *run) attach(slot Collection, c *resources.Resource) (*resources.Resourc
 	return c, nil
 }
 
-// foreign verifies what a slot expects of another's collection, and adds
-// the solution's own fields to the list's copies of its types.
+// foreign verifies what a slot expects of another's collection.
 func (r *run) foreign(slot Collection, c *resources.Resource) error {
-	problems, listTypes, err := expected(r.ctx, r.t, r.subject, slot, c.ID)
+	problems, _, err := expected(r.ctx, r.t, r.subject, slot, c.ID)
 	if err != nil {
 		return err
 	}
@@ -908,6 +961,20 @@ func (r *run) foreign(slot Collection, c *resources.Resource) error {
 		if id, ok := r.typeIDs[key]; ok {
 			r.ids[RefType+key] = id
 		}
+	}
+	return nil
+}
+
+// extend adds the solution's own fields to another's collection: to the
+// list's copies of its types, so the catalog types stay as their owner
+// made them.
+func (r *run) extend(slot Collection, collectionID string) error {
+	if len(slot.Extends) == 0 {
+		return nil
+	}
+	_, listTypes, err := expected(r.ctx, r.t, r.subject, slot, collectionID)
+	if err != nil {
+		return err
 	}
 	for _, key := range sortedKeys(slot.Extends) {
 		lt := listTypes[key]
@@ -924,7 +991,7 @@ func (r *run) foreign(slot Collection, c *resources.Resource) error {
 		}
 		name := slot.Key + "/" + key
 		if len(added) > 0 {
-			if _, err := r.t.UpdateListType(r.ctx, r.subject, c.ID, lt.ID, lt.Version, dms.ListTypeInput{FieldIds: ids, HiddenFieldIds: lt.HiddenFieldIds, Rules: lt.Rules, FieldOrder: lt.FieldOrder, FieldSettings: lt.FieldSettings}); err != nil {
+			if _, err := r.t.UpdateListType(r.ctx, r.subject, collectionID, lt.ID, lt.Version, dms.ListTypeInput{FieldIds: ids, HiddenFieldIds: lt.HiddenFieldIds, Rules: lt.Rules, FieldOrder: lt.FieldOrder, FieldSettings: lt.FieldSettings}); err != nil {
 				return failed(KindExtension, name, err)
 			}
 			r.change("extend", KindExtension, name, strings.Join(added, ", "))

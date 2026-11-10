@@ -316,6 +316,58 @@ func TestApplyKeepsAnEditedSearchSetting(t *testing.T) {
 	}
 }
 
+// A lookup field may look up the solution's own collection, or one it
+// uses: it is made once the collection is there, and its type completed.
+func TestApplyInstallsLookupFields(t *testing.T) {
+	p := newPlace(t)
+	withLookup := func() fstest.MapFS {
+		files := tank()
+		files["solution.json"] = &fstest.MapFile{Data: []byte(strings.NewReplacer(
+			`{"key": "tank_flag", "label": "Check", "type": "choice", "choices": ["ok", "check"]}`,
+			`{"key": "tank_flag", "label": "Check", "type": "choice", "choices": ["ok", "check"]}, {"key": "tank_previous", "label": "Previous reading", "type": "lookup", "options": {"lookup_container_id": "$collection:readings"}}`,
+			`["tank_measured_at", "tank_flag"]`, `["tank_measured_at", "tank_flag", "tank_previous"]`,
+			`["$name", "tank_measured_at"]`, `["$name", "tank_measured_at", "tank_previous"]`,
+		).Replace(string(files["solution.json"].Data)))}
+		return files
+	}
+	first := p.applied(withLookup(), Options{})
+	for _, want := range []string{"create content_type tank_reading 2 field(s)", "create collection readings list Tank", "create field tank_previous lookup", "update content_type tank_reading fields", "create view readings/all"} {
+		has(t, first, want)
+	}
+	in := p.installation("tank")
+	list := in.object(KindCollection, "readings").ID
+	fields, err := p.dms.Fields(p.ctx, admin, list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fields {
+		if f.Key == "tank_previous" {
+			found = f.Options.LookupContainerID == list
+		}
+	}
+	if !found {
+		t.Fatalf("the list has no lookup field that looks it up: %+v", fields)
+	}
+	if again := p.applied(withLookup(), Options{}); len(again.Changes) != 0 || len(again.Customized) != 0 {
+		t.Fatalf("applying again:\n%s\n%v", said(again), again.Customized)
+	}
+
+	// Another solution's field looks up the list it uses.
+	uses := bills()
+	uses["solution.json"] = &fstest.MapFile{Data: []byte(strings.NewReplacer(
+		`{"key": "bills_invoice", "label": "Invoice number", "type": "text"}`,
+		`{"key": "bills_invoice", "label": "Invoice number", "type": "text"}, {"key": "bills_reading", "label": "Reading", "type": "lookup", "options": {"lookup_container_id": "$collection:readings"}}`,
+		`"extends": {"tank_reading": ["bills_invoice"]}`, `"extends": {"tank_reading": ["bills_invoice", "bills_reading"]}`,
+	).Replace(string(uses["solution.json"].Data)))}
+	r := p.applied(uses, Options{})
+	has(t, r, "create field bills_reading lookup")
+	has(t, r, "extend extension readings/tank_reading bills_invoice, bills_reading")
+	if again := p.applied(uses, Options{}); len(again.Changes) != 0 {
+		t.Fatalf("applying the second solution again:\n%s", said(again))
+	}
+}
+
 // What was edited in PaperGo stays, and is asked about when the solution
 // changes the same thing.
 func TestApplyKeepsWhatWasEdited(t *testing.T) {

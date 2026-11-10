@@ -85,7 +85,7 @@ A solution cannot know the IDs its lists and types will have, so it names them:
 | `$type:<key>` | a content type of the solution, or one a collection expects |
 | `$setting:<name>` | the value of one of the solution's settings |
 
-References stand in parameters, in a view's query and in a lookup field's `lookup_container_id`. An ID anywhere in a solution, its scripts included, is a problem: a script reads IDs from its parameters.
+References stand in parameters, in a view's query and in a lookup field's `lookup_container_id`. A lookup field may look up a collection of its own solution: it is made once the collection is there, and it keeps that collection afterwards. An ID anywhere in a solution, its scripts included, is a problem: a script reads IDs from its parameters.
 
 ### Languages
 
