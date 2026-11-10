@@ -338,6 +338,9 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 				return err
 			}
 		} else {
+			if in.Version == 0 {
+				return &dms.PreconditionRequired{Current: w.Version}
+			}
 			if in.Version != w.Version {
 				return dms.ErrPreconditionFailed
 			}

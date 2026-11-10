@@ -7898,7 +7898,7 @@
       "put": {
         "summary": "Set Built-in Workflow",
         "operationId": "setWorkflowBuiltIn",
-        "description": "Save built-in parameters, manual_enabled, automatic_enabled, state and disabled_triggers independently. Automatic content processing requires collection_id. Configuring manual use with automatic_enabled false does not subscribe to events. Existing settings require If-Match.",
+        "description": "Save built-in parameters, manual_enabled, automatic_enabled, state and disabled_triggers independently. Automatic content processing requires collection_id. Configuring manual use with automatic_enabled false does not subscribe to events. The first call creates the setting; later calls require its ETag in If-Match, which the list of built-ins gives as version. A call without it, once the setting exists, returns 428 with the current ETag in the ETag header.",
         "parameters": [
           {
             "name": "id",
@@ -7924,7 +7924,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+            "description": "The current quoted numeric ETag, required once the setting exists; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -8031,6 +8031,24 @@
           },
           "422": {
             "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The setting exists and If-Match is missing; the ETag header holds its current ETag.",
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {

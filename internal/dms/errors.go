@@ -1,6 +1,9 @@
 package dms
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrForbidden      = errors.New("access denied")
@@ -20,6 +23,14 @@ var (
 	// first page: its groups would repeat or skip some of those read.
 	ErrFiguresChanged = errors.New("the figures changed while their pages were read; read them again from the first page")
 )
+
+// PreconditionRequired is a write to a resource that exists, made without
+// If-Match. Current is the version its ETag names, which a retry sends.
+type PreconditionRequired struct{ Current int }
+
+func (e *PreconditionRequired) Error() string {
+	return fmt.Sprintf("If-Match is required; the current ETag is \"%d\"", e.Current)
+}
 
 type ValidationError struct{ Message string }
 

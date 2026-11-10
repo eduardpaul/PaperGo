@@ -431,6 +431,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var max *http.MaxBytesError
 	var moduleProblem *Problem
 	var openTask *taskstore.OpenError
+	var required *dms.PreconditionRequired
 	switch {
 	case errors.As(err, &moveConflict):
 		extensions := map[string]any{"source_item_id": moveConflict.SourceID}
@@ -478,6 +479,9 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):
 		problem(409, "folder_not_empty", "The folder is not empty.")
+	case errors.As(err, &required):
+		etag(w, required.Current)
+		problem(428, "precondition_required", required.Error())
 	case errors.Is(err, dms.ErrPreconditionFailed) || errors.Is(err, identity.ErrPreconditionFailed):
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
 	case errors.Is(err, dms.ErrIntegrationBusy):

@@ -193,3 +193,37 @@ func TestTagVocabularyRoute(t *testing.T) {
 		t.Fatalf("keywords: %d %s", w.Code, w.Body)
 	}
 }
+
+// A per-collection built-in that exists answers a PUT without If-Match
+// with 428 and the ETag to send, rather than as a stale write.
+func TestBuiltInSettingWithoutIfMatch(t *testing.T) {
+	h, s := setupWorkflows(t)
+	ctx := t.Context()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "library", Name: "Photos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/v1/workspaces/" + ws.ID + "/workflow-builtins/documents.photos_to_pdf"
+	body := `{"collection_id": "` + lib.ID + `", "manual_enabled": true}`
+	w := request(h, "PUT", path, body, testToken, "", "application/json")
+	if w.Code != 200 {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	created := w.Header().Get("ETag")
+	w = request(h, "PUT", path, body, testToken, "", "application/json")
+	var problem struct{ Code, Detail string }
+	_ = json.Unmarshal(w.Body.Bytes(), &problem)
+	if w.Code != 428 || w.Header().Get("ETag") != created || problem.Code != "precondition_required" || !strings.Contains(problem.Detail, created) {
+		t.Fatalf("update without If-Match: %d ETag %q %s", w.Code, w.Header().Get("ETag"), w.Body)
+	}
+	if w = request(h, "PUT", path, body, testToken, `"99"`, "application/json"); w.Code != 412 {
+		t.Fatalf("stale If-Match: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "PUT", path, body, testToken, created, "application/json"); w.Code != 200 {
+		t.Fatalf("update with the ETag the 428 named: %d %s", w.Code, w.Body)
+	}
+}
