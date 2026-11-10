@@ -1,6 +1,6 @@
 # Solutions (plan)
 
-Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Steps 0, 4 and 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
+Status: steps 1 to 3 implemented on `feature/solutions`: the folder format and `papergo solution pack`, and planning, applying, the installation and its status in the API and the command line, as [Solutions](../solutions.md) describes. Two things were built differently from what follows: the installation is one document per workspace in the settings store (key `solutions`), not two tables, and plan and apply answer at once instead of starting an operation, since applying is a short transaction. Routes are under the workspace (`/v1/workspaces/{id}/solutions/{key}`). The samples are converted in step 1b. Steps 1b and 5 are done too: the Diesel and Receipts samples are solution folders. Step 0's quick wins are done except unique field keys and parameter `PATCH`, as its section says. Steps 4 and 6 are planned. [Workspace apps](workspace-apps.md) names solutions as its next step: "lists, workflows and apps installed together into an existing workspace, upgraded in place and removed together". This plan says how, starting from what a real installation needed.
 
 ## Why
 
@@ -253,10 +253,11 @@ The order puts the smallest things that remove the most scripting first.
 
 **Step 0: quick wins, each on its own and useful without solutions.**
 
-1. Unique catalog field keys.
-2. `PATCH` for workflow and app parameters and state; `PUT` bodies that ignore the read-only properties a `GET` returns; errors that name the field (`invalid JSON request body` becomes `unknown property "limit" in query`); `412` and `428` answers that carry the current ETag.
-3. The token route in the NPM sample's proxy configuration.
-4. An image published from `main`, and each sample naming the PaperGo version it needs. The published image was 27 commits behind the samples in `main`, so following a sample's README could not work.
+1. Errors that name the property (done): `invalid JSON request body` says `unknown property "limit"`, which value has the wrong kind, or where the JSON breaks.
+2. The command line behind a signing proxy (done): tokens are PaperGo's own to check, so the NPM sample runs `papergo solution` on its backend network.
+3. An image published from `main` (done): `ghcr.io/eduardpaul/papergo:edge`, by the `edge` workflow. The published release was 27 commits behind the samples in `main`, so following a sample's README could not work.
+4. Unique catalog field keys: **not done, and not a quick win.** PaperGo's own Documents template creates a `description` field, and beside a `description` of another definition it creates a second one. Making keys unique changes what collection templates and package imports do when a key is taken, which is a decision of its own. Solutions do not wait for it: what a solution owns starts with its key, and a key two catalog fields share is refused by name.
+5. `PATCH` for workflow and app parameters, and `412`/`428` answers that carry the current ETag: not done. Settings reach parameters through the solution now, which was the need behind the first; both remain worth having for other API clients.
 
 **Step 1: the folder and `pack`** (done). The manifest's JSON Schema, reference checking, compiling. Tests: `internal/solutions`, which also packs the Diesel sample's sources laid out as a solution. Core change: `workflow.Check`, the workflow compiler without a database.
 
