@@ -49,11 +49,13 @@ const refused = [
   new RegExp(`^/v1/workspaces/${segment}/apps(/|$)`),
 ];
 // Routes an app may read but not change: what runs as its author, decides
-// who has access, or has the server fetch from the network.
+// who has access, installs what a workspace runs, or has the server fetch
+// from the network.
 const readOnly = [
   new RegExp(`^/v1/workflows/${segment}$`),
   new RegExp(`^/v1/workspaces/${segment}/workflows$`),
   new RegExp(`^/v1/workspaces/${segment}/workflow-builtins(/|$)`),
+  new RegExp(`^/v1/workspaces/${segment}/solutions(/|$)`),
   new RegExp(`^/v1/workspaces/${segment}/members(/|$)`),
   new RegExp(`^/v1/resources/${segment}/permissions$`),
   new RegExp(`^/v1/resources/${segment}/integrations(/|$)`),

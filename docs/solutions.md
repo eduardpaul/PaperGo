@@ -213,6 +213,8 @@ Plan and apply take the ZIP as the body (`Content-Type: application/zip`, at mos
 
 A workspace's installations are kept with the workspace and go with it.
 
+An [app](apps.md) may read these routes as its viewer, to say that its solution needs attention; the app page refuses its plans, applies and removals, whoever views it.
+
 ## Editors
 
 `papergo solution schema`, `schema workflow` and `schema app` print the JSON Schemas of `solution.json` and of the two settings files, for completion and checking while typing.
