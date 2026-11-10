@@ -175,7 +175,13 @@ func TestProxyConfigurationFailsClosed(t *testing.T) {
 	if err != nil || len(c.ProxyTrustedCIDRs) != 1 {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ key, value string }{{"PROXY_TRUSTED_CIDRS", ""}, {"PROXY_TRUSTED_CIDRS", "0.0.0.0/0"}, {"PROXY_SECRET_FILE", "missing"}, {"PUBLIC_URL", "http://docs.example.com"}, {"ADMIN_SUBJECT", ""}, {"OIDC_GROUPS_CLAIM", "groups"}, {"ADMIN_GROUP", "admins"}, {"OIDC_CLIENT_ID", "papergo"}} {
+	t.Run("secret only", func(t *testing.T) {
+		t.Setenv("PROXY_TRUSTED_CIDRS", "")
+		if c, err := Load(); err != nil || len(c.ProxyTrustedCIDRs) != 0 {
+			t.Fatal(c.ProxyTrustedCIDRs, err)
+		}
+	})
+	for _, tc := range []struct{ key, value string }{{"PROXY_TRUSTED_CIDRS", "172.29.242.2/32,"}, {"PROXY_TRUSTED_CIDRS", "0.0.0.0/0"}, {"PROXY_SECRET_FILE", "missing"}, {"PUBLIC_URL", "http://docs.example.com"}, {"ADMIN_SUBJECT", ""}, {"OIDC_GROUPS_CLAIM", "groups"}, {"ADMIN_GROUP", "admins"}, {"OIDC_CLIENT_ID", "papergo"}} {
 		t.Run(tc.key+tc.value, func(t *testing.T) {
 			t.Setenv(tc.key, tc.value)
 			if _, err := Load(); err == nil {

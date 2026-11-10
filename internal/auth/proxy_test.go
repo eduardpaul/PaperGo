@@ -72,6 +72,40 @@ func TestProxyRequiresPeerSecretAndUnambiguousIdentity(t *testing.T) {
 	}
 }
 
+func TestProxyWithoutTrustedNetworksRequiresTheSecret(t *testing.T) {
+	secret := strings.Repeat("s", 64)
+	proxy, err := NewProxy(secret, nil, "https://docs.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, peer, secret string
+		valid              bool
+	}{
+		{"any peer with the secret", "10.1.2.3:1234", secret, true},
+		{"IPv6 peer with the secret", "[fd00::5]:1234", secret, true},
+		{"wrong secret", "10.1.2.3:1234", strings.Repeat("x", 64), false},
+		{"no secret", "10.1.2.3:1234", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "https://docs.example.com/v1/identity/me", nil)
+			r.RemoteAddr = tc.peer
+			r.Header.Set(ProxySubjectHeader, "alice")
+			if tc.secret != "" {
+				r.Header.Set(ProxySecretHeader, tc.secret)
+			}
+			id, err := proxy.Authenticate(r)
+			if tc.valid {
+				if err != nil || id.Subject != "alice" {
+					t.Fatal(id, err)
+				}
+			} else if err == nil {
+				t.Fatal("identity accepted without the proxy secret")
+			}
+		})
+	}
+}
+
 func TestProxyRejectsCrossOriginMutations(t *testing.T) {
 	secret := strings.Repeat("s", 64)
 	p, err := NewProxy(secret, []netip.Prefix{netip.MustParsePrefix("172.29.242.2/32")}, "https://DOCS.example.com:443")

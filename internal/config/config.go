@@ -472,15 +472,18 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		if len(c.ProxySecret) < 32 || len(c.ProxySecret) > 256 || strings.ContainsAny(c.ProxySecret, "\r\n\x00") {
 			return c, fmt.Errorf("proxy secret must contain 32 to 256 bytes without line breaks")
 		}
-		for _, raw := range strings.Split(lookup("PROXY_TRUSTED_CIDRS"), ",") {
-			prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
-			if err != nil {
-				return c, fmt.Errorf("PROXY_TRUSTED_CIDRS requires valid CIDRs")
+		// Without trusted networks, the secret alone identifies the proxy.
+		if cidrs := strings.TrimSpace(lookup("PROXY_TRUSTED_CIDRS")); cidrs != "" {
+			for _, raw := range strings.Split(cidrs, ",") {
+				prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+				if err != nil {
+					return c, fmt.Errorf("PROXY_TRUSTED_CIDRS requires valid CIDRs")
+				}
+				if prefix.Bits() == 0 {
+					return c, fmt.Errorf("proxy trust cannot cover every address")
+				}
+				c.ProxyTrustedCIDRs = append(c.ProxyTrustedCIDRs, prefix.Masked())
 			}
-			if prefix.Bits() == 0 {
-				return c, fmt.Errorf("proxy trust cannot cover every address")
-			}
-			c.ProxyTrustedCIDRs = append(c.ProxyTrustedCIDRs, prefix.Masked())
 		}
 		if c.GroupsClaim != "" || c.GroupsPrefix != "" || c.GroupsFromUserInfo || c.TokenType != "" || c.Issuer != "" || c.Audience != "" || c.ClientID != "" || c.ClientScopes != "" {
 			return c, fmt.Errorf("proxy authentication does not accept OIDC settings")

@@ -15,7 +15,8 @@ import (
 const ProxySubjectHeader = "X-Papergo-Subject"
 const ProxySecretHeader = "X-Papergo-Proxy-Secret"
 
-// Proxy accepts an identity asserted by an authenticated, explicitly trusted peer.
+// Proxy accepts an identity asserted by a peer that presents the shared
+// secret and, when trusted networks are configured, connects from one of them.
 // It never trusts forwarded client addresses or interprets client credentials.
 type Proxy struct {
 	secret string
@@ -24,8 +25,8 @@ type Proxy struct {
 }
 
 func NewProxy(secret string, peers []netip.Prefix, origin string) (*Proxy, error) {
-	if len(secret) < 32 || len(secret) > 256 || strings.ContainsAny(secret, "\r\n\x00") || len(peers) == 0 {
-		return nil, errors.New("proxy authentication needs a strong secret and trusted peers")
+	if len(secret) < 32 || len(secret) > 256 || strings.ContainsAny(secret, "\r\n\x00") {
+		return nil, errors.New("proxy authentication needs a strong secret")
 	}
 	for _, peer := range peers {
 		if !peer.IsValid() || peer.Bits() == 0 {
@@ -48,7 +49,7 @@ func (p *Proxy) Authenticate(r *http.Request) (Identity, error) {
 	if err != nil {
 		return Identity{}, ErrUnauthenticated
 	}
-	trusted := false
+	trusted := len(p.peers) == 0
 	for _, prefix := range p.peers {
 		trusted = trusted || prefix.Contains(peer.Unmap())
 	}
