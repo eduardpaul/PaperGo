@@ -57,7 +57,7 @@ REVIEWED = {
     # github.com/hashicorp/golang-lru, a module it lists as in the module graph
     # but compiled into nothing; go list -deps confirms it is not linked.
     'modernc.org/sqlite': (
-        'BSD-3-Clause AND MIT AND public domain (SQLite)', '50d0a002c8eadc01afa8f15d3d7c6aec905a26ec09535e19e9b156c78df570ee'),
+        'BSD-3-Clause AND MIT AND public domain (SQLite)', 'aea23a14fe643249b695c6507d06fe6fa6ee28691f6b568e51e7171b85c164cd'),
 }
 SEPARATOR = '\n' + '=' * 78 + '\n\n'
 
