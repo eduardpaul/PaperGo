@@ -16,3 +16,6 @@ __pycache__/
 sdk/node_modules/
 sdk/.kiotabin/
 /internal/onnx/windows-runtime/
+
+# Local Claude Code state and agent worktrees
+.claude/
