@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"papergo/internal/appcode"
+	"papergo/internal/appicon"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
@@ -464,6 +465,12 @@ func (c *checker) apps() {
 	seen := map[string]string{}
 	for _, a := range c.s.Apps {
 		c.component(a.File, a.Key, a.Name, a.State, a.SourceFile, a.Source, a.Parameters, seen)
+		if a.Icon != "" && !appicon.ValidGlyph(a.Icon) {
+			c.add(a.File, "icon", "%q is not one of the glyphs an app may choose", a.Icon)
+		}
+		if a.Color != "" && !appicon.ValidColor(strings.ToLower(a.Color)) {
+			c.add(a.File, "color", "%q must be written as #rrggbb, such as #b45309", a.Color)
+		}
 		if a.Source == "" {
 			continue
 		}

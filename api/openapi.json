@@ -36302,6 +36302,8 @@
           "key",
           "name",
           "description",
+          "icon",
+          "color",
           "state",
           "parameters",
           "current_version",
@@ -36328,6 +36330,14 @@
           },
           "description": {
             "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "description": "The glyph of the app's icon, one of those docs/apps.md lists; empty when the icon shows the name's initials."
+          },
+          "color": {
+            "type": "string",
+            "description": "The colour of the app's icon as #rrggbb; empty when the name chooses it."
           },
           "state": {
             "$ref": "#/components/schemas/AppState"
@@ -36413,6 +36423,16 @@
           "description": {
             "type": "string",
             "maxLength": 2000
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "The glyph of the app's icon, one of those docs/apps.md lists. Left out or empty, the icon shows the name's initials."
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^(#[0-9a-fA-F]{6})?$",
+            "description": "The colour of the app's icon as #rrggbb. Left out or empty, the name chooses it."
           },
           "source": {
             "type": "string",

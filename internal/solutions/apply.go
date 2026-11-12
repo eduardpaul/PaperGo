@@ -1395,13 +1395,13 @@ func (r *run) apps() error {
 		if !ok {
 			continue
 		}
-		save := apps.Save{Name: a.Name, Description: a.Description, Source: a.Source, Parameters: orEmpty(parameters), State: appstore.State(a.State)}
+		save := apps.Save{Name: a.Name, Description: a.Description, Icon: a.Icon, Color: strings.ToLower(a.Color), Source: a.Source, Parameters: orEmpty(parameters), State: appstore.State(a.State)}
 		if save.State == "" {
 			save.State = appstore.StateDraft
 		}
-		want := map[string]any{"name": save.Name, "description": save.Description, "source": save.Source, "parameters": save.Parameters, "state": string(save.State)}
+		want := map[string]any{"name": save.Name, "description": save.Description, "icon": save.Icon, "color": save.Color, "source": save.Source, "parameters": save.Parameters, "state": string(save.State)}
 		state := func(l apps.View) map[string]any {
-			return map[string]any{"name": l.Name, "description": l.Description, "source": l.Source, "parameters": orEmpty(l.Parameters), "state": string(l.State)}
+			return map[string]any{"name": l.Name, "description": l.Description, "icon": l.Icon, "color": l.Color, "source": l.Source, "parameters": orEmpty(l.Parameters), "state": string(l.State)}
 		}
 		id := byKey[a.Key]
 		var live apps.View

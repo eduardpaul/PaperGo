@@ -46,6 +46,10 @@ func Handler() http.Handler {
 			return
 		}
 		name := strings.Trim(r.URL.Path, "/")
+		if name == "pwa" || strings.HasPrefix(name, "pwa/") {
+			servePWA(w, r, strings.TrimPrefix(name, "pwa/"))
+			return
+		}
 		if name != "" && name != "index.html" {
 			if info, err := fs.Stat(files, name); err == nil {
 				if info.IsDir() {

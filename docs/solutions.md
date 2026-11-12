@@ -73,7 +73,7 @@ A settings file is what a workflow or an app is saved with, naming its source be
   "parameters": { "list": "$collection:tank", "reading_type": "$type:diesel_reading", "capacity_l": "$setting:capacity_l" } }
 ```
 
-An app's file has `source` instead of `script`, and no `automatic_enabled` or `manual_enabled`.
+An app's file has `source` instead of `script`, and no `automatic_enabled` or `manual_enabled`. It may choose the app's [icon](apps.md#icon) with `"icon": "fuel"` and `"color": "#b45309"`.
 
 ### References
 

@@ -153,7 +153,7 @@ func TestApplyInstallsOnceAndIsThenUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Parameters["list"] != list.ID || a.State != "published" {
+	if a.Parameters["list"] != list.ID || a.State != "published" || a.Icon != "fuel" || a.Color != "#b45309" {
 		t.Fatalf("app: %+v", a.Parameters)
 	}
 

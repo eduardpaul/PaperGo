@@ -82,7 +82,7 @@ The kit draws in PaperGo's theme, light or dark as the viewer's:
 
 ## How it runs
 
-People open a workspace's published apps from the sidebar, below its lists. **Apps** in the main navigation, at `/launcher`, lists every app they may open in all their workspaces, grouped by workspace: typing narrows them by name, description or workspace and Enter opens the first; the search palette (Ctrl K) lists them too. Those who write apps add and change them in **Workspace settings → Apps**. The app page gives the app the whole screen below the top bar, with a one-line header, and the app is its only scroll area; on a phone it runs edge to edge. The editor checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
+People open a workspace's published apps from the sidebar, below its lists. **Apps** in the main navigation, at `/launcher`, lists every app they may open in all their workspaces, grouped by workspace: typing narrows them by name, description or workspace and Enter opens the first; the search palette (Ctrl K) lists them too. Those who write apps add and change them in **Workspace settings → Apps**. The app page gives the app the whole screen below the top bar, with a one-line header, and the app is its only scroll area; on a phone it runs edge to edge. The editor chooses the app's [icon](#icon) and checks the source against `@papergo/app` and React as it is typed. Once a version is saved, it shows the parameters form with its pickers.
 
 The app page puts the app in a sandboxed frame:
 
@@ -102,6 +102,32 @@ An app does what its viewer may, through the API only, and never holds a login, 
 
 An app still starts workflow runs, answers and updates tasks, and reads and writes items.
 
+## Icon
+
+An app has an icon: a glyph in white on a color. The launcher, the sidebar and the app page show it, and it is the app's icon on a phone's home screen.
+
+- **`icon`** names the glyph, one of: `app-window`, `banknote`, `barcode`, `bell`, `bike`, `book-open`, `bookmark`, `briefcase`, `building`, `calculator`, `calendar`, `camera`, `car`, `chart-column`, `chart-line`, `chart-pie`, `clipboard-list`, `clock`, `cloud`, `coffee`, `credit-card`, `database`, `droplet`, `dumbbell`, `file-text`, `flag`, `flame`, `folder`, `fuel`, `gamepad-2`, `globe`, `graduation-cap`, `hammer`, `hand-coins`, `heart`, `house`, `image`, `inbox`, `key`, `landmark`, `leaf`, `list-checks`, `lock`, `mail`, `map-pin`, `music`, `package`, `pencil`, `phone`, `piggy-bank`, `pill`, `plane`, `printer`, `qr-code`, `receipt`, `scale`, `scan-line`, `search`, `settings`, `shield`, `shopping-cart`, `signature`, `square-check`, `star`, `stethoscope`, `sun`, `tag`, `thermometer`, `truck`, `user`, `users`, `utensils`, `wallet`, `wrench`, `zap`. They are [Lucide](https://lucide.dev) icons. An app without one shows the initials of its name, up to two.
+- **`color`** is the icon's color as `#rrggbb`. An app without one gets a color from its name, the same every time.
+
+The server draws the icons, at `/pwa/icon-180.png`, `/pwa/icon-192.png`, `/pwa/icon-512.png` and `/pwa/icon-maskable-512.png`, from the `name`, `icon` and `color` in the address. The addresses need no sign-in and read nothing stored: an icon shows only what its address says.
+
+## Installing on a phone
+
+PaperGo and each app can be installed on a phone's home screen, as separate apps, from the browser:
+
+- **PaperGo** installs from any page but an app's, and opens at the launcher. The launcher has an **Install** button.
+- **An app** installs from its own page, with the install button in its header, and opens at that page with the app's name and icon. Its window shows the app alone, without PaperGo's menu and top bar. What the app opens elsewhere in PaperGo, such as a task or a list item, shows as a page outside the app, which the phone lets the person close to return.
+
+The button shows where the browser offers to install (Chrome, Edge and Samsung Internet on Android and on computers). On iPhone and iPad it explains Safari's **Share → Add to Home Screen**. Other browsers install from their own menu.
+
+Installing needs HTTPS, as every deployment but a local one has (see [reverse proxies](reverse-proxies.md#public-origin)). What a browser installs is the web manifest the page names: `/pwa/papergo.webmanifest`, or on an app's page `/pwa/app.webmanifest` with the app's workspace, ID, name, icon and color in its address. Like the icons, a manifest is made from its address alone and PaperGo asks no sign-in for it, because a browser's installer does not send PaperGo's. Behind a proxy that authenticates every request, the page has the browser send the proxy's credentials with the manifest and its icons, so `/pwa/` stays behind the same Access List as the rest (see [reverse proxies](reverse-proxies.md)).
+
+An installed app is the web app in its own window, so it needs the network and a sign-in:
+
+- **Signing in** happens in the installed window and returns to the app. With OIDC sign-in, each start of the app signs in again, which the identity provider answers without asking while its own session lasts. A local sign-in lasts 12 hours.
+- **iPhone and iPad** keep each installed app's sign-in apart from Safari's and from other installed apps'.
+- **Changes** to an app's name or icon reach an installed copy when the phone next reads the manifest, which Android does from time to time while the app is used; on iPhone and iPad the app is installed again.
+
 ## Who may do what
 
 | Action | Needs |
@@ -115,7 +141,7 @@ Creating, changing and deleting an app are audited as `app.create`, `app.update`
 
 ## Copying a workspace
 
-A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, state and parameters, and every version with its source.
+A [workspace package](workspace-portability.md) carries the workspace's apps: their key, name, description, icon, color, state and parameters, and every version with its source.
 - **Parameters.** The values of the parameters form's pickers are references: the lists, items, content types and terms they select become those of the copy, and people keep their accounts. Other values are the app's own and travel as they are, even when they hold an ID.
 - **Outside references.** A picker that selects a list or item outside the workspace, or an item a configuration-only package leaves out, fails the export with the name of what it selects; so does an ID in the current version's source, in any letter case. An import refuses a package whose pickers select anything it does not carry, or something other than what they pick, such as a collection picker that selects an item.
 - **Code.** Importing compiles each app's current version again from its source, before the import's transaction opens, so an app never runs code that came in the package. A current version that no longer compiles fails the import, naming the app. IDs of the copied workspace in the source, such as a picker limited to one list, become the copy's, in its code and form too.
@@ -126,8 +152,8 @@ A [workspace package](workspace-portability.md) carries the workspace's apps: th
 | Method | Route | Purpose |
 | --- | --- | --- |
 | GET | `/v1/apps` | The apps the caller may see in every workspace, by name, without their source or parameters form, each with `workspace_name`, for the launcher |
-| GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, by name, without their source or parameters form; or create one: `{"name", "description", "source", "parameters", "state", "key"}` |
-| GET / PUT / DELETE | `/v1/apps/{id}` | Read; replace name, description, state, parameters and source (`If-Match`); delete with its versions (`If-Match`) |
+| GET / POST | `/v1/workspaces/{id}/apps` | List the apps the caller may see, by name, without their source or parameters form; or create one: `{"name", "description", "icon", "color", "source", "parameters", "state", "key"}` |
+| GET / PUT / DELETE | `/v1/apps/{id}` | Read; replace name, description, icon, color, state, parameters and source (`If-Match`); delete with its versions (`If-Match`) |
 | GET | `/v1/apps/{id}/versions` | Versions with their sources and forms, newest first |
 | GET | `/v1/apps/{id}/bundle` | The current version's compiled code, for the app page; its `ETag` is the code's hash and `PaperGo-App-Version` the version |
 

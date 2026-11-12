@@ -28,6 +28,11 @@
     "sourceHint": "Import only react and @papergo/app. Each new source becomes the next version.",
     "state": "State",
     "stateHint": "A published app is in the workspace's sidebar for everyone who can read the workspace; a draft only for those who write apps.",
+    "icon": "Icon",
+    "iconHint": "Shown in the launcher and, when someone installs the app on a phone, on its home screen.",
+    "iconInitials": "Initials",
+    "color": "Color",
+    "colorAutomatic": "Automatic",
     "parameters": "Parameters",
     "noParameters": "This app declares no parameters.",
     "parametersAfterSave": "Save the app to choose the parameters its source declares.",
@@ -44,5 +49,10 @@
     "empty": "No apps yet",
     "emptyHint": "Workspace managers add apps in Workspace settings → Apps.",
     "noMatches": "No app matches “{{q}}”."
+  },
+  "install": {
+    "short": "Install",
+    "action": "Install {{name}}",
+    "appleSteps": "In Safari, tap Share, then “Add to Home Screen”."
   }
 }

@@ -820,6 +820,8 @@ CREATE TABLE apps (
     "key" TEXT NOT NULL CHECK (length("key") BETWEEN 1 AND 100),
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
     description TEXT NOT NULL DEFAULT '' CHECK (length(description) <= 2000),
+    icon TEXT NOT NULL DEFAULT '' CHECK (length(icon) <= 40),
+    color TEXT NOT NULL DEFAULT '' CHECK (color = '' OR color ~ '^#[0-9a-f]{6}$'),
     state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'published')),
     parameters JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(parameters) = 'object'),
     current_version BIGINT NOT NULL CHECK (current_version > 0),

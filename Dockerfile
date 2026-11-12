@@ -21,6 +21,8 @@ RUN npm ci
 COPY web ./
 COPY sdk/dist/ /src/sdk/dist/
 COPY sdk/src/format.ts /src/sdk/src/
+# The icon picker reads the glyphs the server draws.
+COPY internal/appicon/glyphs.json /src/internal/appicon/
 # The build writes the bundled packages' notices with it.
 COPY scripts/npm-notices.mjs /src/scripts/
 RUN npm run build

@@ -53,6 +53,8 @@ export function applyTheme(theme: Theme) {
   }
   const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.classList.toggle('dark', dark);
+  // The browser's bars around the page take the page's background, as theme.js sets it before the first paint.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#111318' : '#fcfcfd');
 }
 
 export function storedTheme(): Theme {

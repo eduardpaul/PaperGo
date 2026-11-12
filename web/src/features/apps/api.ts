@@ -11,6 +11,10 @@ export interface App {
   key: string;
   name: string;
   description: string;
+  /** The glyph of the app's icon; empty when the icon shows the name's initials. */
+  icon: string;
+  /** The icon's color as #rrggbb; empty when the name chooses it. */
+  color: string;
   state: AppState;
   parameters: Record<string, unknown>;
   /** The current version's form; lists of apps leave it out. */

@@ -3,9 +3,13 @@ package web
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
+	"image/png"
 	"io"
 	"io/fs"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -151,5 +155,84 @@ func TestMissingAssetsAndUnsupportedMethods(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("POST", "/admin", nil))
 	if w.Code != 405 || w.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("unsupported method: %d %v", w.Code, w.Header())
+	}
+}
+
+func TestInstallableManifestsAndIcons(t *testing.T) {
+	h := Handler()
+	get := func(target string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", target, nil))
+		return w
+	}
+	manifest := func(target string) map[string]any {
+		w := get(target)
+		if w.Code != 200 || w.Header().Get("Content-Type") != "application/manifest+json" || w.Header().Get("Cache-Control") != "no-cache" {
+			t.Fatalf("%s: %d %v", target, w.Code, w.Header())
+		}
+		var m map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	own := manifest("/pwa/papergo.webmanifest")
+	if own["id"] != "/" || own["start_url"] != "/launcher" || own["scope"] != "/" || own["display"] != "standalone" || own["name"] != "PaperGo" {
+		t.Fatalf("PaperGo's manifest: %v", own)
+	}
+
+	const workspace, app = "0b6f2a5e-1c3d-4e8f-9a7b-2d4c6e8f0a1b", "9f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f"
+	page := "/w/" + workspace + "/a/" + app
+	q := url.Values{"workspace": {workspace}, "app": {app}, "name": {"Diesel & \"fuel\""}, "icon": {"fuel"}, "color": {"#b45309"}}
+	m := manifest("/pwa/app.webmanifest?" + q.Encode())
+	if m["id"] != page || m["start_url"] != page || m["scope"] != page || m["name"] != "Diesel & \"fuel\"" {
+		t.Fatalf("an app's manifest: %v", m)
+	}
+	// Every icon a manifest names is served, in the size it promises.
+	for _, each := range []map[string]any{own, m} {
+		icons := each["icons"].([]any)
+		if len(icons) != 3 {
+			t.Fatalf("icons: %v", icons)
+		}
+		for _, entry := range icons {
+			icon := entry.(map[string]any)
+			w := get(icon["src"].(string))
+			if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || !strings.HasPrefix(w.Header().Get("Cache-Control"), "public, max-age=") {
+				t.Fatalf("%v: %d %v", icon["src"], w.Code, w.Header())
+			}
+			img, err := png.Decode(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if size := strconv.Itoa(img.Bounds().Dx()); icon["sizes"] != size+"x"+size {
+				t.Fatalf("%v is %s pixels wide", icon, size)
+			}
+			_, _, _, corner := img.At(0, 0).RGBA()
+			if maskable := icon["purpose"] == "maskable"; maskable != (corner == 0xffff) {
+				t.Fatalf("%v: corner alpha %x", icon, corner)
+			}
+		}
+	}
+	if w := get("/pwa/icon-180.png?name=Receipts"); w.Code != 200 || w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("an app's Apple icon: %d %v", w.Code, w.Header())
+	}
+
+	// Nothing but a well-formed address is answered, and only to reads.
+	for _, target := range []string{
+		"/pwa/", "/pwa/other.webmanifest", "/pwa/icon-64.png", "/pwa/papergo.webmanifest?name=x",
+		"/pwa/app.webmanifest", "/pwa/app.webmanifest?" + url.Values{"workspace": {workspace}, "app": {app}}.Encode(),
+		"/pwa/app.webmanifest?" + url.Values{"workspace": {"../x"}, "app": {app}, "name": {"x"}}.Encode(),
+		"/pwa/app.webmanifest?" + url.Values{"workspace": {strings.ToUpper(workspace)}, "app": {app}, "name": {"x"}}.Encode(),
+		"/pwa/app.webmanifest?" + url.Values{"workspace": {workspace}, "app": {app}, "name": {strings.Repeat("x", 201)}}.Encode(),
+		"/pwa/icon-192.png?name=x&icon=no-such-glyph", "/pwa/icon-192.png?name=x&color=red", "/pwa/icon-192.png?icon=fuel",
+	} {
+		if w := get(target); w.Code != 404 {
+			t.Fatalf("%s: %d", target, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/pwa/papergo.webmanifest", nil))
+	if w.Code != 405 {
+		t.Fatalf("POST: %d", w.Code)
 	}
 }

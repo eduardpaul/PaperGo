@@ -18,7 +18,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"], "@papergo/format": ["../sdk/src/format.ts"] }
+    "paths": { "@/*": ["./src/*"], "@papergo/format": ["../sdk/src/format.ts"], "@appicon/*": ["../internal/appicon/*"] }
   },
   "include": ["src"]
 }

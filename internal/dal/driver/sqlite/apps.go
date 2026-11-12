@@ -46,7 +46,8 @@ func (q Queries) Apps(ctx context.Context, f apps.Filter) ([]apps.App, error) {
 func (q Queries) InsertApp(ctx context.Context, a apps.App) error {
 	_, err := models.Apps.Insert(&models.AppSetter{
 		ID: omit.From(a.ID), CreatedAt: omit.From(a.CreatedAt), UpdatedAt: omit.From(a.UpdatedAt), WorkspaceID: omit.From(a.WorkspaceID),
-		Key: omit.From(a.Key), Name: omit.From(a.Name), Description: omit.From(a.Description), State: omit.From(string(a.State)),
+		Key: omit.From(a.Key), Name: omit.From(a.Name), Description: omit.From(a.Description), Icon: omit.From(a.Icon), Color: omit.From(a.Color),
+		State:      omit.From(string(a.State)),
 		Parameters: omit.From(types.NewJSON(model.JSONMap(a.Parameters))), CurrentVersion: omit.From(int64(a.CurrentVersion)),
 		CreatedBy: omit.From(a.CreatedBy), UpdatedBy: omit.From(a.UpdatedBy), Version: omit.From(int64(a.Version)),
 	}).Exec(ctx, q.exec)
@@ -56,6 +57,7 @@ func (q Queries) InsertApp(ctx context.Context, a apps.App) error {
 func (q Queries) UpdateApp(ctx context.Context, a apps.App, from int64) error {
 	set := &models.AppSetter{
 		UpdatedAt: omit.From(a.UpdatedAt), UpdatedBy: omit.From(a.UpdatedBy), Name: omit.From(a.Name), Description: omit.From(a.Description),
+		Icon: omit.From(a.Icon), Color: omit.From(a.Color),
 		State: omit.From(string(a.State)), Parameters: omit.From(types.NewJSON(model.JSONMap(a.Parameters))),
 		CurrentVersion: omit.From(int64(a.CurrentVersion)), Version: omit.From(int64(a.Version)),
 	}
@@ -127,6 +129,7 @@ func (q Queries) InsertAppVersion(ctx context.Context, v apps.Version) error {
 func appRecord(r *models.App) apps.App {
 	return apps.App{
 		ID: r.ID, WorkspaceID: r.WorkspaceID, Key: r.Key, Name: r.Name, Description: r.Description, CreatedBy: r.CreatedBy, UpdatedBy: r.UpdatedBy,
+		Icon: r.Icon, Color: r.Color,
 		State: apps.State(r.State), Parameters: r.Parameters.Val, CurrentVersion: int(r.CurrentVersion), Version: int(r.Version),
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}

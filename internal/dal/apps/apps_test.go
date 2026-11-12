@@ -65,9 +65,18 @@ func TestApps(t *testing.T) {
 		t.Run("RevisesWithVersionsAndDeletes", func(t *testing.T) {
 			second := in
 			second.Key, second.Name = "second", "Second"
+			second.Icon, second.Color = "fuel", "#b45309"
 			a, err := s.Apps().Create(ctx, second)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if a.Icon != "fuel" || a.Color != "#b45309" {
+				t.Fatalf("a created app's icon: %+v", a)
+			}
+			bad := second
+			bad.Key, bad.Name, bad.Color = "third", "Third", "orange"
+			if _, err := s.Apps().Create(ctx, bad); !errors.Is(err, dberr.ErrCheckViolation) {
+				t.Fatalf("a colour that is not #rrggbb: %v", err)
 			}
 			published, name := apps.StatePublished, "Second app"
 			same := content("1")
@@ -88,8 +97,12 @@ func TestApps(t *testing.T) {
 				t.Fatalf("versions: %+v %v", versions, err)
 			}
 			listed, err := s.Apps().List(ctx, apps.Filter{WorkspaceIDs: []string{ws.ID}, State: apps.StatePublished})
-			if err != nil || len(listed) != 1 || listed[0].ID != a.ID {
+			if err != nil || len(listed) != 1 || listed[0].ID != a.ID || listed[0].Icon != "fuel" || listed[0].Color != "#b45309" {
 				t.Fatalf("published apps: %+v %v", listed, err)
+			}
+			glyph, none := "receipt", ""
+			if a, _, err = s.Apps().Revise(ctx, a.ID, a.Version, "bob", nil, apps.Changes{Icon: &glyph, Color: &none}); err != nil || a.Icon != glyph || a.Color != "" {
+				t.Fatalf("a new icon: %+v %v", a, err)
 			}
 			if err = s.Apps().Delete(ctx, a.ID, a.Version-1); !errors.Is(err, dberr.ErrConcurrentUpdate) {
 				t.Fatalf("a stale delete: %v", err)

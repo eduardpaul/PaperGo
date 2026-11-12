@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { AppWindow, Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, LayoutGrid, Plus, Search } from 'lucide-react';
+import { Archive, Briefcase, ChevronRight, ClipboardCheck, House, Inbox, LayoutGrid, Plus, Search } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
 import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
 import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
 import { appsQuery } from '@/features/apps/api';
+import { AppIcon } from '@/features/apps/icon';
 import { SmartFolderContextMenu } from '@/features/smart-folders/context-menu';
 import { SmartFolderDialog } from '@/features/smart-folders/editor-dialog';
 import { useHasScope } from '@/features/admin/common';
@@ -186,7 +187,7 @@ function WorkspaceApps({ workspaceId, onNavigate }: { workspaceId: string; onNav
         .map((app) => (
           <li key={app.id}>
             <Link to="/w/$workspaceId/a/$appId" params={{ workspaceId, appId: app.id }} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }}>
-              <AppWindow />
+              <AppIcon app={app} className="size-4" />
               <span className="truncate">{app.name}</span>
             </Link>
           </li>

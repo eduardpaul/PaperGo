@@ -26,9 +26,12 @@ const (
 
 func (s State) Valid() bool { return s == StateDraft || s == StatePublished }
 
-// App is a stored app. Parameters keep numeric literals exactly.
+// App is a stored app. Icon names the glyph of its icon and Color is that
+// icon's colour as #rrggbb; either may be empty. Parameters keep numeric
+// literals exactly.
 type App struct {
 	ID, WorkspaceID, Key, Name, Description, CreatedBy, UpdatedBy string
+	Icon, Color                                                   string
 	State                                                         State
 	Parameters                                                    map[string]any
 	CurrentVersion, Version                                       int
@@ -59,6 +62,7 @@ type Version struct {
 // object.
 type CreateInput struct {
 	ID, WorkspaceID, Key, Name, Description string
+	Icon, Color                             string
 	State                                   State
 	Parameters                              map[string]any
 	Content                                 Content
@@ -69,6 +73,7 @@ type CreateInput struct {
 // key and workspace never change.
 type Changes struct {
 	Name, Description *string
+	Icon, Color       *string
 	State             *State
 	Parameters        *map[string]any
 }
@@ -155,6 +160,7 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (App, error) {
 	at := now()
 	a := App{
 		ID: in.ID, WorkspaceID: in.WorkspaceID, Key: in.Key, Name: in.Name, Description: in.Description, CreatedBy: in.CreatedBy, UpdatedBy: in.CreatedBy,
+		Icon: in.Icon, Color: in.Color,
 		State: in.State, Parameters: in.Parameters, CurrentVersion: 1, Version: 1, CreatedAt: at, UpdatedAt: at,
 	}
 	err := r.write(ctx, func(q Queries) error {
@@ -217,6 +223,12 @@ func (r *Repo) Revise(ctx context.Context, id string, version int, subject strin
 		}
 		if in.Description != nil {
 			a.Description = *in.Description
+		}
+		if in.Icon != nil {
+			a.Icon = *in.Icon
+		}
+		if in.Color != nil {
+			a.Color = *in.Color
 		}
 		if in.State != nil {
 			a.State = *in.State

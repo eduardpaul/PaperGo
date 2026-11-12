@@ -20,6 +20,15 @@
     "description": {
       "type": "string"
     },
+    "icon": {
+      "type": "string",
+      "description": "The glyph of the app's icon, one of those docs/apps.md lists, such as fuel. Without one the icon shows the name's initials."
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "The colour of the app's icon, such as #b45309. Without one the name chooses it."
+    },
     "source": {
       "type": "string",
       "description": "The app's TSX file, beside this one."

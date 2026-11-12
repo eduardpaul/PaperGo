@@ -156,6 +156,10 @@ type App struct {
 	Key         string `json:"key"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// Icon names the glyph of the app's icon and Color is that icon's colour,
+	// #rrggbb.
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
 	// SourceFile is the path of the app's TSX file, beside the settings file.
 	SourceFile string         `json:"source"`
 	Parameters map[string]any `json:"parameters,omitempty"`

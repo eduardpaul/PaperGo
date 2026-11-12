@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { toast, Toaster } from 'sonner';
 import { clearToken, isApiError } from './api/http';
 import { loadAuthentication } from './api/auth';
+import { watchInstallOffer } from './features/pwa/install';
+import { rememberInstalledApp } from './features/pwa/installed';
 import { browserLanguage, i18n, setLanguage } from './i18n';
 import { problemMessage } from './lib/errors';
 import { routeTree } from './routeTree.gen';
@@ -13,7 +15,9 @@ import './styles.css';
 function onError(error: unknown) {
   if (isApiError(error, 401)) {
     clearToken();
-    if (!window.location.pathname.startsWith('/login')) window.location.assign('/login');
+    // Signing in returns to the page that was open, which for an installed app is the app.
+    const { pathname, search, hash } = window.location;
+    if (!pathname.startsWith('/login')) window.location.assign(`/login?returnTo=${encodeURIComponent(pathname + search + hash)}`);
   }
 }
 
@@ -55,6 +59,8 @@ declare module '@tanstack/react-query' {
 }
 
 async function start() {
+  rememberInstalledApp();
+  watchInstallOffer();
   const root = createRoot(document.getElementById('root')!);
   // Until the user's preference loads after sign-in, the screen follows this browser.
   const language = setLanguage(browserLanguage());

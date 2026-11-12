@@ -33,6 +33,10 @@ class DevelopmentChecksTests(unittest.TestCase):
         self.format = self.root / 'sdk/src/format.ts'
         self.format.parent.mkdir(parents=True)
         self.format.write_text('export {};')
+        # The icon picker bundles the glyphs the server draws.
+        self.glyphs = self.root / 'internal/appicon/glyphs.json'
+        self.glyphs.parent.mkdir(parents=True)
+        self.glyphs.write_text('{}')
         # The build writes the npm notices with this generator.
         self.notices = self.root / 'scripts/npm-notices.mjs'
         self.notices.parent.mkdir(parents=True)
@@ -98,14 +102,17 @@ class DevelopmentChecksTests(unittest.TestCase):
             self.format.write_text('export const changed = true;')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 6)
-            (self.web / 'dist/index.html').write_text('tampered')
+            self.glyphs.write_text('{"star": []}')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 7)
-            (self.web / 'dist/index.html').unlink()
+            (self.web / 'dist/index.html').write_text('tampered')
             checks.prepare_frontend()
             self.assertEqual(run.call_count, 8)
-            checks.prepare_frontend(force=True)
+            (self.web / 'dist/index.html').unlink()
+            checks.prepare_frontend()
             self.assertEqual(run.call_count, 9)
+            checks.prepare_frontend(force=True)
+            self.assertEqual(run.call_count, 10)
 
     def test_stale_dependencies_install_only_with_setup(self):
         (self.web / 'node_modules/example').rmdir()

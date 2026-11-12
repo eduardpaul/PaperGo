@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"papergo/internal/appcode"
+	"papergo/internal/appicon"
 	appstore "papergo/internal/dal/apps"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/resources"
@@ -32,11 +33,15 @@ const Scope = "app.manage"
 type Service struct{ DMS *dms.Service }
 
 // Save is an app as a create or replace request gives it. Key is given only
-// on creation; without one it comes from the name.
+// on creation; without one it comes from the name. Icon names one of the
+// glyphs of appicon and Color is #rrggbb; an app that leaves them empty
+// shows its initials on a colour of its name.
 type Save struct {
 	Key         string         `json:"key,omitempty"`
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
+	Icon        string         `json:"icon"`
+	Color       string         `json:"color"`
 	Source      string         `json:"source"`
 	Parameters  map[string]any `json:"parameters"`
 	State       appstore.State `json:"state"`
@@ -50,6 +55,8 @@ type View struct {
 	Key         string         `json:"key"`
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
+	Icon        string         `json:"icon"`
+	Color       string         `json:"color"`
 	State       appstore.State `json:"state"`
 	Parameters  map[string]any `json:"parameters"`
 	// ParametersSchema is the current version's form; lists leave it out.
@@ -172,7 +179,7 @@ func writable(ctx context.Context, t *dms.Service, subject, id string) (appstore
 }
 
 func view(a appstore.App, v appstore.Version, write bool) View {
-	out := View{ID: a.ID, WorkspaceID: a.WorkspaceID, Key: a.Key, Name: a.Name, Description: a.Description, State: a.State, Parameters: a.Parameters,
+	out := View{ID: a.ID, WorkspaceID: a.WorkspaceID, Key: a.Key, Name: a.Name, Description: a.Description, Icon: a.Icon, Color: a.Color, State: a.State, Parameters: a.Parameters,
 		ParametersSchema: v.ParametersSchema, CurrentVersion: a.CurrentVersion, CanWrite: write, CreatedBy: a.CreatedBy, UpdatedBy: a.UpdatedBy,
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version}
 	if write {
@@ -332,6 +339,12 @@ func compile(ctx context.Context, in *Save) (appcode.Compiled, error) {
 	if utf8.RuneCountInString(in.Description) > 2000 {
 		return appcode.Compiled{}, dms.Invalid("description is limited to 2000 characters")
 	}
+	if in.Icon != "" && !appicon.ValidGlyph(in.Icon) {
+		return appcode.Compiled{}, dms.Invalid("icon is not one of the glyphs an app may choose")
+	}
+	if in.Color = strings.ToLower(in.Color); in.Color != "" && !appicon.ValidColor(in.Color) {
+		return appcode.Compiled{}, dms.Invalid("color is written as #rrggbb")
+	}
 	if in.State == "" {
 		in.State = appstore.StateDraft
 	}
@@ -438,7 +451,7 @@ func (s *Service) Create(ctx context.Context, subject, workspaceID string, in Sa
 			return err
 		}
 		a, err := t.DAL.Apps().Create(ctx, appstore.CreateInput{WorkspaceID: workspaceID, Key: key, Name: in.Name, Description: in.Description,
-			State: in.State, Parameters: in.Parameters, Content: content, CreatedBy: subject})
+			Icon: in.Icon, Color: in.Color, State: in.State, Parameters: in.Parameters, Content: content, CreatedBy: subject})
 		if err != nil {
 			return conflict(err, "another app of the workspace has this key or name")
 		}
@@ -462,8 +475,8 @@ func freeKey(ctx context.Context, t *dms.Service, workspaceID, base string) (str
 	}
 }
 
-// Update replaces an app read at version: its name, description, state,
-// parameters and source. A source that changes becomes the next version.
+// Update replaces an app read at version: its name, description, icon,
+// colour, state, parameters and source. A source that changes becomes the next version.
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in Save) (View, error) {
 	if _, err := dms.Read(ctx, s.DMS, func(t *dms.Service) (appstore.App, error) { return writable(ctx, t, subject, id) }); err != nil {
 		return View{}, err
@@ -485,7 +498,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if err != nil {
 			return err
 		}
-		a, v, err := t.DAL.Apps().Revise(ctx, id, version, subject, &content, appstore.Changes{Name: &in.Name, Description: &in.Description, State: &in.State, Parameters: &in.Parameters})
+		a, v, err := t.DAL.Apps().Revise(ctx, id, version, subject, &content, appstore.Changes{Name: &in.Name, Description: &in.Description, Icon: &in.Icon, Color: &in.Color, State: &in.State, Parameters: &in.Parameters})
 		if err != nil {
 			return conflict(err, "another app of the workspace has this name")
 		}

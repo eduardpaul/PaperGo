@@ -84,7 +84,19 @@ func TestAppsAreWrittenByAppManagersAndSeenByReaders(t *testing.T) {
 	if _, err = svc.Get(ctx, "bob", draft.ID); !errors.Is(err, dms.ErrNotFound) {
 		t.Fatalf("a member saw a draft: %v", err)
 	}
+	if draft.Icon != "" || draft.Color != "" {
+		t.Fatalf("an app that chose no icon: %+v", draft)
+	}
+	for _, look := range []Save{{Icon: "rocket-ship"}, {Color: "orange"}, {Color: "#b4530"}} {
+		bad, want := in, "color"
+		if bad.Icon, bad.Color = look.Icon, look.Color; look.Icon != "" {
+			want = "icon"
+		}
+		_, err = svc.Update(ctx, "alice", draft.ID, draft.Version, bad)
+		invalid(t, err, want)
+	}
 	publish := in
+	publish.Icon, publish.Color = "fuel", "#B45309"
 	publish.State = appstore.StatePublished
 	_, err = svc.Update(ctx, "alice", draft.ID, draft.Version, publish)
 	invalid(t, err, "choose the app's parameters before publishing it")
@@ -96,7 +108,8 @@ func TestAppsAreWrittenByAppManagersAndSeenByReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if published.State != appstore.StatePublished || published.CurrentVersion != 1 || published.Version != draft.Version+1 || published.Parameters["list"] != list.ID {
+	if published.State != appstore.StatePublished || published.CurrentVersion != 1 || published.Version != draft.Version+1 || published.Parameters["list"] != list.ID ||
+		published.Icon != "fuel" || published.Color != "#b45309" {
 		t.Fatalf("published app: %+v", published)
 	}
 	if _, err = svc.Update(ctx, "alice", draft.ID, draft.Version, publish); !errors.Is(err, dms.ErrPreconditionFailed) {

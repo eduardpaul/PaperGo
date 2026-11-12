@@ -6,7 +6,13 @@
     <meta name="color-scheme" content="light dark" />
     <!-- Frames show only documents the page writes (srcdoc), such as apps' sandboxed screens, which cannot navigate away. -->
     <meta http-equiv="Content-Security-Policy" content="frame-src 'none'" />
+    <!-- The page's light background; theme.js and the user's theme change it to the dark one. -->
+    <meta name="theme-color" content="#fcfcfd" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- What a phone installs from this page: PaperGo, or on an app's page that app (src/features/pwa). -->
+    <link rel="manifest" href="/pwa/papergo.webmanifest" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="/pwa/icon-180.png" />
+    <meta name="apple-mobile-web-app-title" content="PaperGo" />
     <title>PaperGo</title>
     <script src="/theme.js"></script>
   </head>

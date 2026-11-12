@@ -28,6 +28,11 @@
     "sourceHint": "Importa solo react y @papergo/app. Cada código nuevo es la siguiente versión.",
     "state": "Estado",
     "stateHint": "Una aplicación publicada aparece en la barra lateral del espacio de trabajo para todos los que pueden leerlo; un borrador, solo para quienes escriben aplicaciones.",
+    "icon": "Icono",
+    "iconHint": "Se muestra en el lanzador y, cuando alguien instala la aplicación en un teléfono, en su pantalla de inicio.",
+    "iconInitials": "Iniciales",
+    "color": "Color",
+    "colorAutomatic": "Automático",
     "parameters": "Parámetros",
     "noParameters": "Esta aplicación no declara parámetros.",
     "parametersAfterSave": "Guarda la aplicación para elegir los parámetros que declara su código.",
@@ -44,5 +49,10 @@
     "empty": "Aún no hay aplicaciones",
     "emptyHint": "Los responsables de cada espacio de trabajo las añaden en Configuración del espacio de trabajo → Aplicaciones.",
     "noMatches": "Ninguna aplicación coincide con «{{q}}»."
+  },
+  "install": {
+    "short": "Instalar",
+    "action": "Instalar {{name}}",
+    "appleSteps": "En Safari, toca Compartir y luego «Añadir a pantalla de inicio»."
   }
 }

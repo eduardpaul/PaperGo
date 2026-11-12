@@ -818,6 +818,8 @@ CREATE TABLE apps (
     "key" TEXT NOT NULL CHECK (length("key") BETWEEN 1 AND 100),
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
     description TEXT NOT NULL DEFAULT '' CHECK (length(description) <= 2000),
+    icon TEXT NOT NULL DEFAULT '' CHECK (length(icon) <= 40),
+    color TEXT NOT NULL DEFAULT '' CHECK (color = '' OR (length(color) = 7 AND glob('#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]', color))),
     state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'published')),
     parameters TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(parameters) AND json_type(parameters) = 'object'),
     current_version INTEGER NOT NULL CHECK (current_version > 0),

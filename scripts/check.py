@@ -80,6 +80,8 @@ def frontend_state():
     # both read numbers and dates through its format module.
     sources.extend(ROOT / 'sdk/dist' / name for name in ('workflow.d.ts', 'app.d.ts', 'app-runtime.js'))
     sources.append(ROOT / 'sdk/src/format.ts')
+    # The icon picker bundles the glyphs the server draws.
+    sources.append(ROOT / 'internal/appicon/glyphs.json')
     # The build writes the npm notices with it.
     sources.append(ROOT / 'scripts/npm-notices.mjs')
     outputs = [path for path in (web / 'dist').rglob('*') if path.is_file()]

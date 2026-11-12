@@ -262,7 +262,7 @@ func (p *puller) apps() ([]App, error) {
 		if c.File == "" {
 			c.File, c.Source = AppsDir+"/"+o.Key+".json", o.Key+".tsx"
 		}
-		a := App{Key: o.Key, Name: live.Name, Description: live.Description, SourceFile: c.Source, State: string(live.State), File: c.File, Source: live.Source}
+		a := App{Key: o.Key, Name: live.Name, Description: live.Description, Icon: live.Icon, Color: live.Color, SourceFile: c.Source, State: string(live.State), File: c.File, Source: live.Source}
 		a.Parameters, _ = p.unresolve(plain(live.Parameters), plain(c.Parameters)).(map[string]any)
 		out = append(out, a)
 	}

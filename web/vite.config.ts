@@ -43,6 +43,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // The workflow SDK's declarations, for the script editor.
       '@sdk': fileURLToPath(new URL('../sdk/dist', import.meta.url)),
+      // The glyphs of app icons, which the server draws from the same file.
+      '@appicon': fileURLToPath(new URL('../internal/appicon', import.meta.url)),
       // How numbers and dates read and show, which the app runtime shares.
       '@papergo/format': fileURLToPath(new URL('../sdk/src/format.ts', import.meta.url)),
       // React's own declarations, for the app editor; their package exports hide the files.
@@ -52,11 +54,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    fs: { allow: ['.', '../sdk/dist', '../sdk/src/format.ts'] },
+    fs: { allow: ['.', '../sdk/dist', '../sdk/src/format.ts', '../internal/appicon/glyphs.json'] },
     proxy: {
       '/v1': { target: api, changeOrigin: false },
       '/health': { target: api, changeOrigin: false },
       '/auth': { target: api, changeOrigin: false },
+      '/pwa': { target: api, changeOrigin: false },
     },
   },
   // Monaco's editor chunk loads only with the script editor, PDF.js only with the PDF viewer.

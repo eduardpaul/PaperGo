@@ -33,6 +33,8 @@ type App struct {
 	Key            string                    `db:"key" `
 	Name           string                    `db:"name" `
 	Description    string                    `db:"description" `
+	Icon           string                    `db:"icon" `
+	Color          string                    `db:"color" `
 	State          string                    `db:"state" `
 	Parameters     types.JSON[model.JSONMap] `db:"parameters" `
 	CurrentVersion int64                     `db:"current_version" `
@@ -71,7 +73,7 @@ type appRLoaded struct {
 
 func buildAppColumns(tableName string) appColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "workspace_id", "key", "name", "description", "state", "parameters", "current_version", "created_by", "updated_by", "version",
+		"id", "created_at", "updated_at", "workspace_id", "key", "name", "description", "icon", "color", "state", "parameters", "current_version", "created_by", "updated_by", "version",
 	)
 
 	if tableName != "" {
@@ -88,6 +90,8 @@ func buildAppColumns(tableName string) appColumns {
 		Key:            buildAppColumn(tableName, "key"),
 		Name:           buildAppColumn(tableName, "name"),
 		Description:    buildAppColumn(tableName, "description"),
+		Icon:           buildAppColumn(tableName, "icon"),
+		Color:          buildAppColumn(tableName, "color"),
 		State:          buildAppColumn(tableName, "state"),
 		Parameters:     buildAppColumn(tableName, "parameters"),
 		CurrentVersion: buildAppColumn(tableName, "current_version"),
@@ -107,6 +111,8 @@ type appColumns struct {
 	Key            appColumn
 	Name           appColumn
 	Description    appColumn
+	Icon           appColumn
+	Color          appColumn
 	State          appColumn
 	Parameters     appColumn
 	CurrentVersion appColumn
@@ -165,6 +171,8 @@ type AppSetter struct {
 	Key            omit.Val[string]                    `db:"key" `
 	Name           omit.Val[string]                    `db:"name" `
 	Description    omit.Val[string]                    `db:"description" `
+	Icon           omit.Val[string]                    `db:"icon" `
+	Color          omit.Val[string]                    `db:"color" `
 	State          omit.Val[string]                    `db:"state" `
 	Parameters     omit.Val[types.JSON[model.JSONMap]] `db:"parameters" `
 	CurrentVersion omit.Val[int64]                     `db:"current_version" `
@@ -174,7 +182,7 @@ type AppSetter struct {
 }
 
 func (s AppSetter) SetColumns() []string {
-	vals := make([]string, 0, 13)
+	vals := make([]string, 0, 15)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -195,6 +203,12 @@ func (s AppSetter) SetColumns() []string {
 	}
 	if s.Description.IsValue() {
 		vals = append(vals, "description")
+	}
+	if s.Icon.IsValue() {
+		vals = append(vals, "icon")
+	}
+	if s.Color.IsValue() {
+		vals = append(vals, "color")
 	}
 	if s.State.IsValue() {
 		vals = append(vals, "state")
@@ -238,6 +252,12 @@ func (s AppSetter) Overwrite(t *App) {
 	}
 	if s.Description.IsValue() {
 		t.Description = s.Description.MustGet()
+	}
+	if s.Icon.IsValue() {
+		t.Icon = s.Icon.MustGet()
+	}
+	if s.Color.IsValue() {
+		t.Color = s.Color.MustGet()
 	}
 	if s.State.IsValue() {
 		t.State = s.State.MustGet()
@@ -301,6 +321,16 @@ func (s *AppSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Description.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Icon.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Icon.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.Color.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.Color.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.State.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -338,7 +368,7 @@ func (s AppSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s AppSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 13)
+	exprs := make([]bob.Expression, 0, 15)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -386,6 +416,20 @@ func (s AppSetter) Expressions(prefix ...string) []bob.Expression {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "description")...),
 			psql.Arg(s.Description),
+		}})
+	}
+
+	if s.Icon.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "icon")...),
+			psql.Arg(s.Icon),
+		}})
+	}
+
+	if s.Color.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "color")...),
+			psql.Arg(s.Color),
 		}})
 	}
 
@@ -441,7 +485,7 @@ func appScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(an
 		idx int
 		dst func(o *App) any
 	}
-	targets := make([]target, 0, 13)
+	targets := make([]target, 0, 15)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -458,6 +502,10 @@ func appScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(an
 			targets = append(targets, target{i, func(o *App) any { return &o.Name }})
 		case "description":
 			targets = append(targets, target{i, func(o *App) any { return &o.Description }})
+		case "icon":
+			targets = append(targets, target{i, func(o *App) any { return &o.Icon }})
+		case "color":
+			targets = append(targets, target{i, func(o *App) any { return &o.Color }})
 		case "state":
 			targets = append(targets, target{i, func(o *App) any { return &o.State }})
 		case "parameters":
@@ -914,6 +962,8 @@ type appWhere[Q psql.Filterable] struct {
 	Key            psql.WhereMod[Q, string]
 	Name           psql.WhereMod[Q, string]
 	Description    psql.WhereMod[Q, string]
+	Icon           psql.WhereMod[Q, string]
+	Color          psql.WhereMod[Q, string]
 	State          psql.WhereMod[Q, string]
 	Parameters     psql.WhereMod[Q, types.JSON[model.JSONMap]]
 	CurrentVersion psql.WhereMod[Q, int64]
@@ -937,6 +987,8 @@ func buildAppWhere[Q psql.Filterable](cols appColumns) appWhere[Q] {
 		Key:            psql.Where[Q, string](cols.Key.Expression),
 		Name:           psql.Where[Q, string](cols.Name.Expression),
 		Description:    psql.Where[Q, string](cols.Description.Expression),
+		Icon:           psql.Where[Q, string](cols.Icon.Expression),
+		Color:          psql.Where[Q, string](cols.Color.Expression),
 		State:          psql.Where[Q, string](cols.State.Expression),
 		Parameters:     psql.Where[Q, types.JSON[model.JSONMap]](cols.Parameters.Expression),
 		CurrentVersion: psql.Where[Q, int64](cols.CurrentVersion.Expression),

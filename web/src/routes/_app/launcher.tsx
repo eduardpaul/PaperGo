@@ -8,6 +8,8 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input } from '@/components/ui/input';
 import { QueryFeedback } from '@/features/admin/common';
 import { launcherQuery, type App } from '@/features/apps/api';
+import { AppIcon } from '@/features/apps/icon';
+import { InstallButton } from '@/features/pwa/install';
 import { useTranslation } from '@/i18n';
 
 export const Route = createFileRoute('/_app/launcher')({ component: LauncherPage });
@@ -40,7 +42,7 @@ function LauncherPage() {
 
   return (
     <Page>
-      <PageHeader title={t('launcher.title')} description={t('launcher.description')} icon={LayoutGrid} />
+      <PageHeader title={t('launcher.title')} description={t('launcher.description')} icon={LayoutGrid} actions={<InstallButton name="PaperGo" />} />
       <QueryFeedback query={apps} />
       {apps.isPending && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -85,9 +87,7 @@ function LauncherPage() {
                         params={{ workspaceId: app.workspace_id, appId: app.id }}
                         className="flex h-full min-h-20 items-start gap-3 rounded-lg border bg-background p-4 transition-colors hover:border-accent hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-accent"
                       >
-                        <span className="rounded-lg bg-accent-soft p-2 text-accent">
-                          <AppWindow className="size-5" />
-                        </span>
+                        <AppIcon app={app} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
                             <span className="truncate font-medium">{app.name}</span>

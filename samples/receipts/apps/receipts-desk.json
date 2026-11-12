@@ -2,6 +2,8 @@
   "key": "receipts-desk",
   "name": "Receipts desk",
   "description": "Take receipt photos with a phone, shrunk on the phone to what the model reads, and see what was spent and on which categories.",
+  "icon": "receipt",
+  "color": "#0f766e",
   "source": "receipts-desk.tsx",
   "parameters": {
     "library": "$collection:receipts",
