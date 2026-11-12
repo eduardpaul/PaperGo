@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { appManifestUrl, InstallButton, useAppManifest, watchInstallOffer } from './install';
 import { installedApp, rememberInstalledApp } from './installed';
+import page from '../../../index.html?raw';
 
 const app = { id: '9f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f', workspace_id: '0b6f2a5e-1c3d-4e8f-9a7b-2d4c6e8f0a1b', name: 'Diesel & fuel', icon: 'fuel', color: '#b45309' };
 
@@ -33,7 +33,6 @@ const linked = () => ({
 // Behind a proxy that authenticates every request, a browser fetches the
 // manifest and its icons with the proxy's credentials only when the link asks.
 it('has the browser send the proxy sign-in with the manifest', () => {
-  const page = readFileSync('index.html', 'utf8');
   expect(page).toMatch(/<link rel="manifest" href="\/pwa\/papergo\.webmanifest" crossorigin="use-credentials" \/>/);
 });
 
