@@ -22,6 +22,7 @@ import (
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/integration"
 	"papergo/internal/solutions"
 	"papergo/internal/storage"
 	"papergo/internal/worker"
@@ -101,7 +102,7 @@ func TestOffFeaturesAreAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := enabled(t.Context(), environment{config: config.Config{DatabasePath: t.TempDir() + "/papergo.db"}, db: db, service: service, store: store, workflows: &workflow.Service{DMS: service}, log: slog.Default()})
+	list, err := enabled(t.Context(), environment{config: config.Config{DatabasePath: t.TempDir() + "/papergo.db"}, db: db, service: service, store: store, workflows: &workflow.Service{DMS: service}, secrets: testSecrets(t), log: slog.Default()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestOffFeaturesAreAbsent(t *testing.T) {
 	for _, f := range list {
 		names = append(names, f.name)
 	}
-	if want := []string{"documents", "previews", "apps", "ai-retention", "solutions"}; !slices.Equal(names, want) {
+	if want := []string{"documents", "previews", "apps", "connections", "ai-retention", "solutions"}; !slices.Equal(names, want) {
 		t.Fatalf("features = %v, want %v", names, want)
 	}
 	if err = list.register(service); err != nil {
@@ -179,6 +180,7 @@ func testFeatures(search bool) features {
 		documentsFeature(&documenttext.Reader{}, &documentfiles.Maker{}),
 		previewsFeature(&documentpreview.Renderer{}),
 		{name: "apps", modules: []httpapi.Module{apps.Module()}},
+		connectionsFeature(environment{log: slog.Default()}),
 		{name: "solutions", modules: []httpapi.Module{solutions.Module(nil)}},
 		{name: "comments", modules: []httpapi.Module{comments.Module()}},
 		*aiFeature(assistant, func() {}),
@@ -189,6 +191,16 @@ func testFeatures(search bool) features {
 		f = append(f, searchFeature(&documentsearch.Search{}))
 	}
 	return f
+}
+
+// testSecrets is a key that seals what features store in a test.
+func testSecrets(t *testing.T) *integration.Secrets {
+	t.Helper()
+	secrets, err := integration.NewSecrets(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return secrets
 }
 
 // testAssistant has every model, none of which is ever called.

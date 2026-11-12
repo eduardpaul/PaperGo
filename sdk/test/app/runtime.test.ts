@@ -161,6 +161,45 @@ try {
 ctx.open({ itemId: "i1" });
 expect("open asks the page", sent.at(-1), { type: "papergo:open", target: { itemId: "i1" } });
 
+// Connections are named by key under the app's workspace; publishing and
+// calling are requests the page sends as the viewer.
+const connected = page((m) => {
+  if (m.url.endsWith("/publish")) return { status: 200, body: { request: "r1", topic: JSON.parse(String(m.body)).topic, qos: 1, retain: false } };
+  if (m.url.includes("/fetch?")) return { status: 200, body: { status: 200, headers: {}, body: { home: true } } };
+  if (m.url.endsWith("/call")) return { status: 200, body: { status: 403, headers: {}, body: "no" } };
+  return { status: 404, body: {} };
+});
+const viewer = appContext(init, connected.bridge);
+const published = await viewer.connections.publish("home", "lights", "home/kitchen/light/set", { on: true }, { qos: 0 });
+const publish = connected.sent.at(-1) as Extract<AppMessage, { type: "papergo:request" }>;
+expect("a publish", [publish.method, publish.url, JSON.parse(String(publish.body)), published.request], ["POST", "/v1/workspaces/w1/connections/home/channels/lights/publish", { topic: "home/kitchen/light/set", payload: { on: true }, qos: 0 }, "r1"]);
+const fetched = await viewer.connections.fetch("node red", "status", "/status?zone=living room");
+expect("a fetch names its path in the query", [(connected.sent.at(-1) as { url: string }).url, fetched.body], ["/v1/workspaces/w1/connections/node%20red/channels/status/fetch?path=%2Fstatus%3Fzone%3Dliving+room", { home: true }]);
+const answered = await viewer.connections.call("nodered", "heating", "post", "/heating/set", { target: 21 });
+const call = connected.sent.at(-1) as Extract<AppMessage, { type: "papergo:request" }>;
+expect("a call", [call.url, JSON.parse(String(call.body)), answered.status], ["/v1/workspaces/w1/connections/nodered/channels/heating/call", { method: "POST", path: "/heating/set", body: { target: 21 } }, 403]);
+
+// A subscription asks the page, which forwards what the stream hears for
+// it; stopping it tells the page.
+let pageListener: ((m: PageMessage) => void) | undefined;
+const asked: AppMessage[] = [];
+const subscribing = new Bridge({ post: (m) => void asked.push(m), listen: (h) => void (pageListener = h) });
+const heard: string[] = [];
+let ended: unknown;
+const unsubscribe = subscribing.subscribe("home", "sensors", "home/+/sensor/temperature", { messages: (ms) => heard.push(...ms.map((m) => `${m.topic}=${JSON.stringify(m.payload)}`)), ended: (e) => (ended = e) });
+const subscribeMessage = asked.at(-1) as Extract<AppMessage, { type: "papergo:subscribe" }>;
+expect("the subscription asked for", { ...subscribeMessage, id: 0 }, { type: "papergo:subscribe", id: 0, connection: "home", channel: "sensors", filter: "home/+/sensor/temperature" });
+pageListener?.({ type: "papergo:messages", id: subscribeMessage.id, messages: [{ topic: "home/living/sensor/temperature", payload: 21.5, at: "2026-11-12T10:00:00Z" }] });
+pageListener?.({ type: "papergo:messages", id: subscribeMessage.id + 1, messages: [{ topic: "other", payload: 1, at: "2026-11-12T10:00:00Z" }] });
+expect("messages of the subscription", heard, ["home/living/sensor/temperature=21.5"]);
+unsubscribe();
+expect("unsubscribing tells the page", asked.at(-1), { type: "papergo:unsubscribe", id: subscribeMessage.id });
+subscribing.subscribe("home", "heating", undefined, { messages: () => undefined, ended: (e) => (ended = e) });
+const second = asked.at(-1) as Extract<AppMessage, { type: "papergo:subscribe" }>;
+expect("a subscription to the whole channel names no filter", "filter" in second, false);
+pageListener?.({ type: "papergo:ended", id: second.id, end: { reason: "access" } });
+expect("an ended subscription", ended, { reason: "access" });
+
 let seen: unknown;
 const stop = bridge.watch((changes) => (seen = changes));
 stop();

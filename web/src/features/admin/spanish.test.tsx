@@ -19,7 +19,7 @@ it('shows administration in Spanish, plurals and markup included', async () => {
       const path = new URL(String(input), window.location.href).pathname;
       if (path === '/v1/identity/me') return new Response(JSON.stringify({ subject: 'admin', scopes: ['organization.manage'] }));
       if (path === '/v1/organization/settings/trusted-hosts/usage')
-        return new Response(JSON.stringify({ value: [{ host: 'calendar.example.com', integrations: 1 }] }));
+        return new Response(JSON.stringify({ value: [{ host: 'calendar.example.com', uses: { integrations: 1 } }] }));
       return new Response(JSON.stringify({ hosts: ['*', 'calendar.example.com'], version: 1 }));
     }),
   );
@@ -30,7 +30,7 @@ it('shows administration in Spanish, plurals and markup included', async () => {
     </QueryClientProvider>,
   );
   expect(await screen.findByText('Hosts de confianza')).toBeTruthy();
-  expect(await screen.findAllByText('Lo usa 1 integración')).toHaveLength(2);
+  expect(await screen.findAllByText('Lo usa 1 integración o conexión')).toHaveLength(2);
   expect(screen.getByText(/confía en todos los hosts públicos/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Quitar calendar.example.com' })).toBeTruthy();
   expect(hostEntry('10.0.0.1').problem).toMatch(/No se pueden añadir direcciones IP/);

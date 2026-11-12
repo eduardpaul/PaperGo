@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"papergo/internal/egress"
 	"papergo/internal/hosts"
 )
 
@@ -27,35 +28,12 @@ type Download struct {
 	NotModified        bool
 }
 
-var denied = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("169.254.0.0/16"), netip.MustParsePrefix("172.16.0.0/12"),
-	netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("192.168.0.0/16"),
-	netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("224.0.0.0/3"), netip.MustParsePrefix("::/96"), netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"), netip.MustParsePrefix("100::/64"), netip.MustParsePrefix("2001::/23"),
-	netip.MustParsePrefix("2001:db8::/32"), netip.MustParsePrefix("2002::/16"), netip.MustParsePrefix("fc00::/7"),
-	netip.MustParsePrefix("fe80::/10"), netip.MustParsePrefix("ff00::/8"),
-}
-
-func PublicIP(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	for _, p := range denied {
-		if p.Contains(ip) {
-			return false
-		}
-	}
-	return true
-}
 func ParseURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Fragment != "" || u.Opaque != "" || len(raw) > 8192 || (u.Port() != "" && u.Port() != "443") {
 		return nil, errors.New("use an HTTPS iCalendar URL on port 443 without credentials or a fragment")
 	}
-	if ip, err := netip.ParseAddr(u.Hostname()); err == nil && !PublicIP(ip) {
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil && !egress.Public(ip) {
 		return nil, errors.New("calendar destinations must use public internet addresses")
 	}
 	u.Host = strings.ToLower(u.Host)
@@ -70,15 +48,19 @@ func ParseURL(raw string) (*url.URL, error) {
 	}
 	return u, nil
 }
+
+// public reaches public addresses only. Trust is checked on the URL and
+// every redirect, before the connection, so the dial trusts every host.
+var public = egress.Policy{Trusted: func(string) bool { return true }}
+
 func resolve(ctx context.Context, host string) ([]netip.Addr, error) {
-	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-	if err != nil || len(ips) == 0 {
-		return nil, errors.New("calendar destination could not be resolved")
+	ips, err := public.Resolve(ctx, host)
+	var private *egress.NetworkError
+	if errors.As(err, &private) || errors.Is(err, egress.ErrUnreachable) {
+		return nil, errors.New("calendar destinations must use public internet addresses")
 	}
-	for _, ip := range ips {
-		if !PublicIP(ip) {
-			return nil, errors.New("calendar destinations must use public internet addresses")
-		}
+	if err != nil {
+		return nil, errors.New("calendar destination could not be resolved")
 	}
 	return ips, nil
 }
@@ -101,22 +83,15 @@ func ValidateURL(ctx context.Context, raw string, trusted func(host string) bool
 func NewFetcher() *Fetcher {
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(address)
+			c, err := public.DialContext(ctx, network, address)
+			var private *egress.NetworkError
+			if errors.As(err, &private) || errors.Is(err, egress.ErrUnreachable) {
+				return nil, errors.New("calendar destinations must use public internet addresses")
+			}
 			if err != nil {
-				return nil, errors.New("invalid calendar destination")
+				return nil, errors.New("calendar destination could not be reached")
 			}
-			ips, err := resolve(ctx, host)
-			if err != nil {
-				return nil, err
-			}
-			dialer := net.Dialer{Timeout: 10 * time.Second}
-			for _, ip := range ips {
-				c, e := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-				if e == nil {
-					return c, nil
-				}
-			}
-			return nil, errors.New("calendar destination could not be reached")
+			return c, nil
 		}, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 15 * time.Second,
 		MaxResponseHeaderBytes: 64 << 10, DisableKeepAlives: true,
 	}

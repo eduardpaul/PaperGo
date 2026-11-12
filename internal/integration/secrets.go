@@ -58,21 +58,43 @@ func LoadSecrets(path string, allowCreate bool) (*Secrets, error) {
 	}
 	return NewSecrets(key)
 }
-func (s *Secrets) Encrypt(listID, raw string) ([]byte, error) {
+
+// Purpose names what a ciphertext configures. It is part of the associated
+// data, with the record it belongs to, so a ciphertext copied to another
+// purpose or record does not decrypt.
+type Purpose string
+
+const (
+	// PurposeListIntegration is a list integration's configuration, bound
+	// to its list.
+	PurposeListIntegration Purpose = "list-integration"
+	// PurposeConnection is a connection's target and credentials, bound to
+	// the connection.
+	PurposeConnection Purpose = "connection"
+)
+
+func associated(purpose Purpose, owner string) []byte {
+	return []byte("papergo:" + string(purpose) + ":" + owner)
+}
+
+// Encrypt seals raw for purpose and the record owner names.
+func (s *Secrets) Encrypt(purpose Purpose, owner, raw string) ([]byte, error) {
 	nonce := make([]byte, s.aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
-	return s.aead.Seal(nonce, nonce, []byte(raw), []byte("papergo:list-integration:"+listID)), nil
+	return s.aead.Seal(nonce, nonce, []byte(raw), associated(purpose, owner)), nil
 }
-func (s *Secrets) Decrypt(listID string, b []byte) (string, error) {
+
+// Decrypt opens what Encrypt sealed for the same purpose and owner.
+func (s *Secrets) Decrypt(purpose Purpose, owner string, b []byte) (string, error) {
 	n := s.aead.NonceSize()
 	if len(b) < n {
-		return "", errors.New("integration URL cannot be decrypted")
+		return "", errors.New("the configuration cannot be decrypted")
 	}
-	plain, err := s.aead.Open(nil, b[:n], b[n:], []byte("papergo:list-integration:"+listID))
+	plain, err := s.aead.Open(nil, b[:n], b[n:], associated(purpose, owner))
 	if err != nil {
-		return "", errors.New("integration URL cannot be decrypted")
+		return "", errors.New("the configuration cannot be decrypted")
 	}
 	return string(plain), nil
 }

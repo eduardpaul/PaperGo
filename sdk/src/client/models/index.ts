@@ -1139,6 +1139,125 @@ export interface ComposePDF extends Parsable {
     targetHeight?: number | null;
 }
 /**
+ * The endpoint's answer. Only Content-Type, ETag, Last-Modified and Retry-After are returned. Answers over 4 MiB fail.
+ */
+export interface ConnectionAnswer extends AdditionalDataHolder, Parsable {
+    /**
+     * JSON parsed, other text as a string.
+     */
+    body?: UntypedNode | null;
+    /**
+     * Any other answer.
+     */
+    bodyBase64?: string | null;
+    /**
+     * The headers property
+     */
+    headers?: ConnectionAnswer_headers | null;
+    /**
+     * From a workflow run: the operation that makes the call after the run's step commits; await it with ctx.wait. Its result is the endpoint's answer.
+     */
+    operationId?: string | null;
+    /**
+     * The status property
+     */
+    status?: number | null;
+}
+export interface ConnectionAnswer_headers extends AdditionalDataHolder, Parsable {
+}
+export interface ConnectionCall extends AdditionalDataHolder, Parsable {
+    /**
+     * A JSON value, sent as JSON, or as its text when it is a string and Content-Type is not JSON; the generated client takes an object (json() in scripts).
+     */
+    body?: ConnectionCall_body | null;
+    /**
+     * The body_base64 property
+     */
+    bodyBase64?: string | null;
+    /**
+     * Text sent as it is, text/plain unless Content-Type says otherwise.
+     */
+    bodyText?: string | null;
+    /**
+     * Only Accept, Content-Type, If-Match, If-None-Match and Idempotency-Key.
+     */
+    headers?: ConnectionCall_headers | null;
+    /**
+     * GET by default.
+     */
+    method?: ConnectionCall_method | null;
+    /**
+     * A path inside the channel, relative to the target's base, with its query (at most 2 KiB). Dot segments, encoded slashes, backslashes and empty segments are refused.
+     */
+    path?: string | null;
+}
+/**
+ * A JSON value, sent as JSON, or as its text when it is a string and Content-Type is not JSON; the generated client takes an object (json() in scripts).
+ */
+export interface ConnectionCall_body extends AdditionalDataHolder, Parsable {
+}
+/**
+ * Only Accept, Content-Type, If-Match, If-None-Match and Idempotency-Key.
+ */
+export interface ConnectionCall_headers extends AdditionalDataHolder, Parsable {
+}
+export type ConnectionCall_method = (typeof ConnectionCall_methodObject)[keyof typeof ConnectionCall_methodObject];
+export type ConnectionKind = (typeof ConnectionKindObject)[keyof typeof ConnectionKindObject];
+export interface ConnectionPublish extends AdditionalDataHolder, Parsable {
+    /**
+     * A JSON value, sent as JSON, or as its text when it is a string; the generated client takes an object (json() in scripts).
+     */
+    payload?: ConnectionPublish_payload | null;
+    /**
+     * The bytes it encodes.
+     */
+    payloadBase64?: string | null;
+    /**
+     * Text sent as it is, such as ON.
+     */
+    payloadText?: string | null;
+    /**
+     * 1 by default.
+     */
+    qos?: number | null;
+    /**
+     * Only on channels that allow it.
+     */
+    retain?: boolean | null;
+    /**
+     * One topic inside the channel, without wildcards.
+     */
+    topic?: string | null;
+}
+/**
+ * A JSON value, sent as JSON, or as its text when it is a string; the generated client takes an object (json() in scripts).
+ */
+export interface ConnectionPublish_payload extends AdditionalDataHolder, Parsable {
+}
+export interface ConnectionPublished extends AdditionalDataHolder, Parsable {
+    /**
+     * From a workflow run: the operation that publishes the message after the run's step commits; await it with ctx.wait. Its result is this answer with request set.
+     */
+    operationId?: string | null;
+    /**
+     * The qos property
+     */
+    qos?: number | null;
+    /**
+     * The papergo-request user property the message carries.
+     */
+    request?: string | null;
+    /**
+     * The retain property
+     */
+    retain?: boolean | null;
+    /**
+     * The topic property
+     */
+    topic?: string | null;
+}
+export type ConnectionUse = (typeof ConnectionUseObject)[keyof typeof ConnectionUseObject];
+/**
  * A catalog type belongs to the organization; a list type (collection_id set) is the copy of one catalog type that a list or library customizes and items use. Every type but the root Item derives from a parent and has every field, hidden field and rule of its ancestors.
  */
 export interface ContentType extends AdditionalDataHolder, Parsable {
@@ -1832,6 +1951,78 @@ export function createCompletionRequestFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createComposePDFFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoComposePDF;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionAnswer_headers}
+ */
+// @ts-ignore
+export function createConnectionAnswer_headersFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionAnswer_headers;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionAnswer}
+ */
+// @ts-ignore
+export function createConnectionAnswerFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionAnswer;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionCall_body}
+ */
+// @ts-ignore
+export function createConnectionCall_bodyFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionCall_body;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionCall_headers}
+ */
+// @ts-ignore
+export function createConnectionCall_headersFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionCall_headers;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionCall}
+ */
+// @ts-ignore
+export function createConnectionCallFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionCall;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionPublish_payload}
+ */
+// @ts-ignore
+export function createConnectionPublish_payloadFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionPublish_payload;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionPublished}
+ */
+// @ts-ignore
+export function createConnectionPublishedFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionPublished;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ConnectionPublish}
+ */
+// @ts-ignore
+export function createConnectionPublishFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoConnectionPublish;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3824,6 +4015,33 @@ export function createWorkflowStartedFromDiscriminatorValue(parseNode: ParseNode
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkspaceConnectionChannel}
+ */
+// @ts-ignore
+export function createWorkspaceConnectionChannelFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkspaceConnectionChannel;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkspaceConnection}
+ */
+// @ts-ignore
+export function createWorkspaceConnectionFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkspaceConnection;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkspaceConnectionList}
+ */
+// @ts-ignore
+export function createWorkspaceConnectionListFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkspaceConnectionList;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {WorkspaceKeywordCount}
  */
 // @ts-ignore
@@ -4793,6 +5011,108 @@ export function deserializeIntoComposePDF(composePDF: Partial<ComposePDF> | unde
         "item_ids": n => { composePDF.itemIds = n.getCollectionOfPrimitiveValues<string>("string"); },
         "quality": n => { composePDF.quality = n.getNumberValue(); },
         "target_height": n => { composePDF.targetHeight = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionAnswer The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionAnswer(connectionAnswer: Partial<ConnectionAnswer> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "body": n => { connectionAnswer.body = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "body_base64": n => { connectionAnswer.bodyBase64 = n.getStringValue(); },
+        "headers": n => { connectionAnswer.headers = n.getObjectValue<ConnectionAnswer_headers>(createConnectionAnswer_headersFromDiscriminatorValue); },
+        "operation_id": n => { connectionAnswer.operationId = n.getStringValue(); },
+        "status": n => { connectionAnswer.status = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionAnswer_headers The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionAnswer_headers(connectionAnswer_headers: Partial<ConnectionAnswer_headers> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionCall The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionCall(connectionCall: Partial<ConnectionCall> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "body": n => { connectionCall.body = n.getObjectValue<ConnectionCall_body>(createConnectionCall_bodyFromDiscriminatorValue); },
+        "body_base64": n => { connectionCall.bodyBase64 = n.getStringValue(); },
+        "body_text": n => { connectionCall.bodyText = n.getStringValue(); },
+        "headers": n => { connectionCall.headers = n.getObjectValue<ConnectionCall_headers>(createConnectionCall_headersFromDiscriminatorValue); },
+        "method": n => { connectionCall.method = n.getEnumValue<ConnectionCall_method>(ConnectionCall_methodObject); },
+        "path": n => { connectionCall.path = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionCall_body The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionCall_body(connectionCall_body: Partial<ConnectionCall_body> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionCall_headers The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionCall_headers(connectionCall_headers: Partial<ConnectionCall_headers> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionPublish The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionPublish(connectionPublish: Partial<ConnectionPublish> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "payload": n => { connectionPublish.payload = n.getObjectValue<ConnectionPublish_payload>(createConnectionPublish_payloadFromDiscriminatorValue); },
+        "payload_base64": n => { connectionPublish.payloadBase64 = n.getStringValue(); },
+        "payload_text": n => { connectionPublish.payloadText = n.getStringValue(); },
+        "qos": n => { connectionPublish.qos = n.getNumberValue(); },
+        "retain": n => { connectionPublish.retain = n.getBooleanValue(); },
+        "topic": n => { connectionPublish.topic = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionPublish_payload The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionPublish_payload(connectionPublish_payload: Partial<ConnectionPublish_payload> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ConnectionPublished The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoConnectionPublished(connectionPublished: Partial<ConnectionPublished> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "operation_id": n => { connectionPublished.operationId = n.getStringValue(); },
+        "qos": n => { connectionPublished.qos = n.getNumberValue(); },
+        "request": n => { connectionPublished.request = n.getStringValue(); },
+        "retain": n => { connectionPublished.retain = n.getBooleanValue(); },
+        "topic": n => { connectionPublished.topic = n.getStringValue(); },
     }
 }
 /**
@@ -7764,6 +8084,50 @@ export function deserializeIntoWorkflowForm(workflowForm: Partial<WorkflowForm> 
 export function deserializeIntoWorkflowStarted(workflowStarted: Partial<WorkflowStarted> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "run_ids": n => { workflowStarted.runIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkspaceConnection The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkspaceConnection(workspaceConnection: Partial<WorkspaceConnection> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "channels": n => { workspaceConnection.channels = n.getCollectionOfObjectValues<WorkspaceConnectionChannel>(createWorkspaceConnectionChannelFromDiscriminatorValue); },
+        "connected": n => { workspaceConnection.connected = n.getBooleanValue(); },
+        "key": n => { workspaceConnection.key = n.getStringValue(); },
+        "kind": n => { workspaceConnection.kind = n.getEnumValue<ConnectionKind>(ConnectionKindObject); },
+        "name": n => { workspaceConnection.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkspaceConnectionChannel The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkspaceConnectionChannel(workspaceConnectionChannel: Partial<WorkspaceConnectionChannel> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "key": n => { workspaceConnectionChannel.key = n.getStringValue(); },
+        "may": n => { workspaceConnectionChannel.may = n.getCollectionOfEnumValues<ConnectionUse>(ConnectionUseObject); },
+        "methods": n => { workspaceConnectionChannel.methods = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "name": n => { workspaceConnectionChannel.name = n.getStringValue(); },
+        "path": n => { workspaceConnectionChannel.path = n.getStringValue(); },
+        "retain": n => { workspaceConnectionChannel.retain = n.getBooleanValue(); },
+        "topics": n => { workspaceConnectionChannel.topics = n.getStringValue(); },
+        "uses": n => { workspaceConnectionChannel.uses = n.getCollectionOfEnumValues<ConnectionUse>(ConnectionUseObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkspaceConnectionList The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkspaceConnectionList(workspaceConnectionList: Partial<WorkspaceConnectionList> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "value": n => { workspaceConnectionList.value = n.getCollectionOfObjectValues<WorkspaceConnection>(createWorkspaceConnectionFromDiscriminatorValue); },
     }
 }
 /**
@@ -11023,6 +11387,116 @@ export function serializeComposePDF(writer: SerializationWriter, composePDF: Par
 }
 /**
  * Serializes information the current object
+ * @param ConnectionAnswer The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionAnswer(writer: SerializationWriter, connectionAnswer: Partial<ConnectionAnswer> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionAnswer || isSerializingDerivedType) { return; }
+    writer.writeObjectValue("body", connectionAnswer.body);
+    writer.writeStringValue("body_base64", connectionAnswer.bodyBase64);
+    writer.writeObjectValue<ConnectionAnswer_headers>("headers", connectionAnswer.headers, serializeConnectionAnswer_headers);
+    writer.writeStringValue("operation_id", connectionAnswer.operationId);
+    writer.writeNumberValue("status", connectionAnswer.status);
+    writer.writeAdditionalData(connectionAnswer.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionAnswer_headers The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionAnswer_headers(writer: SerializationWriter, connectionAnswer_headers: Partial<ConnectionAnswer_headers> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionAnswer_headers || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(connectionAnswer_headers.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionCall The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionCall(writer: SerializationWriter, connectionCall: Partial<ConnectionCall> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionCall || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<ConnectionCall_body>("body", connectionCall.body, serializeConnectionCall_body);
+    writer.writeStringValue("body_base64", connectionCall.bodyBase64);
+    writer.writeStringValue("body_text", connectionCall.bodyText);
+    writer.writeObjectValue<ConnectionCall_headers>("headers", connectionCall.headers, serializeConnectionCall_headers);
+    writer.writeEnumValue<ConnectionCall_method>("method", connectionCall.method);
+    writer.writeStringValue("path", connectionCall.path);
+    writer.writeAdditionalData(connectionCall.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionCall_body The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionCall_body(writer: SerializationWriter, connectionCall_body: Partial<ConnectionCall_body> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionCall_body || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(connectionCall_body.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionCall_headers The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionCall_headers(writer: SerializationWriter, connectionCall_headers: Partial<ConnectionCall_headers> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionCall_headers || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(connectionCall_headers.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionPublish The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionPublish(writer: SerializationWriter, connectionPublish: Partial<ConnectionPublish> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionPublish || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<ConnectionPublish_payload>("payload", connectionPublish.payload, serializeConnectionPublish_payload);
+    writer.writeStringValue("payload_base64", connectionPublish.payloadBase64);
+    writer.writeStringValue("payload_text", connectionPublish.payloadText);
+    writer.writeNumberValue("qos", connectionPublish.qos);
+    writer.writeBooleanValue("retain", connectionPublish.retain);
+    writer.writeStringValue("topic", connectionPublish.topic);
+    writer.writeAdditionalData(connectionPublish.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionPublish_payload The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionPublish_payload(writer: SerializationWriter, connectionPublish_payload: Partial<ConnectionPublish_payload> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionPublish_payload || isSerializingDerivedType) { return; }
+    writer.writeAdditionalData(connectionPublish_payload.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param ConnectionPublished The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeConnectionPublished(writer: SerializationWriter, connectionPublished: Partial<ConnectionPublished> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!connectionPublished || isSerializingDerivedType) { return; }
+    writer.writeStringValue("operation_id", connectionPublished.operationId);
+    writer.writeNumberValue("qos", connectionPublished.qos);
+    writer.writeStringValue("request", connectionPublished.request);
+    writer.writeBooleanValue("retain", connectionPublished.retain);
+    writer.writeStringValue("topic", connectionPublished.topic);
+    writer.writeAdditionalData(connectionPublished.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param ContentType The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -14044,6 +14518,55 @@ export function serializeWorkflowStarted(writer: SerializationWriter, workflowSt
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkspaceConnection The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkspaceConnection(writer: SerializationWriter, workspaceConnection: Partial<WorkspaceConnection> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workspaceConnection || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<WorkspaceConnectionChannel>("channels", workspaceConnection.channels, serializeWorkspaceConnectionChannel);
+    writer.writeBooleanValue("connected", workspaceConnection.connected);
+    writer.writeStringValue("key", workspaceConnection.key);
+    writer.writeEnumValue<ConnectionKind>("kind", workspaceConnection.kind);
+    writer.writeStringValue("name", workspaceConnection.name);
+    writer.writeAdditionalData(workspaceConnection.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkspaceConnectionChannel The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkspaceConnectionChannel(writer: SerializationWriter, workspaceConnectionChannel: Partial<WorkspaceConnectionChannel> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workspaceConnectionChannel || isSerializingDerivedType) { return; }
+    writer.writeStringValue("key", workspaceConnectionChannel.key);
+    if(workspaceConnectionChannel.may)
+    writer.writeCollectionOfEnumValues<ConnectionUse>("may", workspaceConnectionChannel.may);
+    writer.writeCollectionOfPrimitiveValues<string>("methods", workspaceConnectionChannel.methods);
+    writer.writeStringValue("name", workspaceConnectionChannel.name);
+    writer.writeStringValue("path", workspaceConnectionChannel.path);
+    writer.writeBooleanValue("retain", workspaceConnectionChannel.retain);
+    writer.writeStringValue("topics", workspaceConnectionChannel.topics);
+    if(workspaceConnectionChannel.uses)
+    writer.writeCollectionOfEnumValues<ConnectionUse>("uses", workspaceConnectionChannel.uses);
+    writer.writeAdditionalData(workspaceConnectionChannel.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkspaceConnectionList The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkspaceConnectionList(writer: SerializationWriter, workspaceConnectionList: Partial<WorkspaceConnectionList> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workspaceConnectionList || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<WorkspaceConnection>("value", workspaceConnectionList.value, serializeWorkspaceConnection);
+    writer.writeAdditionalData(workspaceConnectionList.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param WorkspaceKeywordCount The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -15719,6 +16242,68 @@ export interface WorkflowStarted extends Parsable {
      */
     runIds?: string[] | null;
 }
+export interface WorkspaceConnection extends AdditionalDataHolder, Parsable {
+    /**
+     * The channels property
+     */
+    channels?: WorkspaceConnectionChannel[] | null;
+    /**
+     * The connected property
+     */
+    connected?: boolean | null;
+    /**
+     * The key property
+     */
+    key?: string | null;
+    /**
+     * The kind property
+     */
+    kind?: ConnectionKind | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
+export interface WorkspaceConnectionChannel extends AdditionalDataHolder, Parsable {
+    /**
+     * The key property
+     */
+    key?: string | null;
+    /**
+     * What the caller may do now.
+     */
+    may?: ConnectionUse[] | null;
+    /**
+     * The methods property
+     */
+    methods?: string[] | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The path property
+     */
+    path?: string | null;
+    /**
+     * The retain property
+     */
+    retain?: boolean | null;
+    /**
+     * The topics property
+     */
+    topics?: string | null;
+    /**
+     * The uses property
+     */
+    uses?: ConnectionUse[] | null;
+}
+export interface WorkspaceConnectionList extends AdditionalDataHolder, Parsable {
+    /**
+     * The value property
+     */
+    value?: WorkspaceConnection[] | null;
+}
 export interface WorkspaceKeywordCount extends Parsable {
     /**
      * Resources the caller can read that carry the keyword.
@@ -16017,6 +16602,28 @@ export const CompactSmartFolderEntry_collection_kindObject = {
 export const CompletionRequest_executionObject = {
     Immediate: "immediate",
     Batch: "batch",
+} as const;
+/**
+ * GET by default.
+ */
+export const ConnectionCall_methodObject = {
+    GET: "GET",
+    HEAD: "HEAD",
+    POST: "POST",
+    PUT: "PUT",
+    PATCH: "PATCH",
+    DELETE: "DELETE",
+} as const;
+export const ConnectionKindObject = {
+    Mqtt: "mqtt",
+    Http: "http",
+} as const;
+/**
+ * MQTT subscribing and HTTP GET and HEAD are see; MQTT publishing and HTTP POST, PUT, PATCH and DELETE are control.
+ */
+export const ConnectionUseObject = {
+    See: "see",
+    Control: "control",
 } as const;
 export const CreateCatalogField_typeObject = {
     Text: "text",

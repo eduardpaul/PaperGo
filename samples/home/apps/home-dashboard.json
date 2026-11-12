@@ -1,0 +1,8 @@
+{
+  "key": "home-dashboard",
+  "name": "Home",
+  "description": "Each room's temperature as the sensors report it, its light and fan, and the heating from Node-RED with a boost.",
+  "source": "home-dashboard.tsx",
+  "parameters": {},
+  "state": "published"
+}

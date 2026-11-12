@@ -34,6 +34,9 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/evanw/esbuild` | bundling workflow scripts (`internal/script` only) | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | the [MCP endpoint](mcp.md)'s protocol and Streamable HTTP transport (`extensions/mcp` only) | Apache-2.0, older contributions MIT |
 | `github.com/google/jsonschema-go` | validating MCP tool arguments against their schemas (`extensions/mcp` only) | MIT |
+| `github.com/eclipse/paho.golang` | the MQTT 5 client of [connections](connections.md) (`autopaho`, `paho`, `packets`; `internal/connections` only) | EPL-2.0 or EDL-1.0 (BSD-3-Clause); used under EDL-1.0 |
+| `github.com/gorilla/websocket` | MQTT over WebSocket for connections (`internal/connections` only) | BSD-2-Clause |
+| `golang.org/x/time` | the rate limits of connections (`rate`) | BSD-3-Clause |
 
 goja also links `github.com/dlclark/regexp2` (MIT), `github.com/go-sourcemap/sourcemap` (BSD-2-Clause) and `github.com/google/pprof` (Apache-2.0).
 
@@ -41,7 +44,9 @@ go-pdfium's WebAssembly backend also links `github.com/jolestar/go-commons-pool/
 
 **PDFium** 8111, as the WebAssembly module go-pdfium v1.21.4 embeds, is compiled into the executable and runs in wazero v1.12.0 with no file system access; no native PDFium library is loaded. The module is built with Emscripten 6.0.13 from the `wasm-standalone` branch of `jerbob92/pdfium-binaries`, without V8 or XFA. PDFium is Apache-2.0 and BSD-3-Clause. The module also contains FreeType (FreeType License), libjpeg-turbo (IJG, BSD-3-Clause and zlib), OpenJPEG (BSD-2-Clause), Little CMS (MIT), zlib, ICU (Unicode License), Abseil (Apache-2.0), AGG and Emscripten's runtime libraries (MIT and NCSA, musl MIT). `internal/doctext/pdfium/notices` holds these notices and the rest of PDFium 8111's licence set as `bblanchon/pdfium-binaries` chromium/8111 ships it (among them dragonbox, HarfBuzz and Highway), plus wazero's licence and NOTICE. `scripts/build-binaries.py` ships them as `notices/pdfium/` in release archives and the Docker image. Update the notices and `Name()` in `internal/doctext/pdfium` when go-pdfium changes.
 
-The MCP SDK also links `github.com/segmentio/encoding` and `github.com/segmentio/asm` (MIT), `github.com/yosida95/uritemplate/v3` (BSD-3-Clause) and `golang.org/x/time` (BSD-3-Clause).
+The MCP SDK also links `github.com/segmentio/encoding` and `github.com/segmentio/asm` (MIT) and `github.com/yosida95/uritemplate/v3` (BSD-3-Clause).
+
+paho.golang links nothing beyond `github.com/gorilla/websocket` and the standard library.
 
 The embedded workflow SDK (`sdk/dist/sdk.js`) bundles the npm packages `@microsoft/kiota-abstractions` and the Kiota JSON, text, form and multipart serializers (MIT), `@opentelemetry/api` and `@std-uritemplate/std-uritemplate` (Apache-2.0), and `tinyduration` (MIT). The client is generated with Kiota 1.35.0 (MIT), a development tool.
 

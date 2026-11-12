@@ -43,6 +43,12 @@ var Catalog = []Scope{
 	// solution.manage installs and removes solutions; each change a
 	// solution makes also needs the scope that change needs by hand.
 	{"solution.manage", false},
+	// connection.manage writes a workspace's connections, which reach the
+	// server's networks for everyone who may use them.
+	{"connection.manage", false},
+	// connection.control publishes and calls through connections: driving
+	// devices and flows, beyond seeing them.
+	{"connection.control", true},
 }
 
 func RequireScope(ctx context.Context, store *dal.Store, subject, scope string) error {

@@ -6,6 +6,7 @@ The organization keeps one list of **trusted hosts**: the outside hosts PaperGo 
 | --- | --- | --- |
 | Images in Markdown | Load with the document; images stored in PaperGo always load, fetched with the reader's credentials | A placeholder naming the host, with **Show once** and **Show all images in this file**; administrators also get **Trust host** |
 | Links in Markdown, PDFs and URL fields | Open in a new tab without a referrer | A click, middle click or Enter brings a confirmation (links in Markdown and URL fields carry no address the browser could open by itself, and PDF links withhold the browser's menu), "You're leaving PaperGo for *host*", showing the whole address before it opens |
+| [Connections](connections.md) to public addresses | Connect and call, over TLS only | Refused at connect time; Test says "*host* isn't a trusted host. Ask an administrator to trust it." |
 | [List integrations](list-integrations.md) | Refresh | Refused when added or edited ("*host* isn't a trusted host. Ask an administrator to trust it."); an existing integration stops refreshing and shows **Host no longer trusted**, keeps its items, and resumes once the host is trusted again |
 
 Links and images inside PaperGo itself are always trusted. Images embedded in a file are part of the file and always show.
@@ -22,16 +23,16 @@ Entries are stored lowercase, without a trailing dot, with international names i
 
 A new organization trusts `*`, so everything works at first. To narrow it, add the hosts the organization uses, then remove `*`. While `*` is listed, nothing offers **Trust host**.
 
-The list never opens private networks: server-side fetches still reach only public addresses over HTTPS, whatever it says. It does not cover what the operator configures, such as AI endpoints, OIDC, the MCP URL or CORS.
+The list never opens private networks: server-side fetches reach public addresses only over TLS, whatever it says, and connections reach private networks only those the operator lists in [`connections.networks`](configuration.md). It does not cover what the operator configures, such as AI endpoints, OIDC, the MCP URL or CORS.
 
 ## Managing the list
 
-**Administration → Trusted hosts** shows the entries and how many integrations use each. Removing an entry that integrations still need names them and asks first. Administrators can also trust a host from where it was needed: a link's confirmation, an image placeholder, or a refused integration.
+**Administration → Trusted hosts** shows the entries and how many integrations and connections use each. Removing an entry they still need names them and asks first. Administrators can also trust a host from where it was needed: a link's confirmation, an image placeholder, or a refused integration.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/v1/organization/settings/trusted-hosts` | `hosts` and `version` (`0` until first changed); any active account |
 | PUT | `/v1/organization/settings/trusted-hosts` | Replace `hosts`, with the current version in `If-Match`; `organization.manage` |
-| GET | `/v1/organization/settings/trusted-hosts/usage` | The hosts integrations fetch from, each with its count of `integrations`; `organization.manage` |
+| GET | `/v1/organization/settings/trusted-hosts/usage` | The hosts features reach, each with its `uses` by feature, such as `integrations` and `connections`; `organization.manage` |
 
 Changes are audited as `settings.trusted_hosts`. Open browsers read the list again when their window regains focus.

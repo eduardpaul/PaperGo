@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -16,6 +17,8 @@ type extensions struct {
 	matcher  TextMatcher
 	storage  []StorageReporter
 	imported []ImportHook
+	hosts    []hostReporter
+	parts    []PackagePart
 }
 
 // TextMatcher finds the items and folders whose text matches the search
@@ -110,6 +113,42 @@ type StorageReporter func(context.Context) (StorageUsage, error)
 
 // AddStorageReporter adds an extension's storage to the storage status.
 func (s *Service) AddStorageReporter(r StorageReporter) { s.ext.storage = append(s.ext.storage, r) }
+
+// HostReporter counts the configured uses of each outside host a feature
+// reaches, by host key (hosts.Key).
+type HostReporter func(context.Context) (map[string]int, error)
+
+type hostReporter struct {
+	feature string
+	report  HostReporter
+}
+
+// AddHostReporter adds a feature's hosts to the trusted host usage, under
+// the feature's name, so administrators see what a narrower list stops.
+func (s *Service) AddHostReporter(feature string, r HostReporter) {
+	s.ext.hosts = append(s.ext.hosts, hostReporter{feature, r})
+}
+
+// PackagePart is what a feature adds to workspace and organization
+// packages, under its Name in the package's parts: its own records, with
+// the secrets that belong to this installation left behind.
+type PackagePart struct {
+	Name string
+	// Export returns the feature's records of a workspace, or of every
+	// workspace when workspaceID is empty, as JSON; nil adds nothing.
+	Export func(ctx context.Context, s *Service, workspaceID string) (json.RawMessage, error)
+	// Remap rewrites the IDs a workspace package's records name, such as
+	// their workspace and lists, to those the copy is given; id answers
+	// false for an ID the package does not carry.
+	Remap func(raw json.RawMessage, id func(string) (string, bool)) (json.RawMessage, error)
+	// Import writes the records in the import's transaction, after the
+	// package's tables, as subject; its warnings say what to finish by
+	// hand, such as giving a connection its target again.
+	Import func(ctx context.Context, s *Service, subject string, raw json.RawMessage) ([]string, error)
+}
+
+// AddPackagePart adds a feature's part to packages.
+func (s *Service) AddPackagePart(p PackagePart) { s.ext.parts = append(s.ext.parts, p) }
 
 // ImportHook runs after an organization package import commits. Imported
 // entries raise no change events, so an extension that keeps state derived

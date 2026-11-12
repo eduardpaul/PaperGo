@@ -5,7 +5,9 @@ It carries the workspace's name, description, membership and permissions; lists
 and libraries with their settings; content types, fields and frozen schemas;
 workspace schema templates; list views; shared smart folders; taxonomy and
 relationship policies; workflow definitions, versions and triggers; apps with
-their parameters and versions; and group inbox bindings. Shared dependencies are
+their parameters and versions; group inbox bindings; and the workspace's
+[connections](connections.md), with their keys, settings and channels but
+without their addresses or credentials. Shared dependencies are
 selected from the objects the workspace uses. PaperGo uses a ZIP containing
 `manifest.json` and deduplicated `objects/` entries, with an explicit
 organization or workspace scope.

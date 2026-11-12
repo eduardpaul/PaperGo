@@ -14716,7 +14716,7 @@
     "/v1/events": {
       "get": {
         "summary": "Stream visible item, operation, workflow-run and notification changes",
-        "description": "Authenticated SSE. Event types: connected, item, operation, run, notification, comment, resync, keepalive and reauthenticate. Frames use current REST visibility and caller ownership; run status requires workspace management; notification frames reach only their recipient and carry the recipient's unread count, without an id when the whole inbox changed, as when everything is marked read; comment frames name the comment, its item and thread for people who may read its discussion. Last-Event-ID resumes retained positions for seven days; expired positions return 410. connected and resync instruct clients to use durable delta links for complete deletion/access reconciliation. Item tombstones name only IDs already delivered on this connection; item payloads and run statuses are current views and can coalesce intermediate changes. Personal REST credential revocation/expiry and inactive accounts send reauthenticate and close. Connections end after 30 minutes or 10,000 remembered item IDs; reconnect and resynchronize. Keepalive frames are sent every 7.5 seconds. Streams use a separate pool capped at 64 per process and four per user, and are excluded from HTTP batches.",
+        "description": "Authenticated SSE. Event types: connected, item, operation, run, notification, comment, resync, keepalive, reauthenticate, access, and the frames of subscriptions modules serve, such as connection.messages. The connected frame names the stream's ID, which POST /v1/events/{stream}/subscriptions adds subscriptions to; an access frame names a subscription that ended because its access was lost. Frames use current REST visibility and caller ownership; run status requires workspace management; notification frames reach only their recipient and carry the recipient's unread count, without an id when the whole inbox changed, as when everything is marked read; comment frames name the comment, its item and thread for people who may read its discussion. Last-Event-ID resumes retained positions for seven days; expired positions return 410. connected and resync instruct clients to use durable delta links for complete deletion/access reconciliation. Item tombstones name only IDs already delivered on this connection; item payloads and run statuses are current views and can coalesce intermediate changes. Personal REST credential revocation/expiry and inactive accounts send reauthenticate and close. Connections end after 30 minutes or 10,000 remembered item IDs; reconnect and resynchronize. Keepalive frames are sent every 7.5 seconds. Streams use a separate pool capped at 64 per process and four per user unless LIVE_STREAMS_PER_USER says otherwise, and are excluded from HTTP batches.",
         "parameters": [
           {
             "name": "Last-Event-ID",
@@ -24160,7 +24160,7 @@
       "get": {
         "summary": "Get Trusted Host Usage",
         "operationId": "getTrustedHostUsage",
-        "description": "The outside hosts configured features fetch from, with how many integrations use each, so administrators see what a narrower list stops. Needs organization.manage.",
+        "description": "The outside hosts configured features reach, with how many uses of each feature reach each host, such as list integrations and connections, so administrators see what a narrower list stops. Needs organization.manage.",
         "responses": {
           "200": {
             "description": "Success",
@@ -25157,6 +25157,955 @@
                 }
               }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/connections": {
+      "get": {
+        "summary": "List Connections",
+        "operationId": "listConnections",
+        "tags": [
+          "Connections"
+        ],
+        "description": "The connections of a workspace with their targets, credentials without secrets, channels and status, by name. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace whose connections to list."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      },
+      "post": {
+        "summary": "Create Connection",
+        "operationId": "createConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Adds a connection to a workspace. Its key comes from the name unless given, and never changes. An HTTP connection is given a signing secret, which this answer shows once. Saving refuses channels that serve the same use and overlap, naming both, and access borrowed from a list the manager cannot read. Needs manage access to the workspace and connection.manage.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      }
+    },
+    "/v1/connections/{id}": {
+      "get": {
+        "summary": "Get Connection",
+        "operationId": "getConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "A connection as its managers see it. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      },
+      "put": {
+        "summary": "Replace Connection",
+        "operationId": "replaceConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Replaces a connection at the version If-Match names. Its workspace, key and kind never change. Credentials and the signing secret are kept when left out. The running connection reconnects with what is saved. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      },
+      "delete": {
+        "summary": "Delete Connection",
+        "operationId": "deleteConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Deletes a connection at the version If-Match names and closes it. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      }
+    },
+    "/v1/connections/{id}/test": {
+      "post": {
+        "summary": "Test Connection",
+        "operationId": "testConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Connects and signs in once (MQTT), or calls the health path or the base URL once (HTTP), with the saved configuration, apart from the running connection, and says what went wrong in words that say what to do. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionTestResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      }
+    },
+    "/v1/connections/{id}/signing-secret": {
+      "post": {
+        "summary": "Renew Connection Signing Secret",
+        "operationId": "renewConnectionSigningSecret",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Gives an HTTP connection a new signing secret, which this answer shows once; the previous one stops signing at once. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      }
+    },
+    "/v1/connections/{id}/calls": {
+      "get": {
+        "summary": "List Connection Calls",
+        "operationId": "listConnectionCalls",
+        "tags": [
+          "Connections"
+        ],
+        "description": "An HTTP connection's last 50 calls, newest first, for its monitor: method, path without its query, status, duration and caller. They are kept in memory. Needs manage access to the workspace and connection.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionCallList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.manage"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/connections": {
+      "get": {
+        "summary": "List Workspace Connections",
+        "operationId": "listWorkspaceConnections",
+        "tags": [
+          "Connections"
+        ],
+        "description": "The workspace's connections as its readers see them: key, name, kind, whether it is connected, and each channel with what the caller may do with it now. No target or credential. Apps and workflows name connections by key.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceConnectionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "workspace.read"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/connections/{key}": {
+      "get": {
+        "summary": "Get Workspace Connection",
+        "operationId": "getWorkspaceConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "One connection of the workspace, by key, as its readers see it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The connection's key in the workspace."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceConnection"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "workspace.read"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/connections/{key}/channels/{channel}/publish": {
+      "post": {
+        "summary": "Publish To Connection",
+        "operationId": "publishToConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Publishes a message to one topic inside an MQTT channel and answers once the broker acknowledges it (QoS 1) or it is sent (QoS 0). The message carries the MQTT 5 user property papergo-request, so receivers can drop repeats. Payloads are at most 256 KiB, 16 KiB from an app. Needs connection.control and the channel's control access. Every publish is audited, without its payload. From a workflow run it is an operation performed after the step commits, at least once.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The connection's key in the workspace."
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The channel's key."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionPublish"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPublished"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "From a workflow run: accepted as an operation, at Location and named by operation_id, performed after the run's step commits.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPublished"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the caller's rate through this channel (code connection_rate_limited): ten a second, bursting to twenty.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The endpoint could not be reached, its TLS was wrong, it redirected, or it refused the message (code connection_failed).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The connection is disabled (connection_disabled), not connected yet, or making four calls already (connection_busy).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "No answer within the connection's timeout (code connection_timeout).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.control"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/connections/{key}/channels/{channel}/fetch": {
+      "get": {
+        "summary": "Fetch From Connection",
+        "operationId": "fetchFromConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Reads through an HTTP channel: GET, or HEAD with method=HEAD, of a path inside the channel. Answers 200 with the endpoint's answer in an envelope whatever the endpoint said, so its 403 is never PaperGo's. A channel with a cache answers from it while fresh. Needs the channel's see access. Over 20 a second, bursting to 40, per person and connection is 429; cached answers do not count.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The connection's key in the workspace."
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The channel's key."
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The percent-encoded path, relative to the target's base, with its query."
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "HEAD"
+              ]
+            }
+          },
+          {
+            "name": "accept",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The Accept header sent."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionAnswer"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the caller's rate through this channel (code connection_rate_limited): ten a second, bursting to twenty.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The endpoint could not be reached, its TLS was wrong, it redirected, or it refused the message (code connection_failed).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The connection is disabled (connection_disabled), not connected yet, or making four calls already (connection_busy).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "No answer within the connection's timeout (code connection_timeout).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/connections/{key}/channels/{channel}/call": {
+      "post": {
+        "summary": "Call Connection",
+        "operationId": "callConnection",
+        "tags": [
+          "Connections"
+        ],
+        "description": "Calls an HTTP channel with any method it allows; GET and HEAD are seeing, POST, PUT, PATCH and DELETE controlling, which also needs connection.control. Answers 200 with the endpoint's answer in an envelope. A request's Idempotency-Key is passed on. Bodies are at most 1 MiB, 16 KiB from an app, query included. Every control call is audited, without its body. From a workflow run it takes a controlling method only, GET and HEAD going through fetch, and is an operation performed after the step commits, at least once, with the operation's ID as Idempotency-Key unless the call gives one.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The workspace."
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The connection's key in the workspace."
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The channel's key."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionCall"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionAnswer"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "From a workflow run: accepted as an operation, at Location and named by operation_id, performed after the run's step commits.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionAnswer"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the caller's rate through this channel (code connection_rate_limited): ten a second, bursting to twenty.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The endpoint could not be reached, its TLS was wrong, it redirected, or it refused the message (code connection_failed).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The connection is disabled (connection_disabled), not connected yet, or making four calls already (connection_busy).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before trying again."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "No answer within the connection's timeout (code connection_timeout).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "connection.control"
+        ]
+      }
+    },
+    "/v1/events/{stream}/subscriptions": {
+      "post": {
+        "summary": "Subscribe Live Stream",
+        "operationId": "subscribeLiveStream",
+        "tags": [
+          "Live"
+        ],
+        "description": "Adds a subscription to one of the caller's open live streams, named by the stream ID its connected frame gives. A module serves each source; its frames ride on that stream only and are not stored or replayed. The stream checks each subscription's access every 30 seconds and ends one whose access was lost with an access frame. A stream holds at most 50 subscriptions. Source connections takes workspace, key, channel and an optional filter inside the channel's topics, needs the channel's see access, and delivers connection.messages frames: the latest message of each matching topic, current values first.",
+        "parameters": [
+          {
+            "name": "stream",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The stream's ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subscribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSubscriptionCreated"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/events/{stream}/subscriptions/{subscription}": {
+      "delete": {
+        "summary": "Unsubscribe Live Stream",
+        "operationId": "unsubscribeLiveStream",
+        "tags": [
+          "Live"
+        ],
+        "description": "Ends a subscription of one of the caller's open live streams.",
+        "parameters": [
+          {
+            "name": "stream",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subscription",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Ended"
           },
           "default": {
             "$ref": "#/components/responses/Problem"
@@ -29085,7 +30034,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, wf.{key}.{event}, or a module's type, such as connection.message (options). Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
@@ -29192,6 +30141,11 @@
             "type": "boolean",
             "default": false,
             "description": "Pause this automatic rule without deleting its configuration. Use manual_enabled to control manual invocation."
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "What a module's trigger type takes. connection.message: connection and channel (keys), topic (a filter inside the channel), min_interval (1s to 24h, 1m by default: at most one run per topic that often) and condition ({ path, op, value }, op eq, ne, gt, gte, lt, lte or changed) on the payload."
           }
         },
         "required": [
@@ -35790,15 +36744,18 @@
         "type": "object",
         "required": [
           "host",
-          "integrations"
+          "uses"
         ],
         "properties": {
           "host": {
             "type": "string"
           },
-          "integrations": {
-            "type": "integer",
-            "description": "Integrations that fetch from the host."
+          "uses": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "How many uses of each feature reach the host: integrations (list integrations that fetch from it) and connections (connections whose target names it)."
           }
         }
       },
@@ -36926,6 +37883,737 @@
             "type": "string"
           },
           "collection_name": {
+            "type": "string"
+          }
+        }
+      },
+      "ConnectionKind": {
+        "type": "string",
+        "enum": [
+          "mqtt",
+          "http"
+        ]
+      },
+      "ConnectionUse": {
+        "type": "string",
+        "enum": [
+          "see",
+          "control"
+        ],
+        "description": "MQTT subscribing and HTTP GET and HEAD are see; MQTT publishing and HTTP POST, PUT, PATCH and DELETE are control."
+      },
+      "ConnectionAccess": {
+        "type": "object",
+        "required": [
+          "level",
+          "on"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "manage"
+            ],
+            "description": "The permission needed on the resource on names."
+          },
+          "on": {
+            "type": "string",
+            "description": "workspace, or the ID of a list or library of the connection's workspace."
+          }
+        }
+      },
+      "ConnectionChannel": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "description": "A named, bounded part of what the connection reaches, and who may reach it. Two channels that serve the same use may not overlap.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Lowercase letters, digits, - and _, up to 64; unique in the connection."
+          },
+          "name": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "string",
+            "description": "MQTT: a topic filter (+ and #); topics starting with $ are refused."
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionUse"
+            },
+            "description": "MQTT: what callers may do. HTTP: follows from methods."
+          },
+          "retain": {
+            "type": "boolean",
+            "description": "MQTT: publishes may be retained. Off by default."
+          },
+          "path": {
+            "type": "string",
+            "description": "HTTP: a path pattern relative to the target's base; * is one segment, a last ** one or more."
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "HEAD",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            }
+          },
+          "cache": {
+            "type": "string",
+            "description": "HTTP: keep 2xx GET answers this long (1s to 1h) and serve them to every caller with see access."
+          },
+          "access": {
+            "type": "object",
+            "properties": {
+              "see": {
+                "type": "object",
+                "required": [
+                  "level",
+                  "on"
+                ],
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write",
+                      "manage"
+                    ],
+                    "description": "The permission needed on the resource on names."
+                  },
+                  "on": {
+                    "type": "string",
+                    "description": "workspace, or the ID of a list or library of the connection's workspace."
+                  }
+                }
+              },
+              "control": {
+                "type": "object",
+                "required": [
+                  "level",
+                  "on"
+                ],
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write",
+                      "manage"
+                    ],
+                    "description": "The permission needed on the resource on names."
+                  },
+                  "on": {
+                    "type": "string",
+                    "description": "workspace, or the ID of a list or library of the connection's workspace."
+                  }
+                }
+              }
+            },
+            "description": "Who may use the channel each way; by default members (write on the workspace). Workspace owners always may."
+          }
+        }
+      },
+      "ConnectionCredentials": {
+        "type": "object",
+        "description": "Write-only secrets: answers show the type, user name and header name only.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer",
+              "header"
+            ],
+            "description": "MQTT: none or basic."
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "token": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The header a header credential sets."
+          },
+          "value": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "ConnectionStatus": {
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "connecting",
+              "connected",
+              "failed",
+              "ok",
+              "failing",
+              "unknown"
+            ]
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "connected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConnectionSave": {
+        "type": "object",
+        "required": [
+          "name",
+          "target",
+          "channels"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "On creation."
+          },
+          "key": {
+            "type": "string",
+            "description": "On creation; from the name unless given."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConnectionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "A disabled connection never connects; true by default."
+          },
+          "target": {
+            "type": "string",
+            "description": "MQTT: mqtt, mqtts, ws or wss URL. HTTP: http or https base URL. Plain schemes reach only the operator's networks (connections.networks); public addresses need TLS and a trusted host."
+          },
+          "tls": {
+            "type": "object",
+            "properties": {
+              "ca": {
+                "type": "string",
+                "description": "PEM certificates trusted beside the system's, for self-signed certificates."
+              }
+            }
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/ConnectionCredentials"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP: fixed, non-secret headers."
+          },
+          "timeout": {
+            "type": "string",
+            "description": "HTTP: 1s to 25s, 10s by default."
+          },
+          "sign": {
+            "type": "boolean",
+            "description": "HTTP: send PaperGo-Workspace, PaperGo-Subject and PaperGo-Signature with each call."
+          },
+          "health_path": {
+            "type": "string",
+            "description": "HTTP: what Test calls; the base URL by default."
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionChannel"
+            },
+            "maxItems": 50
+          }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "key",
+          "name",
+          "kind",
+          "enabled",
+          "target",
+          "tls",
+          "credentials",
+          "channels",
+          "status",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConnectionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "A disabled connection never connects; true by default."
+          },
+          "target": {
+            "type": "string",
+            "description": "MQTT: mqtt, mqtts, ws or wss URL. HTTP: http or https base URL. Plain schemes reach only the operator's networks (connections.networks); public addresses need TLS and a trusted host."
+          },
+          "tls": {
+            "type": "object",
+            "properties": {
+              "ca": {
+                "type": "string",
+                "description": "PEM certificates trusted beside the system's, for self-signed certificates."
+              }
+            }
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/ConnectionCredentials"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP: fixed, non-secret headers."
+          },
+          "timeout": {
+            "type": "string",
+            "description": "HTTP: 1s to 25s, 10s by default."
+          },
+          "sign": {
+            "type": "boolean",
+            "description": "HTTP: send PaperGo-Workspace, PaperGo-Subject and PaperGo-Signature with each call."
+          },
+          "health_path": {
+            "type": "string",
+            "description": "HTTP: what Test calls; the base URL by default."
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionChannel"
+            },
+            "maxItems": 50
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectionStatus"
+          },
+          "signing_secret": {
+            "type": "string",
+            "description": "Shown once: when an HTTP connection is created and when a new one is made."
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConnectionList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Connection"
+            }
+          }
+        }
+      },
+      "ConnectionTestResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "detail",
+          "took_ms"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "took_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConnectionCallRecord": {
+        "type": "object",
+        "required": [
+          "at",
+          "channel",
+          "method",
+          "path",
+          "took_ms",
+          "caller"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "took_ms": {
+            "type": "integer"
+          },
+          "caller": {
+            "type": "string"
+          },
+          "cached": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConnectionCallList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionCallRecord"
+            }
+          }
+        }
+      },
+      "WorkspaceConnectionChannel": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "uses",
+          "may"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "retain": {
+            "type": "boolean"
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionUse"
+            }
+          },
+          "may": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionUse"
+            },
+            "description": "What the caller may do now."
+          }
+        }
+      },
+      "WorkspaceConnection": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "kind",
+          "connected",
+          "channels"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConnectionKind"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceConnectionChannel"
+            }
+          }
+        }
+      },
+      "WorkspaceConnectionList": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceConnection"
+            }
+          }
+        }
+      },
+      "ConnectionPublish": {
+        "type": "object",
+        "required": [
+          "topic"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "One topic inside the channel, without wildcards."
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A JSON value, sent as JSON, or as its text when it is a string; the generated client takes an object (json() in scripts)."
+          },
+          "qos": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ],
+            "description": "1 by default."
+          },
+          "retain": {
+            "type": "boolean",
+            "description": "Only on channels that allow it."
+          },
+          "payload_text": {
+            "type": "string",
+            "description": "Text sent as it is, such as ON."
+          },
+          "payload_base64": {
+            "type": "string",
+            "description": "The bytes it encodes."
+          }
+        }
+      },
+      "ConnectionPublished": {
+        "type": "object",
+        "required": [
+          "topic",
+          "qos",
+          "retain"
+        ],
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "description": "From a workflow run: the operation that publishes the message after the run's step commits; await it with ctx.wait. Its result is this answer with request set."
+          },
+          "request": {
+            "type": "string",
+            "description": "The papergo-request user property the message carries."
+          },
+          "topic": {
+            "type": "string"
+          },
+          "qos": {
+            "type": "integer"
+          },
+          "retain": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConnectionCall": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "description": "GET by default."
+          },
+          "path": {
+            "type": "string",
+            "description": "A path inside the channel, relative to the target's base, with its query (at most 2 KiB). Dot segments, encoded slashes, backslashes and empty segments are refused."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Only Accept, Content-Type, If-Match, If-None-Match and Idempotency-Key."
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A JSON value, sent as JSON, or as its text when it is a string and Content-Type is not JSON; the generated client takes an object (json() in scripts)."
+          },
+          "body_base64": {
+            "type": "string"
+          },
+          "body_text": {
+            "type": "string",
+            "description": "Text sent as it is, text/plain unless Content-Type says otherwise."
+          }
+        }
+      },
+      "ConnectionAnswer": {
+        "type": "object",
+        "required": [],
+        "description": "The endpoint's answer. Only Content-Type, ETag, Last-Modified and Retry-After are returned. Answers over 4 MiB fail.",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "description": "From a workflow run: the operation that makes the call after the run's step commits; await it with ctx.wait. Its result is the endpoint's answer."
+          },
+          "status": {
+            "type": "integer"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "description": "JSON parsed, other text as a string."
+          },
+          "body_base64": {
+            "type": "string",
+            "description": "Any other answer."
+          }
+        }
+      },
+      "LiveSubscription": {
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "The module that serves it, such as connections."
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "filter": {
+            "type": "string"
+          }
+        }
+      },
+      "LiveSubscriptionCreated": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
             "type": "string"
           }
         }

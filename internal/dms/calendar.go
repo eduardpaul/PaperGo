@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"papergo/internal/dal/resources"
+	"papergo/internal/integration"
 	"time"
 
 	"github.com/google/uuid"
@@ -140,7 +141,7 @@ func (s *Service) refreshIntegrationOperation(ctx context.Context, op *operation
 	if s.integrations == nil {
 		return errors.New("list integrations are not configured")
 	}
-	configJSON, err := s.integrations.secrets.Decrypt(source.ContainerID, source.ConfigCiphertext)
+	configJSON, err := s.integrations.secrets.Decrypt(integration.PurposeListIntegration, source.ContainerID, source.ConfigCiphertext)
 	if err != nil {
 		return err
 	}

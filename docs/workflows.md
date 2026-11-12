@@ -110,7 +110,7 @@ Keep scripts deterministic: read time, randomness and data only through `ctx` an
 
 ## Waiting
 
-Long work is an API request that returns an **operation** (`202 Accepted`): reading a file's text, composing a PDF, an AI completion, a task. `ctx.wait(operation)` unloads the run until the operation finishes and returns it as it ended; a failed or cancelled operation throws an `OperationError`. `ctx.wait([a, b])` waits for several at once, which run in parallel. A run that waits shows as `waiting`, holds no worker, and continues moments after the operation ends.
+Long work is an API request that returns an **operation** (`202 Accepted`): reading a file's text, composing a PDF, an AI completion, a task, or publishing and calling through a [connection](connections.md#workflows), which a run never does inside its transaction. `ctx.wait(operation)` unloads the run until the operation finishes and returns it as it ended; a failed or cancelled operation throws an `OperationError`. `ctx.wait([a, b])` waits for several at once, which run in parallel. A run that waits shows as `waiting`, holds no worker, and continues moments after the operation ends.
 
 Waits a script starts together are one wait. Once the script has nothing left to run but awaits, every `ctx.wait` it started since, such as those of the tasks in a `Promise.all`, is recorded as one wait step: the run unloads once and continues when all of them have ended. Each wait still settles on its own, so `Promise.allSettled` sees which failed.
 
@@ -238,6 +238,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `folder.restored` | a deleted folder is restored from the recycle bin | the folder |
 | `permissions.changed` | an item's or folder's effective permissions change: its own or an ancestor's ACL is replaced, it moves into another permission scope, or workspace membership changes. Delivered once **per affected item and folder** (see below) | the item or folder |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
+| `connection.message` | an MQTT message of a [connection](connections.md#workflows)'s channel the author may see; `options` name the `connection`, `channel` and `topic`, and throttle with `min_interval` and `condition` | none (`ctx.run.event.data` holds the message) |
 | `manual` | someone starts it through the API or the web app | each chosen item, the selection's primary item, or none |
 | `call` | another run calls it with `ctx.call` (see [calling workflows](#calling-workflows)) | the called item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |

@@ -1,6 +1,7 @@
 package dms
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -48,7 +49,15 @@ func TestIntegrationsFollowTrustedHosts(t *testing.T) {
 		t.Fatal("the feed was not applied", items)
 	}
 	use, err := s.TrustedHostUsage(ctx, "alice")
-	if err != nil || len(use) != 1 || use[0] != (HostUse{Host: "calendar.example.com", Integrations: 1}) {
+	if err != nil || len(use) != 1 || use[0].Host != "calendar.example.com" || len(use[0].Uses) != 1 || use[0].Uses[HostUsesIntegrations] != 1 {
+		t.Fatal(use, err)
+	}
+	// A feature's hosts join the integrations', by host.
+	s.AddHostReporter("connections", func(context.Context) (map[string]int, error) {
+		return map[string]int{"calendar.example.com": 2, "broker.example.com": 1}, nil
+	})
+	use, err = s.TrustedHostUsage(ctx, "alice")
+	if err != nil || len(use) != 2 || use[0].Host != "broker.example.com" || use[0].Uses["connections"] != 1 || use[1].Uses[HostUsesIntegrations] != 1 || use[1].Uses["connections"] != 2 {
 		t.Fatal(use, err)
 	}
 

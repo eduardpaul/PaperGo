@@ -327,7 +327,7 @@ func (r *run) reconcile() error {
 	// content types, which need their other fields: such fields come after
 	// the collections, and their types are completed then.
 	early, late := func() error { return r.contentTypes(false) }, func() error { return r.contentTypes(true) }
-	for _, step := range []func() error{r.fields, r.relationshipTypes, early, r.collections, r.lookupFields, late, r.extensionsAndViews, r.workflows, r.apps} {
+	for _, step := range []func() error{r.fields, r.relationshipTypes, early, r.collections, r.lookupFields, late, r.extensionsAndViews, r.parts, r.workflows, r.apps} {
 		if err := step(); err != nil {
 			return err
 		}

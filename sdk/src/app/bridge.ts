@@ -28,13 +28,47 @@ export interface Change {
   resync?: boolean;
 }
 
+/**
+ * A message of an MQTT topic as a subscription delivers it: JSON payloads
+ * parsed, other text as a string, anything else in base64 with encoding
+ * set.
+ */
+export interface TopicMessage {
+  topic: string;
+  payload: unknown;
+  encoding?: "base64";
+  /** A message the broker kept, delivered on subscribing. */
+  retained?: boolean;
+  /** When PaperGo received it, as an ISO time. */
+  at: string;
+}
+
+/** Why a subscription ended: the viewer lost access, it was refused, or the page stopped it. */
+export interface SubscriptionEnd {
+  reason: "access" | "refused";
+  detail?: string;
+}
+
 // Messages the app sends.
 export type AppMessage =
   | { type: "papergo:request"; id: number; method: string; url: string; headers: Record<string, string>; body?: string | ArrayBuffer }
-  | { type: "papergo:open"; target: OpenTarget };
+  | { type: "papergo:open"; target: OpenTarget }
+  | { type: "papergo:subscribe"; id: number; connection: string; channel: string; filter?: string }
+  | { type: "papergo:unsubscribe"; id: number };
 
 // Messages the page sends.
-export type PageMessage = { type: "papergo:response"; id: number; response: HostResponse } | { type: "papergo:change"; changes: Change[] } | { type: "papergo:theme"; theme: Theme };
+export type PageMessage =
+  | { type: "papergo:response"; id: number; response: HostResponse }
+  | { type: "papergo:change"; changes: Change[] }
+  | { type: "papergo:theme"; theme: Theme }
+  | { type: "papergo:messages"; id: number; messages: TopicMessage[]; missed?: number }
+  | { type: "papergo:ended"; id: number; end: SubscriptionEnd };
+
+/** What a subscription is told. */
+export interface Subscriber {
+  messages(messages: TopicMessage[], missed: number): void;
+  ended?(end: SubscriptionEnd): void;
+}
 
 export interface Port {
   post(message: AppMessage): void;
@@ -77,6 +111,7 @@ export class Bridge {
   private next = 1;
   private readonly pending = new Map<number, (response: HostResponse) => void>();
   private readonly watchers = new Set<(changes: Change[]) => void>();
+  private readonly subscribers = new Map<number, Subscriber>();
   private themed?: (theme: Theme) => void;
 
   constructor(private readonly port: Port) {
@@ -89,8 +124,29 @@ export class Bridge {
         for (const watcher of this.watchers) watcher(message.changes);
       } else if (message.type === "papergo:theme") {
         this.themed?.(message.theme);
+      } else if (message.type === "papergo:messages") {
+        this.subscribers.get(message.id)?.messages(message.messages, message.missed ?? 0);
+      } else if (message.type === "papergo:ended") {
+        const subscriber = this.subscribers.get(message.id);
+        this.subscribers.delete(message.id);
+        subscriber?.ended?.(message.end);
       }
     });
+  }
+
+  /**
+   * Subscribes to the messages of an MQTT channel's topics that filter
+   * matches, the channel's own by default. The page subscribes its live
+   * stream as the viewer and forwards what it hears, current values first;
+   * returns what stops it.
+   */
+  subscribe(connection: string, channel: string, filter: string | undefined, subscriber: Subscriber): () => void {
+    const id = this.next++;
+    this.subscribers.set(id, subscriber);
+    this.port.post({ type: "papergo:subscribe", id, connection, channel, ...(filter ? { filter } : {}) });
+    return () => {
+      if (this.subscribers.delete(id)) this.port.post({ type: "papergo:unsubscribe", id });
+    };
   }
 
   /** Sends a request to the API through the page. url is a path with its query. */

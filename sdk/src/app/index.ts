@@ -10,6 +10,8 @@ export { RequestError } from "./context.js";
 export type { Format, Preferences } from "./format.js";
 export type { Aggregate, AggregateGroup, AggregateGroupBy, AggregateKey, AggregateQuery, Item, Loaded, Query, QueryOptions } from "./hooks.js";
 export { useAggregates, useApp, useItem, useQuery } from "./hooks.js";
+export type { Answer, CallOptions, Connection, ConnectionChannel, ConnectionState, ConnectionUse, Connections, Fetched, FetchOptions, PublishOptions, Published, SubscriptionEnd, TopicMessage, UseFetchOptions } from "./connections.js";
+export { useConnection, useFetch, useTopic, useTopics } from "./connections.js";
 export type { Band, Column, Series } from "./kit.js";
 export { BarChart, Button, Card, DateField, DateTimeField, Gauge, Grid, Legend, LineChart, Modal, Notice, NumberField, Stat, Table, TextField, Toolbar, narrowWidth, useNarrow } from "./kit.js";
 export type { PaperGoClient } from "../client/paperGoClient.js";

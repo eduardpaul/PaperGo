@@ -28,6 +28,7 @@
     "workflows": "Workflows",
     "runs": "Runs",
     "apps": "Apps",
+    "connections": "Devices & services",
     "solutions": "Solutions",
     "readOnly": "Only workspace owners change these settings. You can look at them."
   },

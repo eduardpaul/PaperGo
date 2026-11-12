@@ -176,7 +176,7 @@ func (s *Service) CreateIntegration(ctx context.Context, subject, list string, i
 	if err != nil {
 		return nil, err
 	}
-	cipher, err := s.integrations.secrets.Encrypt(list, string(mustIntegrationConfig(raw)))
+	cipher, err := s.integrations.secrets.Encrypt(integration.PurposeListIntegration, list, string(mustIntegrationConfig(raw)))
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func (s *Service) UpdateIntegration(ctx context.Context, subject, list, id strin
 		if err != nil {
 			return nil, err
 		}
-		cipher, err = s.integrations.secrets.Encrypt(list, string(mustIntegrationConfig(raw)))
+		cipher, err = s.integrations.secrets.Encrypt(integration.PurposeListIntegration, list, string(mustIntegrationConfig(raw)))
 		if err != nil {
 			return nil, err
 		}

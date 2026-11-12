@@ -7,13 +7,17 @@ import type { Resource } from '@/api/types';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { can } from '@/features/lists/access';
 import { useTranslation } from '@/i18n';
-import { onItemChange } from '@/lib/live';
+import { onItemChange, subscribeStream } from '@/lib/live';
 import { appBundle, type App } from './api';
 import { appChange, appDocument, rememberRead, send, type BridgeRequest, type Places } from './bridge';
 
 type Target = { itemId: string } | { taskId: string } | { listId: string };
 
-type FrameMessage = ({ type: 'papergo:request'; id: number } & BridgeRequest) | { type: 'papergo:open'; target: Target };
+type FrameMessage =
+  | ({ type: 'papergo:request'; id: number } & BridgeRequest)
+  | { type: 'papergo:open'; target: Target }
+  | { type: 'papergo:subscribe'; id: number; connection: string; channel: string; filter?: string }
+  | { type: 'papergo:unsubscribe'; id: number };
 
 const currentTheme = () => (window.document.documentElement.classList.contains('dark') ? 'dark' : 'light');
 
@@ -62,6 +66,8 @@ export function AppFrame({ app }: { app: App }) {
     let stopLive: (() => void) | undefined;
     // Where this run of the app saw its workspace's items.
     const places: Places = new Map();
+    // The app's subscriptions to its workspace's connections, by the app's ID.
+    const subscribed = new Map<number, () => void>();
     const tellTheme = () => port?.postMessage({ type: 'papergo:theme', theme: currentTheme() });
     const themes = new MutationObserver(tellTheme);
     const open = async (target: Target) => {
@@ -77,6 +83,27 @@ export function AppFrame({ app }: { app: App }) {
         port?.postMessage({ type: 'papergo:response', id: message.id, response }, response.bytes ? [response.bytes] : []);
       } else if (message.type === 'papergo:open') {
         void open(message.target).catch(() => undefined);
+      } else if (message.type === 'papergo:subscribe') {
+        // An app subscribes to its own workspace's connections only, as the
+        // viewer; the page's stream carries the messages.
+        const { id, connection, channel, filter } = message;
+        if (subscribed.has(id) || typeof connection !== 'string' || typeof channel !== 'string' || (filter !== undefined && typeof filter !== 'string')) return;
+        const spec = { source: 'connections', workspace: app.workspace_id, key: connection, channel, ...(filter ? { filter } : {}) };
+        subscribed.set(
+          id,
+          subscribeStream(spec, {
+            frame: (event, data) => {
+              if (event === 'connection.messages') port?.postMessage({ type: 'papergo:messages', id, messages: data.messages, missed: data.missed });
+            },
+            ended: (end) => {
+              subscribed.delete(id);
+              port?.postMessage({ type: 'papergo:ended', id, end });
+            },
+          }),
+        );
+      } else if (message.type === 'papergo:unsubscribe') {
+        subscribed.get(message.id)?.();
+        subscribed.delete(message.id);
       }
     };
     const hello = (event: MessageEvent) => {
@@ -96,6 +123,8 @@ export function AppFrame({ app }: { app: App }) {
     const stop = () => {
       themes.disconnect();
       stopLive?.();
+      for (const unsubscribe of subscribed.values()) unsubscribe();
+      subscribed.clear();
       port?.close();
       port = undefined;
     };

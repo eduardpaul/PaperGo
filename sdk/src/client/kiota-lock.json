@@ -1,5 +1,5 @@
 {
-  "descriptionHash": "C1F3E526D34E1EA8D944046B688734780DD1FDA32F63CDB3E101D8A3392E6BAFB59BABC35DAD17C3CDA25DAA36969B593C1545D95D0886B964FFA9A356E834AF",
+  "descriptionHash": "8CC8AE708DBC3A1F69A6999F668461CC853CBB87CE7CDB260E4BE662262D1788BAA6F068C26CECC1F8F5FDD71CE2351831281B67ED33B64272BC733546E1A4A9",
   "descriptionLocation": "../../../api/openapi.json",
   "lockFileVersion": "1.0.0",
   "kiotaVersion": "1.35.0",
@@ -37,7 +37,10 @@
     "/v1/$batch",
     "/v1/apps",
     "/v1/apps/**",
+    "/v1/connections",
+    "/v1/connections/**",
     "/v1/events",
+    "/v1/events/**",
     "/v1/identity",
     "/v1/identity/**",
     "/v1/mcp",

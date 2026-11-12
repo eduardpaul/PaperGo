@@ -28,7 +28,7 @@ func TestIntegrationAPISecrecyPreconditionsAndManagedFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	privateURL := "https://example.com/do-not-return-this"
-	encrypted, err := key.Encrypt(list.ID, `{"url":"`+privateURL+`"}`)
+	encrypted, err := key.Encrypt(integration.PurposeListIntegration, list.ID, `{"url":"`+privateURL+`"}`)
 	if err != nil {
 		t.Fatal(err)
 	}

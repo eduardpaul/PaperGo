@@ -23,13 +23,15 @@ const DefaultsFile = "defaults.yaml"
 // validated as its environment variable is, unless the key says otherwise.
 type yamlConfig struct {
 	Server struct {
-		Bind           *string `yaml:"bind"`
-		Port           *int    `yaml:"port"`
-		DataDir        *string `yaml:"data_dir"`
-		PublicURL      string  `yaml:"public_url"`
-		Environment    string  `yaml:"environment"`
-		MaxInFlight    string  `yaml:"max_in_flight"`
-		RequestTimeout string  `yaml:"request_timeout"`
+		Bind        *string `yaml:"bind"`
+		Port        *int    `yaml:"port"`
+		DataDir     *string `yaml:"data_dir"`
+		PublicURL   string  `yaml:"public_url"`
+		Environment string  `yaml:"environment"`
+		MaxInFlight string  `yaml:"max_in_flight"`
+		// LiveStreamsPerUser is how many live streams one person holds.
+		LiveStreamsPerUser string `yaml:"live_streams_per_user"`
+		RequestTimeout     string `yaml:"request_timeout"`
 	} `yaml:"server"`
 	Database struct {
 		URL string `yaml:"url"`
@@ -50,8 +52,12 @@ type yamlConfig struct {
 		DatabasePath string   `yaml:"database_path"`
 		Languages    []string `yaml:"languages"`
 	} `yaml:"search"`
-	Comments string `yaml:"comments"`
-	Storage  struct {
+	Comments    string `yaml:"comments"`
+	Connections struct {
+		// Networks are the private networks connections may reach.
+		Networks []string `yaml:"networks"`
+	} `yaml:"connections"`
+	Storage struct {
 		BlobPath    string `yaml:"blob_path"`
 		MaxUploadMB *int   `yaml:"max_upload_mb"`
 		EditMaxMB   *int   `yaml:"edit_max_mb"`
@@ -144,14 +150,14 @@ type yamlSetting struct{ env, value string }
 func (in *yamlConfig) settings() []yamlSetting {
 	return []yamlSetting{
 		{"PUBLIC_URL", in.Server.PublicURL}, {"APP_ENV", in.Server.Environment},
-		{"MAX_IN_FLIGHT", in.Server.MaxInFlight}, {"REQUEST_TIMEOUT", in.Server.RequestTimeout},
+		{"MAX_IN_FLIGHT", in.Server.MaxInFlight}, {"LIVE_STREAMS_PER_USER", in.Server.LiveStreamsPerUser}, {"REQUEST_TIMEOUT", in.Server.RequestTimeout},
 		{"DATABASE_URL", in.Database.URL},
 		{"AUTH_MODE", in.Auth.Mode}, {"ADMIN_SUBJECT", in.Auth.AdminUser}, {"ADMIN_GROUP", in.Auth.AdminGroup},
 		{"ADMIN_PASSWORD_FILE", in.Auth.AdminPasswordFile}, {"DEV_TOKEN", in.Auth.DevToken}, {"DEV_SUBJECT", in.Auth.DevSubject},
 		{"PROXY_SECRET_FILE", in.Auth.ProxySecretFile}, {"PROXY_TRUSTED_CIDRS", strings.Join(in.Auth.ProxyTrustedCIDRs, ",")},
 		{"SEARCH_STORE", in.Search.Store}, {"SEARCH_DATABASE_PATH", in.Search.DatabasePath},
 		{"SEARCH_LANGUAGES", strings.Join(in.Search.Languages, ",")},
-		{"COMMENTS", in.Comments}, {"BLOB_PATH", in.Storage.BlobPath},
+		{"COMMENTS", in.Comments}, {"CONNECTION_NETWORKS", strings.Join(in.Connections.Networks, ",")}, {"BLOB_PATH", in.Storage.BlobPath},
 		{"OIDC_ISSUER", in.OIDC.Issuer}, {"OIDC_AUDIENCE", in.OIDC.Audience},
 		{"OIDC_CLIENT_ID", in.OIDC.ClientID}, {"OIDC_CLIENT_SCOPES", in.OIDC.ClientScopes},
 		{"OIDC_GROUPS_CLAIM", in.OIDC.GroupsClaim}, {"OIDC_GROUPS_PREFIX", in.OIDC.GroupsPrefix},

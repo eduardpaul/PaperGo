@@ -17,6 +17,10 @@ it('refuses the routes that administer PaperGo, whoever views the app', () => {
     ['GET', '/v1/audit'],
     ['POST', '/v1/$batch'],
     ['GET', '/v1/events'],
+    ['POST', '/v1/events/s1/subscriptions'],
+    ['GET', '/v1/connections?workspace=w1'],
+    ['POST', '/v1/connections/c1/test'],
+    ['PUT', '/v1/connections/c1'],
     ['PUT', '/v1/apps/a1'],
     ['POST', '/v1/workspaces/w1/apps'],
     ['GET', '/v1/%69dentity/users'],
@@ -53,6 +57,10 @@ it('refuses the routes that administer PaperGo, whoever views the app', () => {
     ['POST', '/v1/workflows/wf1/runs'],
     ['GET', '/v1/workspaces/w1/members'],
     ['GET', '/v1/resources/l1/integrations'],
+    ['GET', '/v1/workspaces/w1/connections/home'],
+    ['POST', '/v1/workspaces/w1/connections/home/channels/lights/publish'],
+    ['GET', '/v1/workspaces/w1/connections/nodered/channels/status/fetch?path=%2Fstatus'],
+    ['POST', '/v1/workspaces/w1/connections/nodered/channels/heating/call'],
   ]) {
     expect(refusal(method, url), `${method} ${url}`).toBeUndefined();
   }
@@ -72,7 +80,7 @@ it('sends an app request as the viewer, with only the headers apps may set', asy
   const [url, init] = fetcher.mock.calls[0];
   expect(String(url)).toBe(`${window.location.origin}/v1/resources/l1/children`);
   expect(init).toMatchObject({ method: 'POST', body: '{"name":"Reading"}', credentials: 'same-origin', redirect: 'error' });
-  expect(init?.headers).toEqual({ 'content-type': 'application/json', 'if-match': '"3"', Authorization: 'Bearer viewer-token' });
+  expect(init?.headers).toEqual({ 'content-type': 'application/json', 'if-match': '"3"', Authorization: 'Bearer viewer-token', 'papergo-app': '1' });
 
   const refused = await send({ method: 'POST', url: '/v1/identity/me/tokens', headers: {} }, fetcher as unknown as typeof fetch);
   expect(refused.status).toBe(403);

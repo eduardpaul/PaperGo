@@ -28,6 +28,9 @@
       },
       "task": {
         "completed": "When a task is completed"
+      },
+      "connection": {
+        "message": "When a device sends a message"
       }
     }
   },

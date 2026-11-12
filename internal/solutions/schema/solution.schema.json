@@ -78,6 +78,67 @@
       "items": {
         "$ref": "#/$defs/collection"
       }
+    },
+    "parts": {
+      "type": "object",
+      "description": "What features add to the solution, by the feature's name. connections: the connections its apps and workflows name by key, installed disabled and without an address until a manager gives them one.",
+      "properties": {
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "kind",
+              "channels"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "mqtt",
+                  "http"
+                ]
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "timeout": {
+                    "type": "string"
+                  },
+                  "sign": {
+                    "type": "boolean"
+                  },
+                  "health_path": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "channels": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "key"
+                  ],
+                  "description": "A channel, as docs/connections.md describes; access.on may be $collection:<key>.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {

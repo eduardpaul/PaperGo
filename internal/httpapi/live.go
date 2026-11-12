@@ -22,15 +22,20 @@ var livePollInterval = time.Second
 const liveKeepAlive = 15 * time.Second
 
 // Streams have their own admission pool, so idle connections do not occupy
-// ordinary request slots. A user can hold four of the process's 64 streams.
+// ordinary request slots. A user can hold LiveStreamsPerUser of the
+// process's 64 streams, four unless set.
 func (a *API) streamLimiter(next http.Handler) http.Handler {
 	var mu sync.Mutex
 	active := map[string]int{}
 	total := 0
+	perUser := a.LiveStreamsPerUser
+	if perUser <= 0 {
+		perUser = 4
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := subject(r)
 		mu.Lock()
-		allowed := total < 64 && active[user] < 4
+		allowed := total < 64 && active[user] < perUser
 		if allowed {
 			total++
 			active[user]++
@@ -84,9 +89,15 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		}
 		return controller.Flush()
 	}
-	if err = frame("connected", position, map[string]any{"resynchronize": true}); err != nil {
+	// Subscriptions are added to the stream by its ID, which the first
+	// frame names; they end with it.
+	stream := a.openStream(r)
+	defer a.closeStream(stream)
+	if err = frame("connected", position, map[string]any{"resynchronize": true, "stream": stream.id}); err != nil {
 		return
 	}
+	checks := time.NewTicker(subscriptionCheck)
+	defer checks.Stop()
 	ticker := time.NewTicker(livePollInterval)
 	defer ticker.Stop()
 	keepalive := time.NewTicker(liveKeepAlive / 2)
@@ -273,6 +284,28 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		case <-keepalive.C:
 			if err = frame("keepalive", position, map[string]any{}); err != nil {
 				return
+			}
+		case f := <-stream.frames:
+			if err = frame(f.Event, position, f.Data); err != nil {
+				return
+			}
+			// Frames come in bursts: write what is waiting before the next
+			// poll.
+			for drained := false; !drained; {
+				select {
+				case f = <-stream.frames:
+					if err = frame(f.Event, position, f.Data); err != nil {
+						return
+					}
+				default:
+					drained = true
+				}
+			}
+		case <-checks.C:
+			for _, id := range stream.check() {
+				if err = frame("access", position, map[string]any{"subscription": id}); err != nil {
+					return
+				}
 			}
 		case <-ticker.C:
 		}

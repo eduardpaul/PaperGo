@@ -626,6 +626,21 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 		assignments.Rows = append(assignments.Rows, values)
 	}
 	p.Tables["identity_assignments"] = assignments
+	for name, raw := range p.Parts {
+		for _, part := range s.ext.parts {
+			if part.Name != name {
+				continue
+			}
+			remapped, err := part.Remap(raw, func(old string) (string, bool) {
+				id, ok := ids[old]
+				return id, ok
+			})
+			if err != nil {
+				return p, warnings, invalid(name + ": " + err.Error())
+			}
+			p.Parts[name] = remapped
+		}
+	}
 	p.WorkspaceID = ids[p.WorkspaceID]
 	for i := range p.Integrations {
 		if target, ok := ids[p.Integrations[i].ContainerID]; ok {

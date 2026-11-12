@@ -35,6 +35,7 @@ sql:
     group_inboxes: []
     workflow_versions: []
     apps: []
+    connections: []
     app_versions: []
     blobs: []
     blob_leases: []
@@ -184,6 +185,10 @@ replacements:
     match:
       name: "parameters"
     replace: "types.JSON[model.JSONMap]"
+  - tables: ["connections"]
+    match:
+      name: "/^(settings|channels)$/"
+    replace: "types.JSON[json.RawMessage]"
   - tables: ["app_versions"]
     match:
       name: "parameters_schema"

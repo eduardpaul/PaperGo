@@ -13,6 +13,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
+	connectionstore "papergo/internal/dal/connections"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/integrations"
 	"papergo/internal/dms"
@@ -136,13 +137,19 @@ func run(log *slog.Logger) error {
 	}
 	service := dms.NewService(db.SQL)
 	service.SetOperationQuotas(dms.OperationQuotas(c.OperationQuotas))
+	// The key seals list integrations and connections. Once either is
+	// stored a lost key is an error, never a new key that opens nothing.
 	configuredIntegrations, err := db.DAL.Integrations().Exists(startup, integrations.Filter{})
 	if err != nil {
 		return err
 	}
-	secrets, err := integration.LoadSecrets(c.DatabasePath+".integrations.key", !configuredIntegrations)
+	configuredConnections, err := db.DAL.Connections().List(startup, connectionstore.Filter{})
 	if err != nil {
-		return fmt.Errorf("configure list integration encryption: %w", err)
+		return err
+	}
+	secrets, err := integration.LoadSecrets(c.DatabasePath+".integrations.key", !configuredIntegrations && len(configuredConnections) == 0)
+	if err != nil {
+		return fmt.Errorf("configure integration and connection encryption: %w", err)
 	}
 	service.ConfigureIntegrations(secrets)
 
@@ -168,7 +175,7 @@ func run(log *slog.Logger) error {
 	// Markdown, text, CSV and Office files have their text read.
 	textfiles.Register()
 	officefiles.Register()
-	list, err := enabled(startup, environment{config: c, db: db, service: service, store: store, workflows: workflows, log: log})
+	list, err := enabled(startup, environment{config: c, db: db, service: service, store: store, workflows: workflows, secrets: secrets, log: log})
 	if err != nil {
 		return err
 	}
@@ -182,7 +189,7 @@ func run(log *slog.Logger) error {
 	if err = workflows.SyncBuiltIns(startup); err != nil {
 		return fmt.Errorf("update built-in workflows: %w", err)
 	}
-	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: list.modules(), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: list.modules(), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, LiveStreamsPerUser: c.LiveStreamsPerUser, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}

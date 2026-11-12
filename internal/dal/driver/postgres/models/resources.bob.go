@@ -87,6 +87,7 @@ type resourceR struct {
 	ContainerBusinessKeys         BusinessKeySlice     // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              BusinessKeySlice     // business_keys.business_keys_item_id_fkey
 	ItemComments                  CommentSlice         // comments.comments_item_id_fkey
+	WorkspaceConnections          ConnectionSlice      // connections.connections_workspace_id_fkey
 	ContainerFieldValues          FieldValueSlice      // field_values.field_values_container_id_fkey
 	ItemFieldValues               FieldValueSlice      // field_values.field_values_item_id_fkey
 	Grants                        GrantSlice           // grants.grants_resource_id_fkey
@@ -153,6 +154,7 @@ type resourceRLoaded struct {
 	ContainerBusinessKeys         bool // business_keys.business_keys_container_id_fkey
 	ItemBusinessKeys              bool // business_keys.business_keys_item_id_fkey
 	ItemComments                  bool // comments.comments_item_id_fkey
+	WorkspaceConnections          bool // connections.connections_workspace_id_fkey
 	ContainerFieldValues          bool // field_values.field_values_container_id_fkey
 	ItemFieldValues               bool // field_values.field_values_item_id_fkey
 	Grants                        bool // grants.grants_resource_id_fkey
@@ -1569,6 +1571,29 @@ func (os ResourceSlice) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) Comm
 
 	return Comments.Query(append(mods,
 		sm.Where(Comments.Columns.ItemID.EQ(PKArgExpr)),
+	)...)
+}
+
+// WorkspaceConnections starts a query for related objects on connections
+func (o *Resource) WorkspaceConnections(mods ...bob.Mod[*dialect.SelectQuery]) ConnectionsQuery {
+	return Connections.Query(append(mods,
+		sm.Where(Connections.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceConnections(mods ...bob.Mod[*dialect.SelectQuery]) ConnectionsQuery {
+	pkID := make(pgtypes.Array[string], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
+
+	return Connections.Query(append(mods,
+		sm.Where(Connections.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -3236,6 +3261,67 @@ func (resource0 *Resource) AttachItemComments(ctx context.Context, exec bob.Exec
 	}
 
 	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceConnections0(ctx context.Context, exec bob.Executor, connections1 []*ConnectionSetter, resource0 *Resource) (ConnectionSlice, error) {
+	for i := range connections1 {
+		connections1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Connections.Insert(bob.ToMods(connections1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceConnections0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceConnections0(ctx context.Context, exec bob.Executor, count int, connections1 ConnectionSlice, resource0 *Resource) (ConnectionSlice, error) {
+	setter := &ConnectionSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := connections1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceConnections0: %w", err)
+	}
+
+	return connections1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceConnections(ctx context.Context, exec bob.Executor, related ...*ConnectionSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	connections1, err := insertResourceWorkspaceConnections0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceConnections = append(resource0.R.WorkspaceConnections, connections1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceConnections(ctx context.Context, exec bob.Executor, related ...*Connection) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	connections1 := ConnectionSlice(related)
+
+	_, err = attachResourceWorkspaceConnections0(ctx, exec, len(related), connections1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceConnections = append(resource0.R.WorkspaceConnections, connections1...)
 
 	return nil
 }
@@ -6392,6 +6478,20 @@ func (w resourceWhereR[Q]) HasItemComments(filters ...bob.Mod[*dialect.SelectQue
 		sm.Columns(psql.Raw("1")),
 		sm.From(Comments.NameExpr()),
 		sm.Where(Comments.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
+}
+
+// HasWorkspaceConnections filters parents that have a matching WorkspaceConnections using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Connections).
+func (w resourceWhereR[Q]) HasWorkspaceConnections(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(Connections.NameExpr()),
+		sm.Where(Connections.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

@@ -6,12 +6,21 @@ import { meQuery, preferencesQuery, resourceQuery } from '@/api/queries';
 import { AppFrame } from './app-frame';
 import type { App } from './api';
 
-const { listeners, navigate } = vi.hoisted(() => ({ listeners: new Set<(change: unknown) => void>(), navigate: () => undefined }));
+type Subscriber = { frame(event: string, data: Record<string, unknown>): void; ended?(end: unknown): void };
+const { listeners, navigate, subscriptions } = vi.hoisted(() => ({
+  listeners: new Set<(change: unknown) => void>(),
+  navigate: () => undefined,
+  subscriptions: new Map<Record<string, unknown>, Subscriber>(),
+}));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 vi.mock('@/lib/live', () => ({
   onItemChange: (listener: (change: unknown) => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);
+  },
+  subscribeStream: (spec: Record<string, unknown>, subscriber: Subscriber) => {
+    subscriptions.set(spec, subscriber);
+    return () => subscriptions.delete(spec);
   },
 }));
 vi.mock('@sdk/app-runtime.js?raw', () => ({ default: 'runtime' }));
@@ -21,6 +30,7 @@ const app = { id: 'a1', workspace_id: 'w1', key: 'k', name: 'Tracker', current_v
 afterEach(() => {
   cleanup();
   listeners.clear();
+  subscriptions.clear();
   document.documentElement.classList.remove('dark');
 });
 
@@ -44,10 +54,10 @@ async function started() {
     vi.spyOn(frameWindow, 'postMessage').mockImplementation(((_message: unknown, _origin: string, transfer: MessagePort[]) => resolve(transfer[0] as MessagePort)) as never);
   });
   window.dispatchEvent(new MessageEvent('message', { source: frameWindow, data: { type: 'papergo:hello' } }));
-  const messages: { type: string; theme?: string; changes?: { id: string }[] }[] = [];
+  const messages: { type: string; theme?: string; changes?: { id: string }[]; id?: number; messages?: unknown[]; end?: unknown }[] = [];
   const inner = await port;
   inner.onmessage = (event) => messages.push(event.data);
-  return { frame, messages, client };
+  return { frame, messages, client, port: inner };
 }
 
 it('follows the theme over the port, without restarting the app', async () => {
@@ -73,5 +83,22 @@ it('tells the app of changes of its own workspace, and not of others', async () 
   await waitFor(() => expect(messages.some((m) => m.type === 'papergo:change')).toBe(true));
   const told = messages.filter((m) => m.type === 'papergo:change').flatMap((m) => m.changes ?? []);
   expect(told.map((c) => c.id)).toEqual(['here']);
+  client.clear();
+});
+
+it('subscribes the page stream to its own workspace\'s connections for the app, and forwards their messages', async () => {
+  const { messages, client, port } = await started();
+  port.postMessage({ type: 'papergo:subscribe', id: 7, connection: 'home', channel: 'sensors', filter: 'home/+/sensor/temperature' });
+  await waitFor(() => expect(subscriptions.size).toBe(1));
+  const [[spec, subscriber]] = [...subscriptions];
+  expect(spec).toEqual({ source: 'connections', workspace: 'w1', key: 'home', channel: 'sensors', filter: 'home/+/sensor/temperature' });
+  subscriber.frame('connection.messages', { subscription: 's', messages: [{ topic: 'home/living/sensor/temperature', payload: 21 }], missed: 0 });
+  await waitFor(() => expect(messages).toContainEqual({ type: 'papergo:messages', id: 7, messages: [{ topic: 'home/living/sensor/temperature', payload: 21 }], missed: 0 }));
+  subscriber.ended?.({ reason: 'access' });
+  await waitFor(() => expect(messages).toContainEqual({ type: 'papergo:ended', id: 7, end: { reason: 'access' } }));
+  port.postMessage({ type: 'papergo:subscribe', id: 8, connection: 'home', channel: 'heating' });
+  await waitFor(() => expect(subscriptions.size).toBe(2));
+  port.postMessage({ type: 'papergo:unsubscribe', id: 8 });
+  await waitFor(() => expect(subscriptions.size).toBe(1));
   client.clear();
 });

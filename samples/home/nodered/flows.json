@@ -1,0 +1,120 @@
+[
+  {
+    "id": "papergo_home",
+    "type": "tab",
+    "label": "PaperGo home",
+    "info": "The HTTP side of the PaperGo Home sample: GET /status and POST /heating/boost. Set PAPERGO_SIGNING_SECRET to the connection's signing secret."
+  },
+  {
+    "id": "status_in",
+    "type": "http in",
+    "z": "papergo_home",
+    "name": "GET /status",
+    "url": "/status",
+    "method": "get",
+    "upload": false,
+    "x": 120,
+    "y": 80,
+    "wires": [
+      [
+        "status_fn"
+      ]
+    ]
+  },
+  {
+    "id": "status_fn",
+    "type": "function",
+    "z": "papergo_home",
+    "name": "House status",
+    "func": "const heating = Object.assign({ mode: \"auto\", target_c: 21 }, flow.get(\"heating\"));\nif (heating.boost_until && Date.parse(heating.boost_until) < Date.now()) {\n  heating.mode = \"auto\";\n  delete heating.boost_until;\n  flow.set(\"heating\", heating);\n}\nmsg.payload = { heating };\nreturn msg;",
+    "outputs": 1,
+    "x": 320,
+    "y": 80,
+    "wires": [
+      [
+        "status_out"
+      ]
+    ]
+  },
+  {
+    "id": "status_out",
+    "type": "http response",
+    "z": "papergo_home",
+    "name": "",
+    "statusCode": "",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "x": 520,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "boost_in",
+    "type": "http in",
+    "z": "papergo_home",
+    "name": "POST /heating/boost",
+    "url": "/heating/boost",
+    "method": "post",
+    "upload": false,
+    "x": 140,
+    "y": 180,
+    "wires": [
+      [
+        "check_fn"
+      ]
+    ]
+  },
+  {
+    "id": "check_fn",
+    "type": "function",
+    "z": "papergo_home",
+    "name": "Signed by PaperGo?",
+    "func": "// Refuses a call PaperGo did not sign: PaperGo-Signature is\n// t=<unix time>,v1=<hex HMAC-SHA256 of \"t.subject.workspace.body\">, keyed\n// with the connection's signing secret.\nconst secret = env.get(\"PAPERGO_SIGNING_SECRET\");\nconst h = msg.req.headers;\nconst [t, v1] = String(h[\"papergo-signature\"] || \"\").replace(/^t=/, \"\").split(\",v1=\");\nconst body = msg.payload === undefined || msg.payload === \"\" ? \"\" : typeof msg.payload === \"string\" ? msg.payload : JSON.stringify(msg.payload);\nconst signed = `${t}.${h[\"papergo-subject\"] || \"\"}.${h[\"papergo-workspace\"] || \"\"}.${body}`;\nconst expected = secret ? crypto.createHmac(\"sha256\", secret).update(signed).digest(\"hex\") : \"\";\nconst fresh = Math.abs(Date.now() / 1000 - Number(t)) <= 300;\nif (!secret || !v1 || v1.length !== expected.length || !fresh || !crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected))) {\n  msg.statusCode = 401;\n  msg.payload = { error: \"not signed by PaperGo\" };\n  return [null, msg];\n}\n// A repeated Idempotency-Key is a call already done: answer it again.\nconst key = h[\"idempotency-key\"];\nconst done = flow.get(\"done\") || {};\nif (key && done[key]) {\n  msg.payload = done[key];\n  return [null, msg];\n}\nmsg.caller = h[\"papergo-subject\"];\nmsg.idempotencyKey = key;\nreturn [msg, null];",
+    "outputs": 2,
+    "libs": [
+      {
+        "var": "crypto",
+        "module": "crypto"
+      }
+    ],
+    "x": 350,
+    "y": 180,
+    "wires": [
+      [
+        "boost_fn"
+      ],
+      [
+        "boost_out"
+      ]
+    ]
+  },
+  {
+    "id": "boost_fn",
+    "type": "function",
+    "z": "papergo_home",
+    "name": "Boost",
+    "func": "const minutes = Math.min(Math.max(Number(msg.payload && msg.payload.minutes) || 30, 5), 120);\nconst until = new Date(Date.now() + minutes * 60000).toISOString();\nconst heating = Object.assign({ mode: \"auto\", target_c: 21 }, flow.get(\"heating\"), { mode: \"boost\", boost_until: until });\nflow.set(\"heating\", heating);\nnode.log(`boost for ${minutes} minutes, asked by ${msg.caller}`);\nmsg.payload = { heating };\nif (msg.idempotencyKey) {\n  const done = flow.get(\"done\") || {};\n  done[msg.idempotencyKey] = msg.payload;\n  flow.set(\"done\", done);\n}\nreturn msg;",
+    "outputs": 1,
+    "x": 550,
+    "y": 160,
+    "wires": [
+      [
+        "boost_out"
+      ]
+    ]
+  },
+  {
+    "id": "boost_out",
+    "type": "http response",
+    "z": "papergo_home",
+    "name": "",
+    "statusCode": "",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "x": 730,
+    "y": 180,
+    "wires": []
+  }
+]

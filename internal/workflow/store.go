@@ -337,6 +337,15 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 	checked := map[string]bool{}
 	for i, tr := range def.Triggers {
 		at := fmt.Sprintf("triggers[%d]: ", i)
+		if tt, module := moduleTrigger(tr.Type); module && tt.Check != nil {
+			if err := tt.Check(ctx, t, subject, workspaceID, tr); err != nil {
+				var invalid *dms.ValidationError
+				if errors.As(err, &invalid) {
+					return dms.Invalid(at + err.Error())
+				}
+				return err
+			}
+		}
 		if tr.Type == dms.EventTermChanged {
 			if err := t.RequireScope(ctx, subject, "taxonomy.read"); err != nil {
 				return fmt.Errorf("%sterm.changed requires taxonomy.read: %w", at, err)
@@ -1204,8 +1213,15 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 		return true, nil
 	}
 	accepted := false
-	for _, tr := range m.def.Triggers {
+	for i, tr := range m.def.Triggers {
 		if tr.Disabled || tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
+			continue
+		}
+		if tt, module := moduleTrigger(tr.Type); module {
+			ok, err := tt.Accepts(ctx, t, TriggerMatch{WorkflowID: m.w.ID, WorkspaceID: m.w.WorkspaceID, Position: i, Author: m.v.CreatedBy, Trigger: tr}, e)
+			if err != nil || ok {
+				return ok, err
+			}
 			continue
 		}
 		if tr.TaskKey != "" {

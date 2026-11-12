@@ -17,6 +17,7 @@ import (
 	"papergo/internal/buildinfo"
 	"papergo/internal/comments"
 	"papergo/internal/config"
+	"papergo/internal/connections"
 	"papergo/internal/dal/activitystore"
 	"papergo/internal/dal/database"
 	"papergo/internal/dal/resultcache"
@@ -30,6 +31,7 @@ import (
 	"papergo/internal/documentsearch"
 	"papergo/internal/documenttext"
 	"papergo/internal/httpapi"
+	"papergo/internal/integration"
 	"papergo/internal/ocr"
 	"papergo/internal/search"
 	"papergo/internal/solutions"
@@ -68,7 +70,9 @@ type environment struct {
 	service   *dms.Service
 	store     storage.Store
 	workflows *workflow.Service
-	log       *slog.Logger
+	// secrets seal the configuration of integrations and connections.
+	secrets *integration.Secrets
+	log     *slog.Logger
 }
 
 // mcpContributions are the compiled MCP tool contributions a deployment
@@ -90,6 +94,7 @@ func enabled(ctx context.Context, e environment) (list features, err error) {
 	}
 	list = append(list, documents...)
 	list = append(list, feature{name: "apps", modules: []httpapi.Module{apps.Module()}})
+	list = append(list, connectionsFeature(e))
 	if e.config.Comments {
 		list = append(list, feature{name: "comments", modules: []httpapi.Module{comments.Module()}})
 	}
@@ -122,6 +127,21 @@ func enabled(ctx context.Context, e environment) (list features, err error) {
 		list = append(list, mcpFeature(mcpserver.New(mcpserver.Config{Version: buildinfo.Version, Logger: e.log, AppURL: e.config.PublicURL, RequestTimeout: e.config.RequestTimeout}, registry)))
 	}
 	return list, nil
+}
+
+// connectionsFeature holds the workspaces' MQTT brokers and HTTP services,
+// which apps and workflows reach through named channels.
+func connectionsFeature(e environment) feature {
+	s := connections.New(connections.Config{DMS: e.service, Secrets: e.secrets, Workflows: e.workflows, Networks: e.config.ConnectionNetworks, Log: e.log})
+	return feature{
+		name:        "connections",
+		register:    s.Register,
+		start:       s.Start,
+		modules:     []httpapi.Module{s.Module()},
+		workers:     []worker.Definition{{Name: "connections", Kinds: []string{connections.KindPublish, connections.KindCall}, Concurrency: 4}},
+		maintenance: []worker.Maintenance{s.Maintenance()},
+		close:       s.Close,
+	}
 }
 
 // documentFeatures read, preview and make document files, with the PDF and

@@ -8,6 +8,7 @@ import (
 	"os"
 	"papergo/internal/ai"
 	"papergo/internal/decision"
+	"papergo/internal/egress"
 	"papergo/internal/identity"
 	"papergo/internal/onnx"
 	"papergo/internal/search"
@@ -56,6 +57,12 @@ type Config struct {
 	FileEditMax int64
 	// MaxInFlight bounds concurrent API requests; excess requests are shed with 503.
 	MaxInFlight int
+	// LiveStreamsPerUser bounds the live streams one person holds at once
+	// (LIVE_STREAMS_PER_USER, default 4): a tab holds one.
+	LiveStreamsPerUser int
+	// ConnectionNetworks are the non-public networks connections may reach
+	// (CONNECTION_NETWORKS); public addresses follow trusted hosts.
+	ConnectionNetworks []netip.Prefix
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
 	// RunRetention is how long finished workflow runs, dispatched events
@@ -218,7 +225,7 @@ func loadLayers(getenv func(string) string, directory string, layers ...string) 
 		return Config{}, err
 	}
 	lookup, value := sources(getenv, file)
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", defaultAddress), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, FileEditMax: 2 * 1024 * 1024, MaxInFlight: 32, LiveStreamsPerUser: 4, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.DatabasePath, c.DatabaseURL, c.BlobPath = value("DATABASE_PATH", "data/papergo.db"), lookup("DATABASE_URL"), value("BLOB_PATH", "data/blobs")
 	if c.DatabaseURL != "" {
 		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
@@ -310,6 +317,18 @@ func loadLayers(getenv func(string) string, directory string, layers ...string) 
 		}
 		c.MaxInFlight = n
 	}
+	if v := lookup("LIVE_STREAMS_PER_USER"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 64 {
+			return c, fmt.Errorf("LIVE_STREAMS_PER_USER must be between 1 and 64")
+		}
+		c.LiveStreamsPerUser = n
+	}
+	networks, err := egress.ParseNetworks(lookup("CONNECTION_NETWORKS"))
+	if err != nil {
+		return c, fmt.Errorf("CONNECTION_NETWORKS: %w", err)
+	}
+	c.ConnectionNetworks = networks
 	if v := lookup("REQUEST_TIMEOUT"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < time.Second || d > 10*time.Minute {

@@ -55,12 +55,16 @@ The server then loads the code with stand-ins for those modules to read the para
 | `ctx.app` | The app's `id`, `key`, `name` and the `version` running |
 | `ctx.format` | `number`, `decimal`, `currency`, `date`, `dateTime` and `relative` in the viewer's preferences; `parseDecimal` reads a typed decimal with the viewer's decimal separator, by the rules of PaperGo's own fields, and returns its canonical text, such as `"41.5"`; a date without a time stays on its day, in any time zone |
 | `ctx.open({ itemId } \| { taskId } \| { listId })` | Opens it in PaperGo; an app cannot navigate itself |
+| `ctx.connections` | The workspace's [connections](connections.md) by key: `publish(connection, channel, topic, payload, { qos, retain })` to an MQTT channel, `fetch(connection, channel, path)` and `call(connection, channel, method, path, body)` through an HTTP channel, and `list()`; as the viewer |
 
 | Hook | What it does |
 | --- | --- |
 | `useQuery(listId, query, { all, live, top, select, compact })` | The list's items that match a [collection query](application-foundation.md) (`filter`, `sort`, `contentTypeId`, `search`), as plain JSON; `all` reads every page, 500 items a request unless `top` says otherwise; `live` reads again when one of the list's items changes; `compact` reads [compact items](application-foundation.md), under half the size: identity, version and values, whether an item is archived, and the built-in columns `select` names |
 | `useAggregates(listId, { query, groups, aggregates, sort }, { live, top })` | Figures the server works out of the matching items ([aggregates](application-foundation.md)): `count`, `sum`, `avg`, `min` and `max` of fields, for all of them or in `groups` of up to four `{ field, interval, timeZone }`, a date or date-time by `day`, `week`, `month` or `year` in `timeZone`. Each group holds `keys`, one for each of `groups`. It reads every group, or with `top` the first that many in the order of `sort`; figures that change while their pages are read are read again from the first page. A chart of two years of hourly readings reads 730 days, not 17,520 items |
 | `useItem(id, { live })` | One item |
+| `useConnection(key)` | A [connection](connections.md) of the workspace: its `kind`, whether it is `connected`, and its channels with what the viewer may do; read again every 30 seconds |
+| `useTopic(connection, channel, topic)`, `useTopics(connection, channel, filter)` | The last message of an MQTT topic, or of each topic a filter inside the channel matches, current values first and then each new one |
+| `useFetch(connection, channel, path, { every })` | A GET through an HTTP channel, again every `every` milliseconds (at least 5000) while the page is shown; components that ask for the same path share a request |
 | `useApp()` | The context, in components below `render` |
 
 The kit draws in PaperGo's theme, light or dark as the viewer's:
@@ -88,16 +92,16 @@ The app page puts the app in a sandboxed frame:
 
 1. The page reads the app's compiled code with the viewer's login and writes the frame's one document: the runtime, the app's code and its start, inline.
    - The frame has `sandbox="allow-scripts"`, so it has no origin of its own and cannot read the page's storage, where the login is kept.
-   - Its document's CSP allows only those inline scripts and styles, and images from `data:` and `blob:`. It can make no network requests and post no forms, and blocks WebRTC in the browsers that support the `webrtc` directive.
+   - Its document's CSP allows only those inline scripts and styles, and images from `data:` and `blob:`. It can make no network requests and post no forms, and blocks WebRTC in the browsers that support the `webrtc` directive. An app reaches outside PaperGo only through the [connections](connections.md) a workspace manager opened, as people who may use them, and never sees an address or a credential.
    - PaperGo's page allows frames to show only the documents it writes (`frame-src 'none'`), so the frame cannot navigate anywhere. A frame that loads another document all the same is stopped.
 2. Before the app's code runs, the runtime asks the page for a message port, and the page answers that first request only. Every API request the app makes travels over that port.
-3. The page sends each request as the viewer and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
-4. The page passes on the live changes of the items the viewer may see in the app's workspace, so live queries read again, and changes of its theme, so the app follows without restarting. Each change says where the page last saw the item, so a live figure of a list reads again when an item leaves it or changes type; an item the app saw that moves to another workspace is told as removed, without saying where it went.
+3. The page sends each request as the viewer, marked with `PaperGo-App` so the server applies an app's limits, and returns the status, the body, and the `Content-Type`, `ETag`, `Location` and `Retry-After` headers. The app sets only `Accept`, `Content-Type`, `If-Match`, `If-None-Match`, `Idempotency-Key` and `Prefer`.
+4. The page passes on the live changes of the items the viewer may see in the app's workspace, so live queries read again, and changes of its theme, so the app follows without restarting. An app's subscriptions to its workspace's MQTT channels ride on the page's own live stream, subscribed as the viewer, and the page forwards their messages; the app never opens a stream. Each change says where the page last saw the item, so a live figure of a list reads again when an item leaves it or changes type; an item the app saw that moves to another workspace is told as removed, without saying where it went.
 
 An app does what its viewer may, through the API only, and never holds a login, so it cannot act as the viewer once the page is closed.
 
 **Refused requests.** The page refuses some requests whoever views, with 403 `app_refused`, so an administrator who opens an app does not let it change who administers the organization:
-- **Any method:** `/v1/identity` (users, groups, roles, tokens, WebDAV credentials), `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch` and the apps routes.
+- **Any method:** `/v1/identity` (users, groups, roles, tokens, WebDAV credentials), `/v1/organization`, `/v1/portability`, `/v1/audit`, `/v1/storage`, `/v1/events`, `/v1/mcp`, `/v1/$batch`, the apps routes and `/v1/connections`, where connections' targets and credentials are managed. Apps use connections by key under their workspace.
 - **Anything but reads:** a workflow's definition (`/v1/workflows/{id}`, `/v1/workspaces/{id}/workflows`, its built-ins), workspace members, permissions, and a list's integrations, which have the server fetch from the network; and installed [solutions](solutions.md), which an app may read but not plan, apply or remove.
 
 An app still starts workflow runs, answers and updates tasks, and reads and writes items.

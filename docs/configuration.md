@@ -18,6 +18,7 @@ A YAML file sets only what it names, so a mounted `config.yaml` keeps the image'
 | `server.environment` | `APP_ENV` | `development`; `test` or `production`. |
 | `server.max_in_flight` | `MAX_IN_FLIGHT` | `32` concurrent API requests before new ones get 503. |
 | `server.request_timeout` | `REQUEST_TIMEOUT` | `30s`; reads running longer are cancelled. |
+| `server.live_streams_per_user` | `LIVE_STREAMS_PER_USER` | `4` live streams one person holds at once, 1 to 64; each open tab holds one. Raise it for kiosks that share one account. |
 | `database.url` | `DATABASE_URL` | A `postgres://` URL keeps the database in PostgreSQL instead of SQLite. |
 | `auth.mode` | `AUTH_MODE` | `local`; `development`, `oidc` or `proxy`. |
 | `auth.admin_user` | `ADMIN_SUBJECT` | The first administrator; `admin` in local mode. |
@@ -36,6 +37,7 @@ A YAML file sets only what it names, so a mounted `config.yaml` keeps the image'
 | `search.database_path` | `SEARCH_DATABASE_PATH` | `search.db` beside the database. |
 | `search.languages` | `SEARCH_LANGUAGES` | The organization locale's, else `english`; a YAML list, comma-separated as a variable. See [search](search.md). |
 | `comments` | `COMMENTS` | `on` or `off`. |
+| `connections.networks` | `CONNECTION_NETWORKS` | The private networks [connections](connections.md) may reach, such as `192.168.1.0/24`; none by default. A YAML list, comma-separated as a variable. Public addresses follow [trusted hosts](trusted-hosts.md) instead. |
 | `storage.blob_path` | `BLOB_PATH` | `blobs` beside the database. |
 | `storage.max_upload_mb` | `MAX_UPLOAD_BYTES` | 64 MB. YAML takes megabytes, the variable bytes. |
 | `storage.edit_max_mb` | `FILE_EDIT_MAX_BYTES` | 2 MB; the largest file edited in the browser. |

@@ -46,6 +46,140 @@ function itemChange(data: string): ItemChange | undefined {
   }
 }
 
+/** Why a module subscription ended: the viewer lost access, or the server refused it. */
+export interface SubscriptionEnd {
+  reason: 'access' | 'refused';
+  detail?: string;
+}
+
+/** What a module subscription on the page's stream is told. */
+export interface StreamSubscriber {
+  /** A frame of the subscription: its event and its JSON data. */
+  frame(event: string, data: Record<string, unknown>): void;
+  ended?(end: SubscriptionEnd): void;
+}
+
+interface Subscribed {
+  spec: Record<string, unknown>;
+  subscriber: StreamSubscriber;
+  /** The server's ID for it on the current stream. */
+  id?: string;
+}
+
+const subscriptions = new Set<Subscribed>();
+// The page's current stream, which subscriptions are added to; a new stream
+// starts without any.
+let currentStream: string | undefined;
+// How many subscriptions are being added, whose IDs the page does not know
+// yet, and the frames that named an unknown subscription meanwhile, by its
+// ID: a subscription's current values can arrive on the stream before the
+// answer that names it.
+let adding = 0;
+const early = new Map<string, { event: string; frame: Record<string, unknown> }[]>();
+const earlyFrames = 32;
+
+/** Hands a frame of the stream to the subscription it names. */
+function deliver(s: Subscribed, event: string, frame: Record<string, unknown>) {
+  if (event === 'access') {
+    subscriptions.delete(s);
+    s.subscriber.ended?.({ reason: 'access' });
+  } else s.subscriber.frame(event, frame);
+}
+
+async function subscribeOn(stream: string, s: Subscribed) {
+  adding++;
+  try {
+    const response = await fetch(`/v1/events/${encodeURIComponent(stream)}/subscriptions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authorizationHeaders() },
+      body: JSON.stringify(s.spec),
+      credentials: 'same-origin',
+    });
+    const body = (await response.json().catch(() => ({}))) as { id?: string; detail?: string };
+    if (!subscriptions.has(s) || stream !== currentStream) {
+      if (response.ok && body.id) void unsubscribeOn(stream, body.id);
+      return;
+    }
+    if (response.ok && body.id) {
+      s.id = body.id;
+      const waiting = early.get(body.id) ?? [];
+      early.delete(body.id);
+      for (const { event, frame } of waiting) {
+        if (subscriptions.has(s)) deliver(s, event, frame);
+      }
+      return;
+    }
+    // A stream that ended meanwhile subscribes again when the next connects.
+    if (response.status === 404) return;
+    subscriptions.delete(s);
+    s.subscriber.ended?.({ reason: 'refused', detail: body.detail });
+  } catch {
+    // The next stream subscribes again.
+  } finally {
+    // Frames no answer claimed belong to no subscription of this page.
+    if (--adding === 0) early.clear();
+  }
+}
+
+async function unsubscribeOn(stream: string, id: string) {
+  try {
+    await fetch(`/v1/events/${encodeURIComponent(stream)}/subscriptions/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authorizationHeaders(), credentials: 'same-origin' });
+  } catch {
+    // The subscription ends with its stream.
+  }
+}
+
+/**
+ * Subscribes the page's live stream to a module's frames, such as an MQTT
+ * channel's messages ({ source: 'connections', … }), as the viewer. Every
+ * stream the page opens subscribes again, so a reconnection keeps it;
+ * returns what stops it.
+ */
+export function subscribeStream(spec: Record<string, unknown>, subscriber: StreamSubscriber): () => void {
+  const s: Subscribed = { spec, subscriber };
+  subscriptions.add(s);
+  if (currentStream) void subscribeOn(currentStream, s);
+  return () => {
+    if (!subscriptions.delete(s)) return;
+    if (currentStream && s.id) void unsubscribeOn(currentStream, s.id);
+  };
+}
+
+/** Routes a stream's frames to its subscriptions. */
+function streamFrame(event: string, data: string) {
+  if (event === 'connected') {
+    let stream: string | undefined;
+    try {
+      stream = (JSON.parse(data) as { stream?: string }).stream;
+    } catch {
+      stream = undefined;
+    }
+    currentStream = stream;
+    early.clear();
+    for (const s of subscriptions) {
+      s.id = undefined;
+      if (stream) void subscribeOn(stream, s);
+    }
+    return;
+  }
+  if (subscriptions.size === 0 || !data.includes('"subscription"')) return;
+  let frame: Record<string, unknown>;
+  try {
+    frame = JSON.parse(data) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  let known = false;
+  for (const s of subscriptions) {
+    if (!s.id || s.id !== frame.subscription) continue;
+    known = true;
+    deliver(s, event, frame);
+  }
+  if (known || adding === 0 || typeof frame.subscription !== 'string') return;
+  const waiting = early.get(frame.subscription) ?? [];
+  if (waiting.length < earlyFrames) early.set(frame.subscription, [...waiting, { event, frame }]);
+}
+
 /** Changes arriving within this many milliseconds refresh the page once. */
 export const liveRefreshInterval = 1000;
 
@@ -80,6 +214,7 @@ export function useLiveEvents() {
     };
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
     void readEvents(controller.signal, (event, data) => {
+      streamFrame(event, data);
       if (itemListeners.size > 0) {
         const change = event === 'item' ? itemChange(data) : event === 'resync' || event === 'connected' ? { id: '', resync: true } : undefined;
         if (change) for (const listener of itemListeners) listener(change);
@@ -93,7 +228,10 @@ export function useLiveEvents() {
         window.location.assign('/login');
       }
     });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      currentStream = undefined;
+    };
   }, [queryClient]);
 }
 

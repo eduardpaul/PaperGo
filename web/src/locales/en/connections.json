@@ -1,0 +1,133 @@
+{
+  "page": {
+    "title": "Devices & services",
+    "description": "MQTT brokers and HTTP services, such as Node-RED, that this workspace's apps and workflows reach by key through named channels. Apps and workflows never see an address or a credential.",
+    "needScope": "Setting up devices and services needs manage access to the workspace and the connection.manage scope, which administrators have.",
+    "empty": "No devices or services yet.",
+    "channels_one": "{{count}} channel: {{names}}",
+    "channels_other": "{{count}} channels: {{names}}",
+    "testOk": "{{detail}} ({{ms}} ms)",
+    "testFailed": "{{detail}}",
+    "secretOnce": "The signing secret of {{name}}, shown only now. A Node-RED function node checks PaperGo-Signature with it.",
+    "signingSecret": "Signing secret",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "Apps and workflows that use its key stop reaching it. Its credentials are deleted.",
+    "deleteConfirm": "Delete",
+    "needsTarget": "It came from a package or a solution without its address and credentials: give them, then enable it."
+  },
+  "actions": {
+    "new": "Add device or service",
+    "edit": "Edit",
+    "test": "Test",
+    "monitor": "Monitor",
+    "renewSecret": "New signing secret"
+  },
+  "kind": {
+    "mqtt": "MQTT broker",
+    "http": "HTTP service"
+  },
+  "state": {
+    "disabled": "Disabled",
+    "connecting": "Connecting",
+    "connected": "Connected",
+    "failed": "Failed",
+    "ok": "Working",
+    "failing": "Failing",
+    "unknown": "Not called yet"
+  },
+  "editor": {
+    "title": "Edit {{name}}",
+    "newTitle": "Add a device or service",
+    "description": "Its address and credentials are kept encrypted and shown only to those who manage the workspace's devices and services.",
+    "key": "Key",
+    "keyHint": "What apps and workflows name it by; from the name unless you choose one. It never changes.",
+    "keyFixed": "The key never changes.",
+    "kind": "Kind",
+    "enabled": "Enabled",
+    "target": "Address",
+    "targetHintMqtt": "mqtt://192.168.1.20:1883, mqtts://, ws:// or wss://. Addresses on a private network need the operator to list it in connections.networks; public ones need TLS and a trusted host.",
+    "targetHintHttp": "The base URL, such as http://192.168.1.20:1880/api. Private networks need the operator to list them in connections.networks; public addresses need https and a trusted host.",
+    "credentials": "Credentials",
+    "credentialsKept": "The saved credentials are kept unless you change them.",
+    "credentialType": "How it signs in",
+    "unchanged": "Unchanged",
+    "ca": "Certificate authority",
+    "caHint": "PEM certificates to trust beside the system's, for a self-signed certificate on your network.",
+    "headers": "Fixed headers",
+    "headersHint": "One Name: value per line; not for secrets.",
+    "timeout": "Timeout",
+    "healthPath": "Path Test calls",
+    "sign": "Sign each call with the caller (PaperGo-Signature)"
+  },
+  "credentials": {
+    "none": "No credentials",
+    "basic": "User name and password",
+    "bearer": "Bearer token",
+    "header": "A header",
+    "username": "User name",
+    "password": "Password",
+    "token": "Token",
+    "headerName": "Header name",
+    "headerValue": "Header value"
+  },
+  "channels": {
+    "title": "Channels",
+    "description": "Callers reach only what a channel covers. Two channels that see, or two that control, may not cover the same topic or path.",
+    "add": "Add channel",
+    "new": "New channel",
+    "remove": "Remove channel",
+    "key": "Key",
+    "keyHint": "What apps name the channel by.",
+    "topics": "Topics",
+    "topicsHint": "A topic filter: + is one level, # the last levels, as in home/+/sensor/#.",
+    "retain": "Publishes may be retained",
+    "path": "Path",
+    "pathHint": "From the base URL: * is one segment, a last ** one or more, as in /heating/**.",
+    "methods": "Methods",
+    "cache": "Cache GET answers for",
+    "cacheHint": "Such as 30s; empty keeps none."
+  },
+  "uses": {
+    "see": "See (subscribe)",
+    "control": "Control (publish)"
+  },
+  "access": {
+    "whoSees": "Who can see",
+    "whoControls": "Who can control",
+    "level": "Permission",
+    "on": "On",
+    "read": "People who can see",
+    "write": "People who can edit",
+    "manage": "People who manage",
+    "workspace": "the workspace",
+    "missingList": "A list that no longer exists",
+    "owners": "Workspace owners can always see and control. A workflow acts as its author."
+  },
+  "monitor": {
+    "title": "Monitor {{name}}",
+    "description": "What goes through the connection now. Only those who manage its devices and services see this.",
+    "channel": "Channel",
+    "noSee": "No channel sees messages.",
+    "waiting": "Waiting for messages…",
+    "retained": "Retained",
+    "binary": "(binary)",
+    "publish": "Publish",
+    "topic": "Topic",
+    "payload": "Payload",
+    "payloadHint": "JSON, or text",
+    "send": "Send",
+    "sent": "Sent.",
+    "tryCall": "Try a call",
+    "method": "Method",
+    "path": "Path",
+    "body": "Body",
+    "calls": "Last calls",
+    "noCalls": "No calls yet.",
+    "failed": "Failed",
+    "cached": "Cached",
+    "ended": {
+      "access": "You can no longer see this channel.",
+      "refused": "The channel could not be watched."
+    }
+  }
+}

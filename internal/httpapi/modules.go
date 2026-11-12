@@ -219,6 +219,7 @@ func (a *API) routes() (api *router, err error) {
 	}()
 	api = newRouter()
 	api.HandleFunc("GET /v1/events", a.events)
+	a.registerLiveSubscriptions(api)
 	a.registerPortability(api)
 	a.registerIdentity(api)
 	a.registerFoundation(api)

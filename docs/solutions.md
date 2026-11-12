@@ -75,6 +75,20 @@ A settings file is what a workflow or an app is saved with, naming its source be
 
 An app's file has `source` instead of `script`, and no `automatic_enabled` or `manual_enabled`. It may choose the app's [icon](apps.md#icon) with `"icon": "fuel"` and `"color": "#b45309"`.
 
+### Connections
+
+A solution declares the [connections](connections.md) its apps and workflows name by key, under `parts.connections` in `solution.json`, with their channels and who may use them:
+
+```json
+"parts": { "connections": [
+  { "key": "home", "name": "Home broker", "kind": "mqtt", "channels": [
+    { "key": "sensors", "topics": "home/+/sensor/#", "uses": ["see"] },
+    { "key": "heating", "topics": "boiler/#", "uses": ["see", "control"],
+      "access": { "control": { "level": "write", "on": "$collection:facilities" } } } ] } ] }
+```
+
+A solution never carries an address or a credential. Installing it creates its connections disabled, without an address, and says so: a manager gives each its address and credentials in **Devices & services** and enables it. A later version changes their names, settings and channels, never their address, credentials or whether they are enabled; a connection changed in PaperGo meanwhile is kept unless the installer decides to replace it, as an app would be. Removing or pruning a solution keeps its connections, which hold what people configured. `parts` holds what features add to solutions, by the feature's name; a PaperGo without the feature refuses to install a solution that names it.
+
 ### References
 
 A solution cannot know the IDs its lists and types will have, so it names them:
@@ -85,7 +99,7 @@ A solution cannot know the IDs its lists and types will have, so it names them:
 | `$type:<key>` | a content type of the solution, or one a collection expects |
 | `$setting:<name>` | the value of one of the solution's settings |
 
-References stand in parameters, in a view's query and in a lookup field's `lookup_container_id`. A lookup field may look up a collection of its own solution: it is made once the collection is there, and it keeps that collection afterwards. An ID anywhere in a solution, its scripts included, is a problem: a script reads IDs from its parameters.
+References stand in parameters, in a view's query, in a lookup field's `lookup_container_id` and in `parts`, such as a connection channel's `access.on`. A lookup field may look up a collection of its own solution: it is made once the collection is there, and it keeps that collection afterwards. An ID anywhere in a solution, its scripts included, is a problem: a script reads IDs from its parameters.
 
 ### Languages
 
@@ -217,7 +231,7 @@ A collection of another solution (`use`) is found through that solution's instal
 
 **Pull** writes an installation as files again, as it is now: names, labels, views, parameters and sources read from the workspace, with the IDs as references and a parameter that still holds a setting's value as `$setting:<name>`. What someone edited in the browser reaches the folder this way, and applying the pulled folder changes nothing; what was reported as kept is then what the solution says. Files of the folder that are not the solution's stay.
 
-**Remove** uninstalls a solution: its workflows, apps and views are deleted, the retired ones too, and its collections, content types and fields stay with every item they hold. It is refused while another installed solution uses one of its collections. Applying the solution again later finds its fields and content types, and makes a new collection unless one is bound.
+**Remove** uninstalls a solution: its workflows, apps and views are deleted, the retired ones too, and its collections, content types, fields and connections stay with every item and setting they hold. It is refused while another installed solution uses one of its collections. Applying the solution again later finds its fields and content types, and makes a new collection unless one is bound.
 
 ## Status
 

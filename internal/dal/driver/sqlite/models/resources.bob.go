@@ -86,6 +86,7 @@ type resourceR struct {
 	ItemBusinessKeys              BusinessKeySlice     // fk_business_keys_0
 	ContainerBusinessKeys         BusinessKeySlice     // fk_business_keys_1
 	ItemComments                  CommentSlice         // fk_comments_2
+	WorkspaceConnections          ConnectionSlice      // fk_connections_0
 	ItemFieldValues               FieldValueSlice      // fk_field_values_0
 	ContainerFieldValues          FieldValueSlice      // fk_field_values_1
 	Grants                        GrantSlice           // fk_grants_0
@@ -152,6 +153,7 @@ type resourceRLoaded struct {
 	ItemBusinessKeys              bool // fk_business_keys_0
 	ContainerBusinessKeys         bool // fk_business_keys_1
 	ItemComments                  bool // fk_comments_2
+	WorkspaceConnections          bool // fk_connections_0
 	ItemFieldValues               bool // fk_field_values_0
 	ContainerFieldValues          bool // fk_field_values_1
 	Grants                        bool // fk_grants_0
@@ -1598,6 +1600,25 @@ func (os ResourceSlice) ItemComments(mods ...bob.Mod[*dialect.SelectQuery]) Comm
 	)...)
 }
 
+// WorkspaceConnections starts a query for related objects on connections
+func (o *Resource) WorkspaceConnections(mods ...bob.Mod[*dialect.SelectQuery]) ConnectionsQuery {
+	return Connections.Query(append(mods,
+		sm.Where(Connections.Columns.WorkspaceID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os ResourceSlice) WorkspaceConnections(mods ...bob.Mod[*dialect.SelectQuery]) ConnectionsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Connections.Query(append(mods,
+		sm.Where(sqlite.Group(Connections.Columns.WorkspaceID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // ItemFieldValues starts a query for related objects on field_values
 func (o *Resource) ItemFieldValues(mods ...bob.Mod[*dialect.SelectQuery]) FieldValuesQuery {
 	return FieldValues.Query(append(mods,
@@ -2995,6 +3016,67 @@ func (resource0 *Resource) AttachItemComments(ctx context.Context, exec bob.Exec
 	}
 
 	resource0.R.ItemComments = append(resource0.R.ItemComments, comments1...)
+
+	return nil
+}
+
+func insertResourceWorkspaceConnections0(ctx context.Context, exec bob.Executor, connections1 []*ConnectionSetter, resource0 *Resource) (ConnectionSlice, error) {
+	for i := range connections1 {
+		connections1[i].WorkspaceID = omit.From(resource0.ID)
+	}
+
+	ret, err := Connections.Insert(bob.ToMods(connections1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertResourceWorkspaceConnections0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachResourceWorkspaceConnections0(ctx context.Context, exec bob.Executor, count int, connections1 ConnectionSlice, resource0 *Resource) (ConnectionSlice, error) {
+	setter := &ConnectionSetter{
+		WorkspaceID: omit.From(resource0.ID),
+	}
+
+	err := connections1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachResourceWorkspaceConnections0: %w", err)
+	}
+
+	return connections1, nil
+}
+
+func (resource0 *Resource) InsertWorkspaceConnections(ctx context.Context, exec bob.Executor, related ...*ConnectionSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	connections1, err := insertResourceWorkspaceConnections0(ctx, exec, related, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceConnections = append(resource0.R.WorkspaceConnections, connections1...)
+
+	return nil
+}
+
+func (resource0 *Resource) AttachWorkspaceConnections(ctx context.Context, exec bob.Executor, related ...*Connection) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	connections1 := ConnectionSlice(related)
+
+	_, err = attachResourceWorkspaceConnections0(ctx, exec, len(related), connections1, resource0)
+	if err != nil {
+		return err
+	}
+
+	resource0.R.WorkspaceConnections = append(resource0.R.WorkspaceConnections, connections1...)
 
 	return nil
 }
@@ -6151,6 +6233,20 @@ func (w resourceWhereR[Q]) HasItemComments(filters ...bob.Mod[*dialect.SelectQue
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(Comments.NameExpr()),
 		sm.Where(Comments.Columns.ItemID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasWorkspaceConnections filters parents that have a matching WorkspaceConnections using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Connections).
+func (w resourceWhereR[Q]) HasWorkspaceConnections(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Connections.NameExpr()),
+		sm.Where(Connections.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

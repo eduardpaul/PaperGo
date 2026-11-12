@@ -45,6 +45,7 @@ var (
 func Check(ctx context.Context, s Solution) Problems {
 	c := checker{ctx: ctx, s: s, slots: map[string]Collection{}, fields: map[string]Field{}, types: map[string]ContentType{}, foreign: map[string]bool{}, settings: map[string]map[string]any{}}
 	c.manifest()
+	c.parts()
 	c.workflows()
 	c.apps()
 	c.locales()

@@ -845,6 +845,30 @@ CREATE TABLE app_versions (
 );
 CREATE UNIQUE INDEX appversion_app_id_number ON app_versions(app_id, number);
 
+-- A connection is an outside endpoint of a workspace, an MQTT broker or an
+-- HTTP service, which apps and workflows reach through its channels. Its
+-- target and credentials are sealed in config_ciphertext; settings are the
+-- kind's plain options and channels what callers may reach, and who may.
+CREATE TABLE connections (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    workspace_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE DEFERRABLE,
+    "key" TEXT NOT NULL CHECK (length("key") BETWEEN 1 AND 100),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+    kind TEXT NOT NULL CHECK (kind IN ('mqtt', 'http')),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    config_ciphertext BYTEA NOT NULL,
+    config_hash TEXT NOT NULL,
+    settings JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(settings) = 'object'),
+    channels JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(channels) = 'array'),
+    created_by TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+CREATE UNIQUE INDEX connection_workspace_id_key ON connections(workspace_id, "key");
+CREATE UNIQUE INDEX connection_workspace_id_name ON connections(workspace_id, name);
+
 CREATE TABLE workflow_triggers (
     id TEXT PRIMARY KEY NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

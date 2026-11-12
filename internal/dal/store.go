@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dal/blobs"
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/comments"
+	"papergo/internal/dal/connections"
 	"papergo/internal/dal/content"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/delta"
@@ -73,6 +74,7 @@ type queries interface {
 	blobs.Queries
 	catalog.Queries
 	comments.Queries
+	connections.Queries
 	delta.Queries
 	directory.Queries
 	events.Queries
@@ -259,6 +261,12 @@ func (s *Store) Views() *views.Repo {
 // WithTx was used.
 func (s *Store) Apps() *apps.Repo {
 	return apps.NewRepo(s.bind(s.exec()), writer[apps.Queries](s))
+}
+
+// Connections returns the connections of workspaces, bound to the store's
+// transaction when WithTx was used.
+func (s *Store) Connections() *connections.Repo {
+	return connections.NewRepo(s.bind(s.exec()), writer[connections.Queries](s))
 }
 
 // Workflows returns the workflow definition repository, bound to the store's

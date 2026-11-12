@@ -36,7 +36,7 @@ it('trusts listed hosts, subdomains of wildcards and this app, and nothing else'
   expect(trusts(undefined, 'https://docs.example.com/a')).toBe(false);
 });
 
-function serve(hosts: string[], scopes: string[] = [], usage = [{ host: 'calendar.example.com', integrations: 2 }]) {
+function serve(hosts: string[], scopes: string[] = [], usage: { host: string; uses: Record<string, number> }[] = [{ host: 'calendar.example.com', uses: { integrations: 2, connections: 1 } }]) {
   const calls: { method: string; path: string; body: unknown; ifMatch?: string }[] = [];
   let current = { hosts, version: 3 };
   vi.stubGlobal(
@@ -75,7 +75,7 @@ it('asks before a link leaves for an untrusted host', async () => {
   expect(screen.queryByRole('button', { name: 'Trust elsewhere.example' })).toBeNull();
 });
 
-it('adds and removes entries with the list version, naming the integrations a removal stops', async () => {
+it('adds and removes entries with the list version, naming the integrations and connections a removal stops', async () => {
   const calls = serve(['*', 'calendar.example.com'], ['organization.manage']);
   render(
     <QueryClientProvider client={client()}>
@@ -83,7 +83,7 @@ it('adds and removes entries with the list version, naming the integrations a re
     </QueryClientProvider>,
   );
   expect(await screen.findByText('trusts every public host.', { exact: false })).toBeTruthy();
-  expect(await screen.findAllByText('Used by 2 integrations')).toHaveLength(2);
+  expect(await screen.findAllByText('Used by 3 integrations and connections')).toHaveLength(2);
   fireEvent.change(screen.getByLabelText('Host to trust'), { target: { value: 'Docs.Example.com' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add' }));
   await waitFor(() => expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ hosts: ['*', 'calendar.example.com', 'docs.example.com'] }));
@@ -92,19 +92,19 @@ it('adds and removes entries with the list version, naming the integrations a re
   fireEvent.click(await screen.findByRole('button', { name: 'Remove *' }));
   await waitFor(() => expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2));
   fireEvent.click(await screen.findByRole('button', { name: 'Remove calendar.example.com' }));
-  expect(await screen.findByText('2 integrations on calendar.example.com will stop refreshing', { exact: false })).toBeTruthy();
+  expect(await screen.findByText('2 integrations on calendar.example.com, 1 connection to calendar.example.com will stop working', { exact: false })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   await waitFor(() => expect(calls.filter((call) => call.method === 'PUT').at(-1)?.body).toEqual({ hosts: ['docs.example.com'] }));
 });
 
 it('counts integrations on public IP addresses against *, as the server trusts them', async () => {
-  serve(['*'], ['organization.manage'], [{ host: '203.0.113.5', integrations: 1 }]);
+  serve(['*'], ['organization.manage'], [{ host: '203.0.113.5', uses: { integrations: 1 } }]);
   render(
     <QueryClientProvider client={client()}>
       <TrustedHostsPage />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText('Used by 1 integration')).toBeTruthy();
+  expect(await screen.findByText('Used by 1 integration or connection')).toBeTruthy();
   fireEvent.click(await screen.findByRole('button', { name: 'Remove *' }));
-  expect(await screen.findByText('1 integration on 203.0.113.5 will stop refreshing', { exact: false })).toBeTruthy();
+  expect(await screen.findByText('1 integration on 203.0.113.5 will stop working', { exact: false })).toBeTruthy();
 });

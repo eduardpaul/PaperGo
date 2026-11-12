@@ -28,6 +28,9 @@
       },
       "task": {
         "completed": "Cuando se completa una tarea"
+      },
+      "connection": {
+        "message": "Cuando un dispositivo envía un mensaje"
       }
     }
   },

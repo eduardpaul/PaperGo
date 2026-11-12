@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/netip"
+	"papergo/internal/egress"
 	"papergo/internal/integration"
 	"strings"
 	"testing"
@@ -93,23 +94,23 @@ func TestSecretsAndPublicDestinations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ciphertext, err := s.Encrypt("list", "https://example.com/secret")
+	ciphertext, err := s.Encrypt(integration.PurposeListIntegration, "list", "https://example.com/secret")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Decrypt("other-list", ciphertext); err == nil {
+	if _, err = s.Decrypt(integration.PurposeListIntegration, "other-list", ciphertext); err == nil {
 		t.Fatal("encryption was not list bound")
 	}
-	if raw, err := s.Decrypt("list", ciphertext); err != nil || raw != "https://example.com/secret" {
+	if raw, err := s.Decrypt(integration.PurposeListIntegration, "list", ciphertext); err != nil || raw != "https://example.com/secret" {
 		t.Fatal(err)
 	}
 	for _, ip := range []string{"127.0.0.1", "10.0.0.1", "::ffff:127.0.0.1", "::1", "169.254.169.254", "100.64.0.1", "fc00::1", "2002:a00:1::", "192.0.2.1"} {
-		if PublicIP(netip.MustParseAddr(ip)) {
+		if egress.Public(netip.MustParseAddr(ip)) {
 			t.Fatal("allowed", ip)
 		}
 	}
 	for _, ip := range []string{"8.8.8.8", "2606:4700:4700::1111"} {
-		if !PublicIP(netip.MustParseAddr(ip)) {
+		if !egress.Public(netip.MustParseAddr(ip)) {
 			t.Fatal("denied", ip)
 		}
 	}

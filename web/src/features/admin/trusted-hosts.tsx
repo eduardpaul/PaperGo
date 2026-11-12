@@ -14,10 +14,13 @@ import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { i18n, Trans, useTranslation } from '@/i18n';
 import { problemMessage } from '@/lib/errors';
 
+/** An outside host features reach, with how many uses of each feature reach it. */
 interface HostUse {
   host: string;
-  integrations: number;
+  uses: Record<string, number>;
 }
+
+const total = (use: HostUse) => Object.values(use.uses).reduce((sum, n) => sum + n, 0);
 
 /** The form an entry is stored in, or why it cannot be one; the server has the last word. */
 export function hostEntry(raw: string): { entry?: string; problem?: string } {
@@ -81,7 +84,7 @@ export function TrustedHostsPage() {
     const rest = hosts.filter((host) => host !== entry);
     return (usage.data ?? []).filter((use) => serverMatches(hosts, use.host) && !serverMatches(rest, use.host));
   };
-  const usedBy = (entry: string) => (usage.data ?? []).filter((use) => serverMatches([entry], use.host)).reduce((sum, use) => sum + use.integrations, 0);
+  const usedBy = (entry: string) => (usage.data ?? []).filter((use) => serverMatches([entry], use.host)).reduce((sum, use) => sum + total(use), 0);
   const remove = (entry: string) => (stops(entry).length ? setRemoving(entry) : save.mutate(hosts.filter((host) => host !== entry)));
   const stopping = removing ? stops(removing) : [];
 
@@ -149,7 +152,15 @@ export function TrustedHostsPage() {
         onOpenChange={(open) => !open && setRemoving(undefined)}
         title={t('trustedHosts.stopTitle', { entry: removing })}
         description={t('trustedHosts.stopDescription', {
-          uses: stopping.map((use) => t('trustedHosts.stopUse', { count: use.integrations, host: use.host })).join(', '),
+          uses: stopping
+            .flatMap((use) =>
+              Object.entries(use.uses).map(([feature, count]) => {
+                if (feature === 'integrations') return t('trustedHosts.stopIntegrations', { count, host: use.host });
+                if (feature === 'connections') return t('trustedHosts.stopConnections', { count, host: use.host });
+                return t('trustedHosts.stopUses', { count, host: use.host });
+              }),
+            )
+            .join(', '),
         })}
         confirm={t('common:actions.removeItem')}
         busy={save.isPending}

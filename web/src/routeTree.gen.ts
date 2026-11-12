@@ -46,6 +46,7 @@ import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/_app/w/$wo
 import { Route as AppWWorkspaceIdAAppIdRouteImport } from './routes/_app/w/$workspaceId/a/$appId'
 import { Route as AppWWorkspaceIdSettingsIndexRouteImport } from './routes/_app/w/$workspaceId/settings/index'
 import { Route as AppWWorkspaceIdSettingsAppsRouteImport } from './routes/_app/w/$workspaceId/settings/apps'
+import { Route as AppWWorkspaceIdSettingsConnectionsRouteImport } from './routes/_app/w/$workspaceId/settings/connections'
 import { Route as AppWWorkspaceIdSettingsMembersRouteImport } from './routes/_app/w/$workspaceId/settings/members'
 import { Route as AppWWorkspaceIdSettingsRunsRouteImport } from './routes/_app/w/$workspaceId/settings/runs'
 import { Route as AppWWorkspaceIdSettingsSolutionsRouteImport } from './routes/_app/w/$workspaceId/settings/solutions'
@@ -248,6 +249,12 @@ const AppWWorkspaceIdSettingsAppsRoute =
     path: '/apps',
     getParentRoute: () => AppWWorkspaceIdSettingsRoute,
   } as any)
+const AppWWorkspaceIdSettingsConnectionsRoute =
+  AppWWorkspaceIdSettingsConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => AppWWorkspaceIdSettingsRoute,
+  } as any)
 const AppWWorkspaceIdSettingsMembersRoute =
   AppWWorkspaceIdSettingsMembersRouteImport.update({
     id: '/members',
@@ -363,6 +370,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
   '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
+  '/w/$workspaceId/settings/connections': typeof AppWWorkspaceIdSettingsConnectionsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
@@ -411,6 +419,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
   '/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
+  '/w/$workspaceId/settings/connections': typeof AppWWorkspaceIdSettingsConnectionsRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
@@ -463,6 +472,7 @@ export interface FileRoutesById {
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/_app/w/$workspaceId/a/$appId': typeof AppWWorkspaceIdAAppIdRoute
   '/_app/w/$workspaceId/settings/apps': typeof AppWWorkspaceIdSettingsAppsRoute
+  '/_app/w/$workspaceId/settings/connections': typeof AppWWorkspaceIdSettingsConnectionsRoute
   '/_app/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/_app/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
   '/_app/w/$workspaceId/settings/solutions': typeof AppWWorkspaceIdSettingsSolutionsRoute
@@ -516,6 +526,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/'
     | '/w/$workspaceId/a/$appId'
     | '/w/$workspaceId/settings/apps'
+    | '/w/$workspaceId/settings/connections'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
     | '/w/$workspaceId/settings/solutions'
@@ -564,6 +575,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceId'
     | '/w/$workspaceId/a/$appId'
     | '/w/$workspaceId/settings/apps'
+    | '/w/$workspaceId/settings/connections'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
     | '/w/$workspaceId/settings/solutions'
@@ -615,6 +627,7 @@ export interface FileRouteTypes {
     | '/_app/w/$workspaceId/'
     | '/_app/w/$workspaceId/a/$appId'
     | '/_app/w/$workspaceId/settings/apps'
+    | '/_app/w/$workspaceId/settings/connections'
     | '/_app/w/$workspaceId/settings/members'
     | '/_app/w/$workspaceId/settings/runs'
     | '/_app/w/$workspaceId/settings/solutions'
@@ -898,6 +911,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdSettingsAppsRouteImport
       parentRoute: typeof AppWWorkspaceIdSettingsRoute
     }
+    '/_app/w/$workspaceId/settings/connections': {
+      id: '/_app/w/$workspaceId/settings/connections'
+      path: '/connections'
+      fullPath: '/w/$workspaceId/settings/connections'
+      preLoaderRoute: typeof AppWWorkspaceIdSettingsConnectionsRouteImport
+      parentRoute: typeof AppWWorkspaceIdSettingsRoute
+    }
     '/_app/w/$workspaceId/settings/members': {
       id: '/_app/w/$workspaceId/settings/members'
       path: '/members'
@@ -1046,6 +1066,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 
 interface AppWWorkspaceIdSettingsRouteChildren {
   AppWWorkspaceIdSettingsAppsRoute: typeof AppWWorkspaceIdSettingsAppsRoute
+  AppWWorkspaceIdSettingsConnectionsRoute: typeof AppWWorkspaceIdSettingsConnectionsRoute
   AppWWorkspaceIdSettingsMembersRoute: typeof AppWWorkspaceIdSettingsMembersRoute
   AppWWorkspaceIdSettingsRunsRoute: typeof AppWWorkspaceIdSettingsRunsRoute
   AppWWorkspaceIdSettingsSolutionsRoute: typeof AppWWorkspaceIdSettingsSolutionsRoute
@@ -1056,6 +1077,8 @@ interface AppWWorkspaceIdSettingsRouteChildren {
 const AppWWorkspaceIdSettingsRouteChildren: AppWWorkspaceIdSettingsRouteChildren =
   {
     AppWWorkspaceIdSettingsAppsRoute: AppWWorkspaceIdSettingsAppsRoute,
+    AppWWorkspaceIdSettingsConnectionsRoute:
+      AppWWorkspaceIdSettingsConnectionsRoute,
     AppWWorkspaceIdSettingsMembersRoute: AppWWorkspaceIdSettingsMembersRoute,
     AppWWorkspaceIdSettingsRunsRoute: AppWWorkspaceIdSettingsRunsRoute,
     AppWWorkspaceIdSettingsSolutionsRoute:

@@ -1,7 +1,7 @@
 # Data access layer
 
 `internal/dal` owns transactional database invariants using Bob v0.50.0.
-`schema/sqlite.sql` and `schema/postgres.sql` define the same 71 tables with
+`schema/sqlite.sql` and `schema/postgres.sql` define the same 72 tables with
 native SQLite and PostgreSQL types. Both schemas use declarative constraints;
 repository methods maintain cross-table invariants and derived data in Go.
 SQLite JSON columns use TEXT affinity with JSON checks to preserve numeric
@@ -15,7 +15,8 @@ Each domain lives in its own package and is split in two:
   invariants once for every engine, and declares the statements it needs as a
   `Queries` interface. It contains no SQL. The domains are `audit/`,
   `blobs/` (file versions and their availability, staged files, previews,
-  deletion queue, leases), `catalog/` (field
+  deletion queue, leases), `connections/` (workspaces' connections to MQTT
+  brokers and HTTP services), `catalog/` (field
   definitions, content types with their lineage, the list types through
   which collections accept them, business
   keys, schema revisions and templates), `delta/` (collection

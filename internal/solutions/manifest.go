@@ -5,6 +5,8 @@
 package solutions
 
 import (
+	"encoding/json"
+
 	"papergo/internal/dal/catalog"
 	"papergo/internal/model"
 )
@@ -51,6 +53,9 @@ type Manifest struct {
 	ContentTypes      []ContentType      `json:"content_types,omitempty"`
 	RelationshipTypes []RelationshipType `json:"relationship_types,omitempty"`
 	Collections       []Collection       `json:"collections,omitempty"`
+	// Parts are what features add to a solution, by the feature's name,
+	// such as its connections (Part).
+	Parts map[string]json.RawMessage `json:"parts,omitempty"`
 }
 
 // Field is a catalog field the solution owns.

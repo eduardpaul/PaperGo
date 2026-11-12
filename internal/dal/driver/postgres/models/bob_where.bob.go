@@ -29,6 +29,7 @@ func Where[Q psql.Filterable]() struct {
 	BusinessKeys            businessKeyWhere[Q]
 	CommentMentions         commentMentionWhere[Q]
 	Comments                commentWhere[Q]
+	Connections             connectionWhere[Q]
 	ContentTypeAncestors    contentTypeAncestorWhere[Q]
 	ContentTypes            contentTypeWhere[Q]
 	DomainEvents            domainEventWhere[Q]
@@ -97,6 +98,7 @@ func Where[Q psql.Filterable]() struct {
 		BusinessKeys            businessKeyWhere[Q]
 		CommentMentions         commentMentionWhere[Q]
 		Comments                commentWhere[Q]
+		Connections             connectionWhere[Q]
 		ContentTypeAncestors    contentTypeAncestorWhere[Q]
 		ContentTypes            contentTypeWhere[Q]
 		DomainEvents            domainEventWhere[Q]
@@ -164,6 +166,7 @@ func Where[Q psql.Filterable]() struct {
 		BusinessKeys:            buildBusinessKeyWhere[Q](BusinessKeys.Columns),
 		CommentMentions:         buildCommentMentionWhere[Q](CommentMentions.Columns),
 		Comments:                buildCommentWhere[Q](Comments.Columns),
+		Connections:             buildConnectionWhere[Q](Connections.Columns),
 		ContentTypeAncestors:    buildContentTypeAncestorWhere[Q](ContentTypeAncestors.Columns),
 		ContentTypes:            buildContentTypeWhere[Q](ContentTypes.Columns),
 		DomainEvents:            buildDomainEventWhere[Q](DomainEvents.Columns),

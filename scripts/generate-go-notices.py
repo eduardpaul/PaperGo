@@ -22,8 +22,8 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = './cmd/api'
 # LICENSE, LICENCE.md, LICENSE-GO, COPYING, NOTICE.txt, PATENTS and the like,
-# but not Go sources such as notice.go.
-LICENSE_FILE = re.compile(r'^((un)?licen[cs]e|copying|notice|patents)([-_.][\w.-]*)?$(?<!\.go)', re.IGNORECASE)
+# Eclipse's edl-v10 and epl-v20, but not Go sources such as notice.go.
+LICENSE_FILE = re.compile(r'^((un)?licen[cs]e|copying|notice|patents|edl-v\d+|epl-v\d+)([-_.][\w.-]*)?$(?<!\.go)', re.IGNORECASE)
 # Recognised licence texts, matched on whitespace-collapsed text. BSD-3-Clause
 # precedes BSD-2-Clause, whose clauses it contains.
 ALLOWED = [
@@ -48,6 +48,11 @@ REFUSED = [
 # reviewed by hand: module path -> (licence, SHA-256 of the reviewed licence
 # files as licence_digest computes it). Changed files need a new review.
 REVIEWED = {
+    # Dual-licensed EPL-2.0 or EDL-1.0; PaperGo uses it under EDL-1.0, the
+    # BSD-3-Clause text in edl-v10. EPL-2.0 names the GPL only as a possible
+    # secondary licence.
+    'github.com/eclipse/paho.golang': (
+        'BSD-3-Clause (EDL-1.0)', '13c1f9aea595e5633e2c0b1f8323c2380dc8ad06b05cd9852e8dacc1524e24d4'),
     # Code under Apache-2.0, older contributions MIT. The same LICENSE puts
     # the project's documentation, which is not linked, under CC-BY-4.0.
     'github.com/modelcontextprotocol/go-sdk': (

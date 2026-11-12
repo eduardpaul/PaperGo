@@ -54,6 +54,11 @@ type API struct {
 	BrowserSignIn *BrowserSignIn
 	// Modules contribute feature routes; Validate checks they compose.
 	Modules []Module
+	// LiveStreamsPerUser bounds the live streams one person holds at once;
+	// zero means four.
+	LiveStreamsPerUser int
+
+	streams streams
 
 	loopback struct {
 		once   sync.Once

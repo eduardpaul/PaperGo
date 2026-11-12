@@ -1,0 +1,71 @@
+{
+  "key": "home",
+  "name": "Home",
+  "description": "A house's sensors, lights and fans on an MQTT broker and its heating on Node-RED, on one dashboard, with a workflow that turns a fan on when a room is too warm.",
+  "version": "1.0.0",
+  "settings": {
+    "type": "object",
+    "properties": {
+      "too_warm_c": {
+        "type": "number",
+        "title": "Too warm above (°C)",
+        "default": 26
+      }
+    }
+  },
+  "fields": [
+    {
+      "key": "home_room",
+      "label": "Room",
+      "type": "text",
+      "required": true,
+      "indexed": true
+    }
+  ],
+  "content_types": [
+    {
+      "key": "home_device",
+      "name": "Device",
+      "fields": ["home_room"]
+    }
+  ],
+  "collections": [
+    {
+      "key": "facilities",
+      "kind": "list",
+      "name": "Facilities",
+      "content_types": ["home_device"],
+      "search": false
+    }
+  ],
+  "parts": {
+    "connections": [
+      {
+        "key": "broker",
+        "name": "Home broker",
+        "kind": "mqtt",
+        "channels": [
+          { "key": "sensors", "name": "Sensors", "topics": "home/+/sensor/#", "uses": ["see"] },
+          { "key": "lights", "name": "Lights", "topics": "home/+/light/set", "uses": ["control"] },
+          { "key": "fans", "name": "Fans", "topics": "home/+/fan/set", "uses": ["control"] }
+        ]
+      },
+      {
+        "key": "nodered",
+        "name": "Node-RED",
+        "kind": "http",
+        "settings": { "timeout": "10s", "sign": true, "health_path": "/status" },
+        "channels": [
+          { "key": "status", "name": "House status", "path": "/status", "methods": ["GET"], "cache": "30s" },
+          {
+            "key": "heating",
+            "name": "Heating",
+            "path": "/heating/**",
+            "methods": ["POST"],
+            "access": { "control": { "level": "write", "on": "$collection:facilities" } }
+          }
+        ]
+      }
+    ]
+  }
+}

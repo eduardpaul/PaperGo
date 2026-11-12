@@ -117,6 +117,9 @@ type Trigger struct {
 	// Actions, on permissions.changed triggers, limits them to these changes
 	// (PermissionActions); the default is all.
 	Actions []string `json:"actions,omitempty"`
+	// Options are what a module's trigger type takes (RegisterTriggerType),
+	// such as a connection.message trigger's connection, channel and topic.
+	Options json.RawMessage `json:"options,omitempty"`
 }
 
 // PermissionActions are the changes a permissions.changed event reports.
@@ -262,6 +265,18 @@ func (d Definition) validate() error {
 			return dms.Invalid("use manual_enabled to control manual runs")
 		}
 		at := fmt.Sprintf("triggers[%d]: ", i)
+		if tt, module := moduleTrigger(t.Type); module {
+			if err := validateModuleTrigger(at, tt, t); err != nil {
+				return err
+			}
+			if d.Condition != nil && t.CollectionID == "" {
+				return dms.Invalid(at + "a condition needs collection_id on every trigger")
+			}
+			continue
+		}
+		if len(t.Options) > 0 {
+			return dms.Invalid(at + "options belong to the trigger types modules serve")
+		}
 		if t.Surface != "" && (t.Type != TriggerSchedule || t.CollectionID == "" || t.Surface != "head" && t.Surface != "published") {
 			return dms.Invalid(at + "surface is head or published, on schedule triggers with collection_id")
 		}

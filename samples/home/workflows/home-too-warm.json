@@ -1,0 +1,11 @@
+{
+  "key": "home-too-warm",
+  "name": "Too warm",
+  "description": "Turns a room's fan on when its temperature rises above too_warm_c, at most every 15 minutes a room.",
+  "script": "home-too-warm.ts",
+  "parameters": {
+    "too_warm_c": "$setting:too_warm_c"
+  },
+  "automatic_enabled": true,
+  "state": "published"
+}

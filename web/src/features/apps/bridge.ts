@@ -35,8 +35,11 @@ const responseHeaders = ['content-type', 'etag', 'location', 'retry-after'];
 
 const segment = '[^/?#]+';
 // Routes refused whatever the method: administration, credentials, apps
-// themselves, and routes that would carry other requests past these rules.
+// themselves, connections' targets and credentials, and routes that would
+// carry other requests past these rules. Apps use connections by key, under
+// their workspace.
 const refused = [
+  /^\/v1\/connections(\/|$)/,
   /^\/v1\/identity(\/|$)/,
   /^\/v1\/organization(\/|$)/,
   /^\/v1\/portability(\/|$)/,
@@ -93,6 +96,9 @@ export async function send(request: BridgeRequest, fetcher: typeof fetch = fetch
     if (requestHeaders.has(name.toLowerCase()) && typeof value === 'string') headers[name.toLowerCase()] = value;
   }
   if (authenticationMode() !== 'proxy') Object.assign(headers, authorizationHeaders());
+  // Marks what an app sends, so the server applies an app's limits, such
+  // as the smaller payloads it may publish through a connection.
+  headers['papergo-app'] = '1';
   try {
     const response = await fetcher(new URL(request.url, window.location.origin), {
       method,

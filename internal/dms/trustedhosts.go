@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"papergo/internal/integration"
 	"sort"
 
 	"papergo/internal/dal/dberr"
@@ -76,35 +77,55 @@ func (s *Service) trustedHost(ctx context.Context) (func(host string) bool, erro
 	return func(host string) bool { return hosts.Trusted(list.Hosts, host) }, nil
 }
 
-// HostUse is an outside host that configured features fetch from.
+// HostUse is an outside host that configured features reach, with how
+// many uses of each feature reach it, such as integrations or connections.
 type HostUse struct {
-	Host         string `json:"host"`
-	Integrations int    `json:"integrations"`
+	Host string         `json:"host"`
+	Uses map[string]int `json:"uses"`
 }
 
-// TrustedHostUsage returns the hosts that list integrations fetch from and
-// how many use each, so administrators see what a narrower list stops. It
-// needs the organization.manage scope.
+// HostUsesIntegrations names list integrations among a host's uses.
+const HostUsesIntegrations = "integrations"
+
+// TrustedHostUsage returns the hosts that list integrations and the
+// features that report theirs reach, and how many uses each has, so
+// administrators see what a narrower list stops. It needs the
+// organization.manage scope.
 func (s *Service) TrustedHostUsage(ctx context.Context, subject string) ([]HostUse, error) {
 	if err := s.RequireScope(ctx, subject, "organization.manage"); err != nil {
 		return nil, err
 	}
-	if s.integrations == nil {
-		return []HostUse{}, nil
+	counts := map[string]map[string]int{}
+	add := func(feature, host string, n int) {
+		if host == "" || n == 0 {
+			return
+		}
+		if counts[host] == nil {
+			counts[host] = map[string]int{}
+		}
+		counts[host][feature] += n
 	}
-	rows, err := s.DAL.Integrations().List(ctx, integrations.Filter{})
-	if err != nil {
-		return nil, err
+	if s.integrations != nil {
+		rows, err := s.DAL.Integrations().List(ctx, integrations.Filter{})
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			add(HostUsesIntegrations, s.integrationHost(row), 1)
+		}
 	}
-	counts := map[string]int{}
-	for _, row := range rows {
-		if host := s.integrationHost(row); host != "" {
-			counts[host]++
+	for _, r := range s.ext.hosts {
+		hosts, err := r.report(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for host, n := range hosts {
+			add(r.feature, host, n)
 		}
 	}
 	out := make([]HostUse, 0, len(counts))
-	for host, n := range counts {
-		out = append(out, HostUse{Host: host, Integrations: n})
+	for host, uses := range counts {
+		out = append(out, HostUse{Host: host, Uses: uses})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Host < out[j].Host })
 	return out, nil
@@ -113,7 +134,7 @@ func (s *Service) TrustedHostUsage(ctx context.Context, subject string) ([]HostU
 // integrationHost is the host an integration fetches from, read from its
 // decrypted configuration; empty when it cannot be read.
 func (s *Service) integrationHost(row integrations.Integration) string {
-	plain, err := s.integrations.secrets.Decrypt(row.ContainerID, row.ConfigCiphertext)
+	plain, err := s.integrations.secrets.Decrypt(integration.PurposeListIntegration, row.ContainerID, row.ConfigCiphertext)
 	if err != nil {
 		return ""
 	}

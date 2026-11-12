@@ -21,7 +21,7 @@ export function triggerLabel(trigger: Trigger, types: SearchContentType[] = []):
     : i18n.t('workflows:trigger.withSelectedType', { event: eventLabel(trigger) });
 }
 
-const events = ['manual', 'call', 'file.added', 'file.updated', 'item.created', 'item.updated', 'item.published', 'permissions.changed', 'term.changed', 'term.merged', 'term.moved', 'task.completed'] as const;
+const events = ['manual', 'call', 'file.added', 'file.updated', 'item.created', 'item.updated', 'item.published', 'permissions.changed', 'term.changed', 'term.merged', 'term.moved', 'task.completed', 'connection.message'] as const;
 
 function eventLabel(trigger: Trigger): string {
   if (trigger.type === 'schedule') {

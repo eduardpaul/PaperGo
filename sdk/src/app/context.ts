@@ -7,6 +7,7 @@ import { client } from "../builders.js";
 import { createPaperGoClient, PaperGoClientNavigationMetadata, type PaperGoClient } from "../client/paperGoClient.js";
 import type { HostResponse } from "../host.js";
 import { Bridge, type OpenTarget, type Theme } from "./bridge.js";
+import { connections, type Connections } from "./connections.js";
 import { formatter, type Format, type Preferences } from "./format.js";
 
 export type { OpenTarget } from "./bridge.js";
@@ -69,6 +70,12 @@ export interface AppContext<P = Record<string, unknown>> {
    * parsed. A response of 400 or more throws a RequestError.
    */
   request<T = unknown>(method: string, path: string, options?: RequestOptions): Promise<Response<T>>;
+  /**
+   * The workspace's connections, by key: publishing to MQTT channels and
+   * calling HTTP channels as the viewer. useTopic, useTopics and useFetch
+   * read them in components.
+   */
+  readonly connections: Connections;
   /** Opens an item, a task or a list in PaperGo. */
   open(target: OpenTarget): void;
 }
@@ -86,7 +93,7 @@ export function appContext<P>(init: Init, bridge: Bridge): AppContext<P> {
   // Kiota's client registers the serializers; apps use the SDK's builders.
   createPaperGoClient(adapter);
   const api = client<PaperGoClient>(adapter, PaperGoClientNavigationMetadata);
-  return {
+  const ctx: AppContext<P> = {
     api,
     params: init.params as P,
     user: init.user,
@@ -112,8 +119,13 @@ export function appContext<P>(init: Init, bridge: Bridge): AppContext<P> {
       }
       return { status: response.status, headers: response.headers, data: data as T };
     },
+    get connections() {
+      return connected;
+    },
     open: (target) => bridge.open(target),
   };
+  const connected = connections(init.workspace.id, (method, path, options) => ctx.request(method, path, options));
+  return ctx;
 }
 
 /** The running app's context and bridge, for the hooks. */

@@ -33,6 +33,7 @@ psql:
     group_inboxes: []
     workflow_versions: []
     apps: []
+    connections: []
     app_versions: []
     blobs: []
     blob_leases: []

@@ -3,12 +3,15 @@ package dms
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -800,5 +803,71 @@ func TestWorkspacePackageAutomaticRulesRequireACollection(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// A feature's package part travels with a workspace package: it exports
+// its records of the workspace, has the IDs they name remapped to the
+// copy's, and imports them in the import's transaction, which a dry run
+// rolls back.
+func TestWorkspacePackageCarriesFeatureParts(t *testing.T) {
+	s, ws, list := fixture(t)
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	type record struct{ Workspace, List string }
+	var imported []record
+	part := PackagePart{
+		Name: "devices",
+		Export: func(_ context.Context, _ *Service, workspaceID string) (json.RawMessage, error) {
+			if workspaceID != ws.ID {
+				t.Errorf("exported for %q", workspaceID)
+			}
+			return json.Marshal(record{ws.ID, list.ID})
+		},
+		Remap: func(raw json.RawMessage, id func(string) (string, bool)) (json.RawMessage, error) {
+			var r record
+			if err := json.Unmarshal(raw, &r); err != nil {
+				return nil, err
+			}
+			var ok bool
+			if r.Workspace, ok = id(r.Workspace); !ok {
+				return nil, errors.New("no workspace")
+			}
+			if r.List, ok = id(r.List); !ok {
+				return nil, errors.New("no list")
+			}
+			return json.Marshal(r)
+		},
+		Import: func(_ context.Context, _ *Service, subject string, raw json.RawMessage) ([]string, error) {
+			var r record
+			if err := json.Unmarshal(raw, &r); err != nil {
+				return nil, err
+			}
+			imported = append(imported, r)
+			return []string{"Set up the devices of " + subject + "'s copy."}, nil
+		},
+	}
+	s.AddPackagePart(part)
+	noData := false
+	object, p := exportWorkspaceForTest(t, s, store, ExportOptions{WorkspaceID: ws.ID, IncludeData: &noData})
+	if string(p.Parts["devices"]) == "" {
+		t.Fatal("the part was not exported")
+	}
+	result, err := importWorkspaceForTest(t, s, store, object, false, "Copy")
+	if err != nil || !result.Valid {
+		t.Fatal(result, err)
+	}
+	if len(imported) != 1 || imported[0].Workspace != result.WorkspaceID || imported[0].Workspace == ws.ID || imported[0].List == list.ID || imported[0].List == "" {
+		t.Fatalf("imported %+v into %s", imported, result.WorkspaceID)
+	}
+	if !slices.Contains(result.Warnings, "Set up the devices of organization-admin's copy.") {
+		t.Fatalf("warnings %v", result.Warnings)
+	}
+	// A deployment that does not serve a package's part refuses it.
+	other := emptyPackageTarget(t)
+	if _, err = importWorkspaceForTest(t, other, store, object, true, ""); err == nil || !strings.Contains(err.Error(), "devices") {
+		t.Fatalf("a part nothing serves: %v", err)
 	}
 }

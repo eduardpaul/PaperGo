@@ -54,15 +54,17 @@ type portableIntegration struct {
 }
 
 type corePackage struct {
-	Scope           string                  `json:"scope"`
-	WorkspaceID     string                  `json:"workspace_id,omitempty"`
-	TemplateSubject string                  `json:"template_subject,omitempty"`
-	IncludeData     bool                    `json:"include_data"`
-	Integrations    []portableIntegration   `json:"integrations"`
-	Format          string                  `json:"format"`
-	Organization    map[string]any          `json:"organization"`
-	Tables          map[string]packageTable `json:"tables"`
-	Objects         []packageObject         `json:"objects"`
+	Scope           string                `json:"scope"`
+	WorkspaceID     string                `json:"workspace_id,omitempty"`
+	TemplateSubject string                `json:"template_subject,omitempty"`
+	IncludeData     bool                  `json:"include_data"`
+	Integrations    []portableIntegration `json:"integrations"`
+	// Parts are what features add (PackagePart), by name.
+	Parts        map[string]json.RawMessage `json:"parts,omitempty"`
+	Format       string                     `json:"format"`
+	Organization map[string]any             `json:"organization"`
+	Tables       map[string]packageTable    `json:"tables"`
+	Objects      []packageObject            `json:"objects"`
 }
 type ExportOptions struct {
 	WorkspaceID string `json:"workspace_id,omitempty"`
@@ -188,6 +190,18 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, op
 	}
 	for _, source := range sources {
 		p.Integrations = append(p.Integrations, portableIntegration{source.ContainerID, source.Kind, source.Name})
+	}
+	for _, part := range s.ext.parts {
+		raw, err := part.Export(ctx, s, options.WorkspaceID)
+		if err != nil {
+			return storage.Object{}, err
+		}
+		if raw != nil {
+			if p.Parts == nil {
+				p.Parts = map[string]json.RawMessage{}
+			}
+			p.Parts[part.Name] = raw
+		}
 	}
 	scope := portable.Scope{WorkspaceID: options.WorkspaceID, Data: p.IncludeData}
 	scanned := 0
@@ -513,6 +527,11 @@ func (s *Service) readPackage(ctx context.Context, store storage.Store, in packa
 	if p.Scope == "organization" && p.WorkspaceID != "" {
 		return imp, invalid("organization packages cannot specify workspace_id")
 	}
+	for name := range p.Parts {
+		if !slices.ContainsFunc(s.ext.parts, func(part PackagePart) bool { return part.Name == name }) {
+			return imp, invalid("the package carries " + name + ", which this deployment does not serve")
+		}
+	}
 	if p.TemplateSubject != "" && (p.Scope != "workspace" || p.IncludeData) {
 		return imp, invalid("template_subject requires a configuration-only workspace package")
 	}
@@ -708,6 +727,21 @@ func (s *Service) applyPackageImport(ctx context.Context, subject string, imp *p
 				return true, nil
 			}
 			return false, err
+		}
+		for _, part := range s.ext.parts {
+			raw, ok := p.Parts[part.Name]
+			if !ok {
+				continue
+			}
+			warnings, err := part.Import(ctx, s, subject, raw)
+			if err != nil {
+				if in.DryRun {
+					result.Errors = []string{part.Name + ": " + err.Error()}
+					return true, nil
+				}
+				return false, err
+			}
+			result.Warnings = append(result.Warnings, warnings...)
 		}
 		if err = identity.RequireScope(ctx, s.DAL, subject, "organization.manage"); err != nil {
 			return false, invalid("package must retain the importing administrator")

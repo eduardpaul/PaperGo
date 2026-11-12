@@ -6,6 +6,7 @@ import apps from '@/locales/en/apps.json';
 import archive from '@/locales/en/archive.json';
 import auth from '@/locales/en/auth.json';
 import comments from '@/locales/en/comments.json';
+import connections from '@/locales/en/connections.json';
 import common from '@/locales/en/common.json';
 import documents from '@/locales/en/documents.json';
 import errors from '@/locales/en/errors.json';
@@ -31,6 +32,7 @@ export const en = {
   auth,
   comments,
   common,
+  connections,
   documents,
   errors,
   fields,

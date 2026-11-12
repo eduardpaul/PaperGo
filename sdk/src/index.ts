@@ -58,9 +58,9 @@ export * as models from "./client/models/index.js";
 
 /**
  * When a workflow runs. Item and folder events, schedules, manual starts,
- * task events, permission changes, term changes, and events of other
- * workflows (wf.{key}.completed) are trigger types; docs/workflows.md lists
- * them with their options.
+ * task events, permission changes, term changes, events of other workflows
+ * (wf.{key}.completed) and MQTT messages (connection.message) are trigger
+ * types; docs/workflows.md lists them with their options.
  */
 export interface Trigger {
   type: string;
@@ -85,6 +85,14 @@ export interface Trigger {
   media_types?: string[];
   task_key?: string;
   actions?: string[];
+  /**
+   * What a module's trigger type takes. connection.message:
+   * `{ connection, channel, topic?, min_interval?, condition? }`, which
+   * starts a run for an MQTT message of a channel the author may see, at
+   * most once per topic every min_interval (1m by default), when
+   * condition `{ path?, op, value? }` holds of its payload.
+   */
+  options?: Record<string, unknown>;
 }
 
 /** What a start does while a run on the same item is active. */

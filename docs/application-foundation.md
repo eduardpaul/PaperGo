@@ -297,7 +297,9 @@ Requests that start an operation (bulk update, search reindex, package export an
 
 Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
 
-Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal access tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
+The `connected` frame names the stream's ID. A module can serve frames that are not stored: a client adds a subscription to its open stream with `POST /v1/events/{stream}/subscriptions`, naming the module's `source`, and the stream carries that subscription's frames, such as an MQTT channel's `connection.messages` ([connections](connections.md#api)). The stream checks each subscription's access every 30 seconds and ends one whose access was lost with an `access` frame naming it; subscriptions end with their stream and are not replayed.
+
+Streams use a separate admission pool (four per user unless `server.live_streams_per_user` says otherwise, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal access tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
 
 ## Configuration and content packages
 
