@@ -1,13 +1,16 @@
-// Package compose combines page photos into one searchable PDF: each photo
-// is turned upright, shrunk so its smallest text keeps a readable height,
-// and embedded with an invisible text layer at the positions OCR recognized.
-// It ports PaperDotNet's photo to document conversion.
+// Package compose makes files from photos, each turned upright and shrunk
+// so its smallest text keeps a readable height. PDF combines page photos
+// into one searchable PDF, with an invisible text layer at the positions OCR
+// recognized; Image makes a single photo the smaller JPEG it can be without
+// that text getting smaller. It ports PaperDotNet's photo to document
+// conversion and image storage optimization.
 package compose
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"math"
 	"slices"
@@ -17,12 +20,12 @@ import (
 	"papergo/internal/pdf"
 )
 
-// Options tune a composition.
+// Options tune a composition or an image.
 type Options struct {
 	// TargetHeight is the height in pixels the smallest text of each page
-	// keeps in the PDF, 8 to 200. Pages never grow.
+	// keeps, 8 to 200. Pages never grow.
 	TargetHeight float64 `json:"target_height"`
-	// Quality is the JPEG quality of page images, 1 to 100.
+	// Quality is the JPEG quality of the images, 1 to 100.
 	Quality int `json:"quality"`
 }
 
@@ -49,7 +52,7 @@ func (o Options) Validate() error {
 	return nil
 }
 
-// Page describes how a photo became a page.
+// Page describes how a photo became a page or an image.
 type Page struct {
 	SourceWidth  int `json:"source_width"`
 	SourceHeight int `json:"source_height"`
@@ -59,12 +62,14 @@ type Page struct {
 	// pixels; zero on a page without text, which keeps its size.
 	SmallestTextHeight float64 `json:"smallest_text_height,omitempty"`
 	Scale              float64 `json:"scale"`
-	TextLines          int     `json:"text_lines"`
+	// TextLines are the lines OCR read on a PDF page, and the reliable
+	// lines measured on an image, which reads none.
+	TextLines int `json:"text_lines"`
 	// Orientation is the EXIF orientation applied, when not 1.
 	Orientation int `json:"orientation,omitempty"`
 }
 
-// Metrics describe a composition, for reviewers and run history.
+// Metrics describe a composition or an image, for reviewers and run history.
 type Metrics struct {
 	Pages        int         `json:"pages"`
 	TextLines    int         `json:"text_lines"`
@@ -117,17 +122,44 @@ func PDF(ctx context.Context, engine ocr.Engine, w io.Writer, pages int, photo f
 	return m, nil
 }
 
-// prepare turns a photo into a PDF page: upright, flattened onto white,
-// scaled so that its smallest reliable text line is targetHeight pixels
-// high (never enlarged), with the text OCR read on the full-resolution photo
-// placed at the scaled positions.
-func prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, targetHeight float64) (pdf.Page, Page, error) {
+// Image writes a photo as the JPEG at quality that keeps its smallest
+// reliable text line targetHeight pixels high: upright, flattened onto white
+// and never enlarged. data is the encoded JPEG, PNG or WebP file, of at most
+// maxPixels.
+func Image(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, o Options) ([]byte, Metrics, error) {
+	if err := o.Validate(); err != nil {
+		return nil, Metrics{}, err
+	}
+	info := engine.Info()
+	m := Metrics{Pages: 1, SourceBytes: int64(len(data)), TargetHeight: o.TargetHeight, Quality: o.Quality, Detector: info.Engine, Models: info.Models}
+	upright, p, lines, err := fit(ctx, engine, data, maxPixels, o.TargetHeight)
+	if err != nil {
+		return nil, Metrics{}, err
+	}
+	var img image.Image = upright
+	if p.Width != p.SourceWidth || p.Height != p.SourceHeight {
+		img = imaging.Resize(upright, p.Width, p.Height)
+	}
+	out, err := imaging.EncodeJPEG(img, o.Quality)
+	if err != nil {
+		return nil, Metrics{}, err
+	}
+	p.TextLines = lines
+	m.TextLines, m.Bytes, m.PageDetails = lines, int64(len(out)), []Page{p}
+	return out, m, nil
+}
+
+// fit decodes a photo, turns it upright, flattens it onto white and works
+// out the size at which its smallest reliable text line is targetHeight
+// pixels high, never enlarged: the upright photo, its page and the number of
+// reliable lines measured.
+func fit(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, targetHeight float64) (*image.RGBA, Page, int, error) {
 	img, err := imaging.Decode(data, maxPixels)
 	if errors.Is(err, imaging.ErrAnimated) {
-		return pdf.Page{}, Page{}, errAnimated
+		return nil, Page{}, 0, errAnimated
 	}
 	if err != nil {
-		return pdf.Page{}, Page{}, err
+		return nil, Page{}, 0, err
 	}
 	upright := imaging.Flatten(img)
 	w, h := upright.Rect.Dx(), upright.Rect.Dy()
@@ -137,13 +169,25 @@ func prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int6
 	}
 	heights, err := analyze(ctx, engine, upright, minConfidence, analysisDimension)
 	if err != nil {
-		return pdf.Page{}, Page{}, err
+		return nil, Page{}, 0, err
 	}
 	if len(heights) > 0 {
 		p.SmallestTextHeight = slices.Min(heights)
 		p.Scale = sizeForText(p.SmallestTextHeight, targetHeight)
 		p.Width, p.Height = max(1, round(float64(w)*p.Scale)), max(1, round(float64(h)*p.Scale))
 	}
+	return upright, p, len(heights), nil
+}
+
+// prepare turns a photo into a PDF page: fitted to its smallest text, with
+// the text OCR read on the full-resolution photo placed at the scaled
+// positions.
+func prepare(ctx context.Context, engine ocr.Engine, data []byte, maxPixels int64, targetHeight float64) (pdf.Page, Page, error) {
+	upright, p, _, err := fit(ctx, engine, data, maxPixels, targetHeight)
+	if err != nil {
+		return pdf.Page{}, Page{}, err
+	}
+	w, h := p.SourceWidth, p.SourceHeight
 	text, err := engine.Recognize(ctx, upright)
 	if err != nil {
 		return pdf.Page{}, Page{}, fmt.Errorf("text recognition failed: %w", err)

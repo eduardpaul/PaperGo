@@ -134,6 +134,16 @@ A completed or cancelled run discards its pending staged files. A failed run kee
 
 The operation fails if a photo changes before the PDF is made; staging and promotion fail if one changes before they commit. Either way, start a new conversion. The [Photos to PDF](workflows.md#built-in-workflows) built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
 
+## Shrinking a photo
+
+`POST /v1/items/{id}/optimize-image` ports PaperDotNet's image storage optimization. It is a background operation on the item whose result is an [artifact](#artifacts-and-staged-files) with the item's current JPEG, PNG or WebP photo shrunk, with `target_height` and `quality`, as for [Photos to PDF](#photos-to-pdf):
+
+1. **Snapshot.** The item must be one the caller may write, with a JPEG, PNG or WebP file; the request records its file version.
+2. **Size.** The photo is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white, and its text lines are measured as for a PDF page. It is scaled so that its smallest line is `target_height` pixels high (default 32). It never grows; a photo without text keeps its size.
+3. **JPEG.** It is encoded as JPEG at `quality` (default 80), without the camera's metadata, and named after the photo with the `.jpg` extension. The result has its `bytes` and the `metrics` of a composition, with one page whose `text_lines` are the lines measured.
+
+Stage and promote the artifact to make it the item's file: a workflow does it before a model reads the photo, so a camera photo of several MB goes as a few hundred KB. The operation fails if the photo changes before the image is made. An identical request for the same photo reuses an unexpired artifact.
+
 ## Renaming and upload name conflicts
 
 Use an item's **Rename** action or edit its name in Details. The new content

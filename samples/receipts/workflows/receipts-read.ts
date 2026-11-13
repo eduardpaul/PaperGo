@@ -1,4 +1,5 @@
-// Reads a receipt photo: asks a model in batch mode for the store, date,
+// Reads a receipt photo: shrinks it first so its smallest text keeps a
+// readable height, asks a model in batch mode for the store, date,
 // currency, total and product lines it shows, each line with the category of
 // its product from a fixed list, files the lines in the
 // receipt's own folder of its library, each linked to the receipt, and then
@@ -58,6 +59,11 @@ const prompt = "Read this receipt photo. Return only the object described by the
   "currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers, with a dot as the decimal " +
   "separator and no thousands separator or currency symbol, whatever the receipt shows: 1234.50, not 1.234,50 or 1,234.50 EUR. One lines entry per product. " +
   "category is the kind of product, one of the listed values; Other when none fits.";
+
+// An optimized photo replaces the uploaded one only when it saves at least
+// this share of its bytes: a photo shrunk before, by this workflow or by the
+// app, is kept rather than encoded again.
+const optimizedAtMost = 0.8;
 
 // The relationship that links a receipt to each of its lines.
 const contains = "contains receipt line";
@@ -214,7 +220,8 @@ export default workflow<unknown, unknown, Params>({
     const api = ctx.api;
     // A manual start can name any item of the library. Only a receipt with
     // a photo has something to read: its current file, or, once it is kept
-    // as a PDF, the photo it was made from until its bytes are reclaimed.
+    // as a PDF, the photo it was made from until its bytes are reclaimed
+    // (the optimized one, the newest).
     const item = (await api.v1.resources.byId(id).get())!;
     const types = (await api.v1.resources.byId(ctx.params.library).contentTypes.get())!;
     const listType = (catalogType: string) => types.find((t) => t.parentId === catalogType)?.id;
@@ -234,16 +241,31 @@ export default workflow<unknown, unknown, Params>({
     let version = item.version!;
     let problem = "Not readable";
     try {
-      // The model reads the photo as it was uploaded: the app shrinks it on
-      // the phone to what the model needs.
       // An answer is cached by its request, so reading a receipt in review
       // again says why this run asks: the same request would get the answer
       // that sent it to review.
       const again = item.values?.additionalData?.receipts_status === "Needs review";
       // While it is read it waits to be read, whatever it was before.
       if (item.values?.additionalData?.receipts_status !== "New") version = await update(api, id, version, { status: "New", problem: null });
+      // The model reads the photo shrunk so its smallest text keeps 32
+      // pixels, as the PDF keeps it: whatever uploaded it, a camera photo
+      // of several MB goes to the model as a few hundred KB. It replaces the
+      // uploaded photo as the receipt's file; a file a workflow saves starts
+      // no run.
+      let read = photo.id!;
+      if (photo.isCurrent) {
+        const optimized = await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({}))!);
+        const result = plain(optimized.result) as { artifact_id: string; bytes: number };
+        const staged = (await api.v1.artifacts.byId(result.artifact_id).stage.post())!;
+        if (result.bytes <= optimizedAtMost * (photo.size ?? 0)) {
+          read = (await api.v1.stagedFiles.byId(staged.id!).promote.post({}))!.blobId!;
+          version = (await api.v1.resources.byId(id).get())!.version!;
+        } else {
+          await api.v1.stagedFiles.byId(staged.id!).discard.post();
+        }
+      }
       const answer = await ctx.wait((await api.v1.ai.completions.post({
-        prompt, itemId: id, imageBlobId: photo.id, execution: "batch", queue: "shared", outputSchema: json(schema),
+        prompt, itemId: id, imageBlobId: read, execution: "batch", queue: "shared", outputSchema: json(schema),
         input: again ? `An earlier answer could not be used; read the receipt again carefully. (${ctx.run.id})` : undefined,
       }))!);
       const receipt = readable((plain(answer.result) as { json: Receipt }).json);
@@ -274,10 +296,9 @@ export default workflow<unknown, unknown, Params>({
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }
-      // The receipt is kept as a searchable PDF of the photo: scaled so its
-      // smallest text stays legible, compressed, with its OCR text. It
-      // replaces the photo as the receipt's file; a file a workflow saves
-      // starts no run.
+      // The receipt is kept as a searchable PDF of the photo the model read,
+      // compressed, with its OCR text. It replaces the photo as the
+      // receipt's file.
       problem = "No PDF";
       if (photo.isCurrent) {
         const composed = await ctx.wait((await api.v1.items.byId(id).composePdf.post({}))!);

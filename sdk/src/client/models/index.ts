@@ -2692,6 +2692,15 @@ export function createOperationPageFromDiscriminatorValue(parseNode: ParseNode |
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {OptimizeImage}
+ */
+// @ts-ignore
+export function createOptimizeImageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoOptimizeImage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {PageList}
  */
 // @ts-ignore
@@ -6111,6 +6120,18 @@ export function deserializeIntoOperationPage(operationPage: Partial<OperationPag
 }
 /**
  * The deserialization information for the current model
+ * @param OptimizeImage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "quality": n => { optimizeImage.quality = n.getNumberValue(); },
+        "target_height": n => { optimizeImage.targetHeight = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param PageList The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -9268,6 +9289,16 @@ export interface OperationPage extends Parsable {
      * The value property
      */
     value?: Operation[] | null;
+}
+export interface OptimizeImage extends Parsable {
+    /**
+     * JPEG quality, 80 when omitted.
+     */
+    quality?: number | null;
+    /**
+     * Height in pixels the smallest text keeps, 32 when omitted; the photo never grows.
+     */
+    targetHeight?: number | null;
 }
 export interface PageList extends AdditionalDataHolder, Parsable {
     /**
@@ -12502,6 +12533,18 @@ export function serializeOperationPage(writer: SerializationWriter, operationPag
     if (!operationPage || isSerializingDerivedType) { return; }
     writer.writeStringValue("@odata.nextLink", operationPage.odataNextLink);
     writer.writeCollectionOfObjectValues<Operation>("value", operationPage.value, serializeOperation);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param OptimizeImage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeOptimizeImage(writer: SerializationWriter, optimizeImage: Partial<OptimizeImage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!optimizeImage || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("quality", optimizeImage.quality);
+    writer.writeNumberValue("target_height", optimizeImage.targetHeight);
 }
 /**
  * Serializes information the current object

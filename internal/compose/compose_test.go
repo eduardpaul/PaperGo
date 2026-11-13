@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	_ "image/jpeg"
 	"image/png"
 	"os"
 	"os/exec"
@@ -105,6 +106,39 @@ func TestPagesScaleToTheSmallestTextAndKeepTheirOrder(t *testing.T) {
 		if !strings.Contains(text[i], want) {
 			t.Errorf("page %d text %q, want %q", i+1, text[i], want)
 		}
+	}
+}
+
+func TestImageShrinksToTheSmallestText(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		height int
+		want   Page
+	}{
+		// 64-pixel text halves the photo; without text, or with 16-pixel
+		// text, it keeps its size: images never grow.
+		{"large text", 64, Page{SourceWidth: 1000, SourceHeight: 800, Width: 500, Height: 400, SmallestTextHeight: 64, Scale: 0.5, TextLines: 1}},
+		{"no text", 0, Page{SourceWidth: 1000, SourceHeight: 800, Width: 1000, Height: 800, Scale: 1}},
+		{"small text", 16, Page{SourceWidth: 1000, SourceHeight: 800, Width: 1000, Height: 800, SmallestTextHeight: 16, Scale: 1, TextLines: 1}},
+	} {
+		src := photo(t, 1000, 800)
+		out, m, err := Image(context.Background(), fake{height: c.height}, src, 64e6, Defaults)
+		if err != nil {
+			t.Fatal(c.name, err)
+		}
+		if len(m.PageDetails) != 1 || m.PageDetails[0] != c.want || m.Pages != 1 || m.Bytes != int64(len(out)) || m.SourceBytes != int64(len(src)) || m.Quality != Defaults.Quality {
+			t.Fatalf("%s: metrics %+v", c.name, m)
+		}
+		cfg, format, err := image.DecodeConfig(bytes.NewReader(out))
+		if err != nil || format != "jpeg" || cfg.Width != c.want.Width || cfg.Height != c.want.Height {
+			t.Errorf("%s: %s %dx%d %v", c.name, format, cfg.Width, cfg.Height, err)
+		}
+	}
+	if _, _, err := Image(context.Background(), fake{}, []byte("%PDF-1.7"), 64e6, Defaults); err == nil {
+		t.Error("a PDF is accepted")
+	}
+	if _, _, err := Image(context.Background(), fake{}, photo(t, 10, 10), 64e6, Options{TargetHeight: 32, Quality: 0}); err == nil {
+		t.Error("quality 0 is accepted")
 	}
 }
 

@@ -1,6 +1,7 @@
 // Package documentfiles makes new files from items' files:
-// POST /v1/items/{id}/compose-pdf combines photos into one searchable PDF.
-// It is an operation whose result is an artifact, kept for reuse by
+// POST /v1/items/{id}/compose-pdf combines photos into one searchable PDF,
+// and POST /v1/items/{id}/optimize-image shrinks a photo to its smallest
+// text. Each is an operation whose result is an artifact, kept for reuse by
 // identical requests whoever asks. A consumer stages an artifact with
 // POST /v1/artifacts/{id}/stage to review it; POST
 // /v1/staged-files/{id}/promote makes it the item's file and POST
@@ -36,15 +37,19 @@ import (
 	"papergo/internal/transfer"
 )
 
-// KindCompose is the operation kind.
-const KindCompose = "document.compose_pdf"
+// The operation kinds.
+const (
+	KindCompose  = "document.compose_pdf"
+	KindOptimize = "document.optimize_image"
+)
 
 var (
-	// ErrNoOCR refuses composition in a deployment without an OCR engine.
-	ErrNoOCR = errors.New("photos to PDF needs OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
-	// errPhotoChanged fails a composition whose photos changed: the
-	// reviewed PDF must show the photos as they are.
-	errPhotoChanged = errors.New("a photo changed after the composition started; start a new one")
+	// ErrNoOCR refuses composition or optimization in a deployment without
+	// an OCR engine.
+	ErrNoOCR = errors.New("photos to PDF and image optimization need OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
+	// errPhotoChanged fails a file made from photos that changed: the
+	// reviewed file must show the photos as they are.
+	errPhotoChanged = errors.New("a photo changed after the operation started; start a new one")
 )
 
 // Maker makes files with the deployment's OCR engine.
@@ -57,9 +62,12 @@ type Maker struct {
 	MaxFileBytes int64
 }
 
-// Register makes s run the operation.
+// Register makes s run the operations.
 func (m *Maker) Register(s *dms.Service) error {
-	return s.RegisterOperationHandler(KindCompose, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: m.compose})
+	if err := s.RegisterOperationHandler(KindCompose, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: m.compose}); err != nil {
+		return err
+	}
+	return s.RegisterOperationHandler(KindOptimize, dms.OperationHandler{Scope: "document.write", Validate: validate, Execute: m.optimize})
 }
 
 // Module serves the routes.
@@ -72,6 +80,7 @@ func (module) Name() string { return "documentfiles" }
 func (h module) Routes() []httpapi.Route {
 	return []httpapi.Route{
 		{Method: http.MethodPost, Pattern: "/v1/items/{id}/compose-pdf", OperationID: "composeItemPDF", Handle: h.compose},
+		{Method: http.MethodPost, Pattern: "/v1/items/{id}/optimize-image", OperationID: "optimizeItemImage", Handle: h.optimizeImage},
 		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}", OperationID: "getArtifact", Handle: h.getArtifact},
 		{Method: http.MethodGet, Pattern: "/v1/artifacts/{id}/content", OperationID: "getArtifactContent", Handle: h.artifactContent},
 		{Method: http.MethodPost, Pattern: "/v1/artifacts/{id}/stage", OperationID: "stageArtifact", Handle: h.stage},
@@ -82,7 +91,8 @@ func (h module) Routes() []httpapi.Route {
 }
 
 // job is an operation's payload: the item, the file versions its file is
-// made from, the item's first, and the key identical requests share.
+// made from (one for an optimized image), and the key identical requests
+// share.
 type job struct {
 	ItemID   string          `json:"item_id"`
 	InputKey string          `json:"input_key"`
@@ -111,6 +121,19 @@ func (h module) compose(w http.ResponseWriter, r *http.Request, in httpapi.Reque
 	return nil
 }
 
+func (h module) optimizeImage(w http.ResponseWriter, r *http.Request, in httpapi.Request) error {
+	var request OptimizeRequest
+	if r.ContentLength != 0 && !in.Decode(w, r, &request) {
+		return nil
+	}
+	op, err := h.m.StartOptimize(r.Context(), in.DMS, in.Subject, r.PathValue("id"), request)
+	if err != nil {
+		return err
+	}
+	httpapi.Accepted(w, r, op)
+	return nil
+}
+
 // ComposeRequest names the photos to combine, in page order, and tunes the
 // PDF; zero values take the defaults.
 type ComposeRequest struct {
@@ -132,13 +155,23 @@ type ComposeResult struct {
 	Metrics    compose.Metrics `json:"metrics"`
 }
 
-// StartCompose combines the current files of photo items of the item's
-// list or library into one PDF for the item, as subject, who needs write
-// access to every photo.
-func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemID string, in ComposeRequest) (*dms.OperationView, error) {
-	if m.OCR == nil {
-		return nil, dms.Invalid(ErrNoOCR.Error())
-	}
+// OptimizeRequest tunes an optimized image; zero values take the defaults.
+type OptimizeRequest struct {
+	compose.Options
+}
+
+// OptimizeResult is a finished optimization's result: the JPEG artifact.
+// Reused says an identical request made it.
+type OptimizeResult struct {
+	ArtifactID string          `json:"artifact_id"`
+	Reused     bool            `json:"reused,omitempty"`
+	ItemID     string          `json:"item_id"`
+	Bytes      int64           `json:"bytes"`
+	Metrics    compose.Metrics `json:"metrics"`
+}
+
+// options are the request's options over the defaults.
+func options(in compose.Options) (compose.Options, error) {
 	o := compose.Defaults
 	if in.TargetHeight != 0 {
 		o.TargetHeight = in.TargetHeight
@@ -147,7 +180,61 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemI
 		o.Quality = in.Quality
 	}
 	if err := o.Validate(); err != nil {
-		return nil, dms.Invalid(err.Error())
+		return o, dms.Invalid(err.Error())
+	}
+	return o, nil
+}
+
+// photo is the current file of an item subject may write, which must be a
+// JPEG, PNG or WebP photo.
+func photo(ctx context.Context, s *dms.Service, subject, id string) (file, error) {
+	b, err := s.CurrentFile(ctx, subject, id)
+	if err != nil {
+		return file{}, err
+	}
+	switch b.ContentType {
+	case "image/jpeg", "image/png", "image/webp":
+	default:
+		return file{}, dms.Invalid(b.Filename + " is not a JPEG, PNG or WebP photo")
+	}
+	return file{ItemID: id, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename}, nil
+}
+
+// StartOptimize shrinks the item's current photo so its smallest text keeps
+// the target height, as a JPEG artifact for the item, as subject, who needs
+// write access to the item.
+func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, itemID string, in OptimizeRequest) (*dms.OperationView, error) {
+	if m.OCR == nil {
+		return nil, dms.Invalid(ErrNoOCR.Error())
+	}
+	o, err := options(in.Options)
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.Authorize(ctx, subject, itemID, "write")
+	if err != nil {
+		return nil, err
+	}
+	if r.Kind != "item" {
+		return nil, dms.Invalid("only an item's photo can be optimized")
+	}
+	f, err := photo(ctx, s, subject, itemID)
+	if err != nil {
+		return nil, err
+	}
+	return start(ctx, s, subject, KindOptimize, job{ItemID: itemID, Compose: o, Files: []file{f}})
+}
+
+// StartCompose combines the current files of photo items of the item's
+// list or library into one PDF for the item, as subject, who needs write
+// access to every photo.
+func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemID string, in ComposeRequest) (*dms.OperationView, error) {
+	if m.OCR == nil {
+		return nil, dms.Invalid(ErrNoOCR.Error())
+	}
+	o, err := options(in.Options)
+	if err != nil {
+		return nil, err
 	}
 	ids := in.ItemIDs
 	if len(ids) == 0 {
@@ -174,25 +261,20 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemI
 		if r.Kind != "item" || r.ContainerID == nil || primary.ContainerID == nil || *r.ContainerID != *primary.ContainerID {
 			return nil, dms.Invalid("every photo must be an item of the item's list or library")
 		}
-		b, err := s.CurrentFile(ctx, subject, id)
+		f, err := photo(ctx, s, subject, id)
 		if err != nil {
 			return nil, err
 		}
-		switch b.ContentType {
-		case "image/jpeg", "image/png", "image/webp":
-		default:
-			return nil, dms.Invalid(b.Filename + " is not a JPEG, PNG or WebP photo")
-		}
-		j.Files = append(j.Files, file{ItemID: id, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename})
+		j.Files = append(j.Files, f)
 	}
 	if !seen[itemID] {
 		return nil, dms.Invalid("item_ids must include the item")
 	}
-	return start(ctx, s, subject, j)
+	return start(ctx, s, subject, KindCompose, j)
 }
 
-func start(ctx context.Context, s *dms.Service, subject string, j job) (*dms.OperationView, error) {
-	j.InputKey = inputKey(j)
+func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*dms.OperationView, error) {
+	j.InputKey = inputKey(kind, j)
 	payload, err := json.Marshal(j)
 	if err != nil {
 		return nil, err
@@ -204,7 +286,7 @@ func start(ctx context.Context, s *dms.Service, subject string, j job) (*dms.Ope
 	var out *dms.OperationView
 	err = s.Write(ctx, func(t *dms.Service) error {
 		var err error
-		if out, err = t.EnqueueOperation(ctx, subject, j.ItemID, KindCompose, payload); err != nil || out.Replayed {
+		if out, err = t.EnqueueOperation(ctx, subject, j.ItemID, kind, payload); err != nil || out.Replayed {
 			return err
 		}
 		return t.LeaseOperationBlobs(ctx, out.ID, blobs)
@@ -212,12 +294,12 @@ func start(ctx context.Context, s *dms.Service, subject string, j job) (*dms.Ope
 	return out, err
 }
 
-// inputKey identifies what a PDF is made from and how: the operation kind,
+// inputKey identifies what a file is made from and how: the operation kind,
 // the item, the source file versions in order and the options.
-func inputKey(j job) string {
+func inputKey(kind string, j job) string {
 	h := sha256.New()
 	enc := json.NewEncoder(h)
-	_ = enc.Encode([]any{KindCompose, j.ItemID, j.Compose})
+	_ = enc.Encode([]any{kind, j.ItemID, j.Compose})
 	for _, f := range j.Files {
 		_ = enc.Encode([]string{f.ItemID, f.BlobID})
 	}
@@ -308,6 +390,63 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 	return s.Write(ctx, func(t *dms.Service) error {
 		a, err := t.AddArtifact(ctx, op.CreatedBy, dms.ArtifactInput{ItemID: j.ItemID, OperationID: op.ID, InputKey: j.InputKey, Sources: sources,
 			ObjectKey: obj.Key, Filename: name, ContentType: "application/pdf", Size: obj.Size, SHA256: obj.SHA256, Metrics: raw})
+		if errors.Is(err, dms.ErrConflict) {
+			return errPhotoChanged
+		}
+		if err != nil {
+			return err
+		}
+		res.ArtifactID = a.ID
+		return save(ctx, t, op, res)
+	})
+}
+
+// optimize shrinks the photo outside the writer and keeps the JPEG as an
+// artifact.
+func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Operation) error {
+	var j job
+	if err := json.Unmarshal(op.Payload, &j); err != nil {
+		return err
+	}
+	if len(j.Files) != 1 {
+		return errors.New("an optimized image is made from one photo")
+	}
+	if a, err := s.ReusableArtifact(ctx, j.ItemID, j.InputKey); err != nil || a != nil {
+		if err != nil {
+			return err
+		}
+		res := OptimizeResult{ArtifactID: a.ID, Reused: true, ItemID: j.ItemID, Bytes: a.Size}
+		if err = json.Unmarshal(a.Metrics, &res.Metrics); err != nil {
+			return err
+		}
+		return finish(ctx, s, op, res)
+	}
+	if m.OCR == nil {
+		return ErrNoOCR
+	}
+	f := j.Files[0]
+	data, err := m.read(ctx, f.ObjectKey)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", f.Filename, err)
+	}
+	out, metrics, err := compose.Image(ctx, m.OCR, data, m.maxPixels(), j.Compose)
+	if err != nil {
+		return fmt.Errorf("optimize image: %w", err)
+	}
+	obj, err := m.store(ctx, out)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(metrics)
+	if err != nil {
+		return err
+	}
+	res := OptimizeResult{ItemID: j.ItemID, Bytes: obj.Size, Metrics: metrics}
+	name := strings.TrimSuffix(f.Filename, path.Ext(f.Filename)) + ".jpg"
+	return s.Write(ctx, func(t *dms.Service) error {
+		a, err := t.AddArtifact(ctx, op.CreatedBy, dms.ArtifactInput{ItemID: j.ItemID, OperationID: op.ID, InputKey: j.InputKey,
+			Sources:   []model.ArtifactSource{{ItemID: f.ItemID, BlobID: f.BlobID}},
+			ObjectKey: obj.Key, Filename: name, ContentType: "image/jpeg", Size: obj.Size, SHA256: obj.SHA256, Metrics: raw})
 		if errors.Is(err, dms.ErrConflict) {
 			return errPhotoChanged
 		}

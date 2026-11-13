@@ -125,7 +125,7 @@ PaperGo provides collection recycle bins, restoration and permanent purge, confi
 | Fixed promoted numeric slots using double | Preserve int64 integers and scaled decimal units. Approximate numeric indexes are inappropriate for exact money/integer comparisons. |
 | Ten promoted slots per scalar category | Keep flexible typed FieldValue rows initially. Benchmark representative workloads before introducing bounded hot-field columns. |
 | Mutable reusable content types and configurable version pruning | Keep frozen effective schemas and immutable retained history. Add explicit schema adoption and retention policy. |
-| Image storage optimization: page images shrunk until their smallest text reaches a target height, then re-encoded as WebP | Not ported. PaperGo keeps uploaded images as they are and encodes no WebP. Its photos to PDF conversion uses the same text-height analysis to scale the pages of a searchable PDF. |
+| Image storage optimization: page images shrunk until their smallest text reaches a target height, then re-encoded as WebP | Ported as [Shrinking a photo](documents.md#shrinking-a-photo), on request: a photo shrunk to its smallest text, as JPEG rather than WebP, is an artifact a workflow or a person promotes to the item's file. PaperGo keeps uploads as they are until then. |
 | Multi-tenant platform and PostgreSQL-specific optimizations | Keep the agreed one-organization SQLite deployment. Preserve adapter boundaries for a later measured migration. |
 | Complete workflow, identity server, semantic search, and application modules | Defer until demanded by actual applications. Build durable events and stable extension contracts first. |
 

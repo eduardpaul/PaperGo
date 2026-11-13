@@ -21726,6 +21726,122 @@
         }
       }
     },
+    "/v1/items/{id}/optimize-image": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "optimizeItemImage",
+        "summary": "Shrink a photo to its smallest text",
+        "description": "Shrinks the item's current photo, as a JPEG artifact for the item: turned upright, flattened onto white and scaled so its smallest reliable text line keeps target_height, never enlarged, like a page of compose-pdf. Stage and promote the artifact to make it the item's file, before reading the photo with a model or composing a PDF of it. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.",
+        "x-required-scopes": [
+          "document.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeImage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An Idempotency-Key returned the operation this request accepted earlier.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The operation, at /v1/operations/{id}."
+              },
+              "Idempotent-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued operation. Follow Location; its result is an OptimizeImageResult.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "description": "Too many pending operations for the caller, the workspace or the installation (code operation_quota). Nothing was accepted; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/staged-files/{id}/promote": {
       "post": {
         "tags": [
@@ -35668,6 +35784,53 @@
           "item_id",
           "others",
           "pages",
+          "bytes"
+        ],
+        "additionalProperties": false
+      },
+      "OptimizeImage": {
+        "type": "object",
+        "properties": {
+          "target_height": {
+            "type": "number",
+            "minimum": 8,
+            "maximum": 200,
+            "description": "Height in pixels the smallest text keeps, 32 when omitted; the photo never grows."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "JPEG quality, 80 when omitted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OptimizeImageResult": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "description": "The JPEG, as an artifact to stage."
+          },
+          "reused": {
+            "type": "boolean",
+            "description": "An identical request made the artifact."
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "artifact_id",
+          "item_id",
           "bytes"
         ],
         "additionalProperties": false

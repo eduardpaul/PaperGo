@@ -189,7 +189,7 @@ func documentsFeature(text *documenttext.Reader, files *documentfiles.Maker) fea
 			return files.Register(s)
 		},
 		modules: []httpapi.Module{text.Module(), files.Module()},
-		workers: []worker.Definition{{Name: "documents", Kinds: []string{documenttext.Kind, documentfiles.KindCompose}}},
+		workers: []worker.Definition{{Name: "documents", Kinds: []string{documenttext.Kind, documentfiles.KindCompose, documentfiles.KindOptimize}}},
 	}
 }
 

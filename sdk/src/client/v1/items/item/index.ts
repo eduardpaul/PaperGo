@@ -16,6 +16,8 @@ import { MentionableRequestBuilderRequestsMetadata, type MentionableRequestBuild
 // @ts-ignore
 import { MoveRequestBuilderRequestsMetadata, type MoveRequestBuilder } from './move/index.js';
 // @ts-ignore
+import { OptimizeImageRequestBuilderRequestsMetadata, type OptimizeImageRequestBuilder } from './optimizeImage/index.js';
+// @ts-ignore
 import { PagesRequestBuilderNavigationMetadata, PagesRequestBuilderRequestsMetadata, type PagesRequestBuilder } from './pages/index.js';
 // @ts-ignore
 import { PreviewRequestBuilderRequestsMetadata, type PreviewRequestBuilder } from './preview/index.js';
@@ -72,6 +74,10 @@ export interface ItemsItemRequestBuilder extends BaseRequestBuilder<ItemsItemReq
      * The move property
      */
     get move(): MoveRequestBuilder;
+    /**
+     * The optimizeImage property
+     */
+    get optimizeImage(): OptimizeImageRequestBuilder;
     /**
      * The pages property
      */
@@ -146,6 +152,9 @@ export const ItemsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof Ite
     },
     move: {
         requestsMetadata: MoveRequestBuilderRequestsMetadata,
+    },
+    optimizeImage: {
+        requestsMetadata: OptimizeImageRequestBuilderRequestsMetadata,
     },
     pages: {
         requestsMetadata: PagesRequestBuilderRequestsMetadata,
