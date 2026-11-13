@@ -21616,8 +21616,8 @@
           "Documents"
         ],
         "operationId": "composeItemPDF",
-        "summary": "Combine photos into one searchable PDF",
-        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.",
+        "summary": "Combine photos into one PDF",
+        "description": "Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright, flattened onto white, sized and colored by the options, and, with text_layer, carries the text OCR recognizes invisibly so it can be searched. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -21732,8 +21732,8 @@
           "Documents"
         ],
         "operationId": "optimizeItemImage",
-        "summary": "Shrink a photo to its smallest text",
-        "description": "Shrinks the item's current photo, as a JPEG artifact for the item: turned upright, flattened onto white and scaled so its smallest reliable text line keeps target_height, never enlarged, like a page of compose-pdf. Stage and promote the artifact to make it the item's file, before reading the photo with a model or composing a PDF of it. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.",
+        "summary": "Make a photo a sized JPEG",
+        "description": "Makes the item's current photo a JPEG artifact for the item: turned upright, flattened onto white, without the camera's metadata, sized and colored by the options. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. Stage and promote the artifact to make it the item's file. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.",
         "x-required-scopes": [
           "document.write"
         ],
@@ -35733,17 +35733,53 @@
             },
             "description": "The photo items in page order, the item among them; the item alone when omitted."
           },
-          "target_height": {
+          "text_height": {
             "type": "number",
             "minimum": 8,
             "maximum": 200,
-            "description": "Height in pixels the smallest text of each page keeps, 32 when omitted; pages never grow."
+            "description": "Height in pixels the smallest reliable text line keeps, measured by OCR; omitted, the text does not size the photo. Needs OCR."
+          },
+          "max_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Largest width in pixels."
+          },
+          "max_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Largest height in pixels."
+          },
+          "min_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Width in pixels shrinking stops at, unless a maximum or the photo is smaller."
+          },
+          "min_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Height in pixels shrinking stops at, unless a maximum or the photo is smaller."
           },
           "quality": {
             "type": "integer",
             "minimum": 1,
             "maximum": 100,
             "description": "JPEG quality, 80 when omitted."
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "rgb",
+              "gray"
+            ],
+            "description": "rgb (when omitted) keeps the color; gray keeps 8-bit gray."
+          },
+          "text_layer": {
+            "type": "boolean",
+            "description": "Put the text OCR recognizes on each page in the PDF, invisible, so it can be searched; true when omitted. Needs OCR."
           }
         },
         "additionalProperties": false
@@ -35791,17 +35827,49 @@
       "OptimizeImage": {
         "type": "object",
         "properties": {
-          "target_height": {
+          "text_height": {
             "type": "number",
             "minimum": 8,
             "maximum": 200,
-            "description": "Height in pixels the smallest text keeps, 32 when omitted; the photo never grows."
+            "description": "Height in pixels the smallest reliable text line keeps, measured by OCR; omitted, the text does not size the photo. Needs OCR."
+          },
+          "max_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Largest width in pixels."
+          },
+          "max_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Largest height in pixels."
+          },
+          "min_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Width in pixels shrinking stops at, unless a maximum or the photo is smaller."
+          },
+          "min_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Height in pixels shrinking stops at, unless a maximum or the photo is smaller."
           },
           "quality": {
             "type": "integer",
             "minimum": 1,
             "maximum": 100,
             "description": "JPEG quality, 80 when omitted."
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "rgb",
+              "gray"
+            ],
+            "description": "rgb (when omitted) keeps the color; gray keeps 8-bit gray."
           }
         },
         "additionalProperties": false

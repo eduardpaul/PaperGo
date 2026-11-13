@@ -56,10 +56,19 @@ func TestRoutesOutsideRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/compose-pdf", "/optimize-image"} {
-		if res := call("POST", "/v1/items/"+item.ID+path, ""); res.Code != 422 || !strings.Contains(res.Body.String(), "need OCR") {
-			t.Fatal(path, res.Code, res.Body.String())
+	// A text height or a text layer (a PDF's default) needs OCR.
+	for _, c := range []struct{ path, body string }{
+		{"/compose-pdf", ""},
+		{"/compose-pdf", `{"text_layer":false,"text_height":32}`},
+		{"/optimize-image", `{"text_height":32}`},
+	} {
+		if res := call("POST", "/v1/items/"+item.ID+c.path, c.body, "Content-Type", "application/json"); res.Code != 422 || !strings.Contains(res.Body.String(), "need OCR") {
+			t.Fatal(c.path, c.body, res.Code, res.Body.String())
 		}
+	}
+	// Options are checked before the photo: an item without one is not looked at.
+	if res := call("POST", "/v1/items/"+item.ID+"/optimize-image", `{"color":"cmyk"}`, "Content-Type", "application/json"); res.Code != 422 || !strings.Contains(res.Body.String(), "invalid color") {
+		t.Fatal(res.Code, res.Body.String())
 	}
 	for _, path := range []string{"/v1/artifacts/x/stage", "/v1/staged-files/x/promote", "/v1/staged-files/x/discard"} {
 		if res := call("POST", path, ""); res.Code != 404 {

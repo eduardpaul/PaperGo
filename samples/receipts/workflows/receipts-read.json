@@ -6,6 +6,10 @@
   "parameters": {
     "library": "$collection:receipts",
     "receipt_type": "$type:receipts_receipt",
+    "read_text_height": "$setting:read_text_height",
+    "read_quality": "$setting:read_quality",
+    "pdf_color": "$setting:pdf_color",
+    "pdf_quality": "$setting:pdf_quality",
     "line_type": "$type:receipts_line"
   },
   "automatic_enabled": true,

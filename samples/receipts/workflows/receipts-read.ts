@@ -14,6 +14,13 @@ interface Params {
   library: string;
   receipt_type: string;
   line_type: string;
+  // The photo the model reads: shrunk so its smallest text is
+  // read_text_height pixels high, as a JPEG of read_quality.
+  read_text_height: number;
+  read_quality: number;
+  // The PDF the receipt is kept as, made from that photo at its size.
+  pdf_color: "rgb" | "gray";
+  pdf_quality: number;
 }
 
 // The kinds of product a line is filed under: the choices of the line's
@@ -247,14 +254,17 @@ export default workflow<unknown, unknown, Params>({
       const again = item.values?.additionalData?.receipts_status === "Needs review";
       // While it is read it waits to be read, whatever it was before.
       if (item.values?.additionalData?.receipts_status !== "New") version = await update(api, id, version, { status: "New", problem: null });
-      // The model reads the photo shrunk so its smallest text keeps 32
-      // pixels, as the PDF keeps it: whatever uploaded it, a camera photo
-      // of several MB goes to the model as a few hundred KB. It replaces the
-      // uploaded photo as the receipt's file; a file a workflow saves starts
-      // no run.
+      // The model reads the photo shrunk so its smallest text is
+      // read_text_height pixels high, in color: whatever uploaded it, a
+      // camera photo of several MB goes to the model as a few hundred KB. It
+      // replaces the uploaded photo as the receipt's file; a file a workflow
+      // saves starts no run.
+      const p = ctx.params;
       let read = photo.id!;
       if (photo.isCurrent) {
-        const optimized = await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({}))!);
+        const optimized = await ctx.wait((await api.v1.items.byId(id).optimizeImage.post({
+          textHeight: p.read_text_height, quality: p.read_quality,
+        }))!);
         const result = plain(optimized.result) as { artifact_id: string; bytes: number };
         const staged = (await api.v1.artifacts.byId(result.artifact_id).stage.post())!;
         if (result.bytes <= optimizedAtMost * (photo.size ?? 0)) {
@@ -296,12 +306,14 @@ export default workflow<unknown, unknown, Params>({
         });
         await api.v1.items.byId(id).relationships.post({ type: contains, directed: true, targetId: created!.id });
       }
-      // The receipt is kept as a searchable PDF of the photo the model read,
-      // compressed, with its OCR text. It replaces the photo as the
-      // receipt's file.
+      // The receipt is kept as a PDF of the photo the model read, at its
+      // size, in pdf_color, with its OCR text so it can be searched. It
+      // replaces the photo as the receipt's file.
       problem = "No PDF";
       if (photo.isCurrent) {
-        const composed = await ctx.wait((await api.v1.items.byId(id).composePdf.post({}))!);
+        const composed = await ctx.wait((await api.v1.items.byId(id).composePdf.post({
+          color: p.pdf_color, quality: p.pdf_quality, textLayer: true,
+        }))!);
         const artifact = (plain(composed.result) as { artifact_id: string }).artifact_id;
         const staged = (await api.v1.artifacts.byId(artifact).stage.post())!;
         await api.v1.stagedFiles.byId(staged.id!).promote.post({});

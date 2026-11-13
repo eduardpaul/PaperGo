@@ -8,6 +8,7 @@ interface Params {
   collection: string;
   target_height: number;
   quality: number;
+  color: "rgb" | "gray";
   approvers?: string[];
 }
 
@@ -28,7 +29,7 @@ export default workflow<unknown, unknown, Params>({
     const p = ctx.params;
     const id = ctx.itemId!;
     const composed = await ctx.wait((await ctx.api.v1.items.byId(id).composePdf.post({
-      itemIds: ctx.run.items, targetHeight: p.target_height, quality: p.quality,
+      itemIds: ctx.run.items, textHeight: p.target_height, quality: p.quality, color: p.color,
     }))!);
     const result = plain(composed.result) as { artifact_id: string };
     const staged = (await ctx.api.v1.artifacts.byId(result.artifact_id).stage.post())!;

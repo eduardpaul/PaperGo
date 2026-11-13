@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface ComposePdfRequestBuilder extends BaseRequestBuilder<ComposePdfRequestBuilder> {
     /**
-     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
+     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright, flattened onto white, sized and colored by the options, and, with text_layer, carries the text OCR recognizes invisibly so it can be searched. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
@@ -25,7 +25,7 @@ export interface ComposePdfRequestBuilder extends BaseRequestBuilder<ComposePdfR
      */
      post(body: ComposePDF, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright and shrunk so its smallest text keeps target_height, and OCR places the recognized text invisibly on it. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
+     * Combines the current files of photo items of the item's list or library into one PDF in page order, as an artifact for the item. Each page is turned upright, flattened onto white, sized and colored by the options, and, with text_layer, carries the text OCR recognizes invisibly so it can be searched. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. An identical request for the same photos reuses an unexpired artifact (reused). The operation fails when a photo changes before the PDF is made. Requires write access to every photo.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}

@@ -97,6 +97,29 @@ func TestWriteStructureAndImageEncoding(t *testing.T) {
 	}
 }
 
+// Gray pages are embedded in gray, losslessly or as JPEG.
+func TestWriteGrayImages(t *testing.T) {
+	noise := image.NewGray(image.Rect(0, 0, 150, 100))
+	seed := uint32(5)
+	for i := range noise.Pix {
+		seed = seed*1664525 + 1013904223
+		noise.Pix[i] = byte(seed >> 24)
+	}
+	white := image.NewGray(image.Rect(0, 0, 300, 200))
+	for i := range white.Pix {
+		white.Pix[i] = 255
+	}
+	s := string(write(t, []Page{{Image: white}, {Image: noise}}))
+	for _, want := range []string{
+		"/Width 300 /Height 200 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode",
+		"/Width 150 /Height 100 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /DCTDecode",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
+
 func TestWriteRejectsInvalidInput(t *testing.T) {
 	var buf bytes.Buffer
 	for name, c := range map[string]struct {

@@ -123,26 +123,36 @@ A completed or cancelled run discards its pending staged files. A failed run kee
 
 `POST /v1/items/{id}/content/reclaim` with a `blob_id` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a pending staged file's artifact (or a file it was made from), or a byte lease held by an operation defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). Asking again for a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs.
 
+## Sizing and coloring photos
+
+[Photos to PDF](#photos-to-pdf) and [a photo as JPEG](#a-photo-as-jpeg) treat each photo the same way, with the same options. The photo is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white, then sized and colored. Every sizing option is off when omitted, and photos never grow:
+
+| Option | Meaning |
+| --- | --- |
+| `text_height` | The height in pixels, 8 to 200, the smallest reliable text line keeps. A copy at most 2600 pixels long goes to the OCR detector; lines that score at least 50, are at least 6 analysis pixels high and at least 1.5 times as long as high count, each as high as its shortest side, projected back to the photo's pixels. A photo without such text is not sized by it. Needs OCR |
+| `max_width`, `max_height` | The largest size in pixels |
+| `min_width`, `min_height` | The size in pixels shrinking stops at, unless a maximum or the photo itself is smaller |
+| `color` | `rgb` (default) keeps the color; `gray` keeps 8-bit gray, which makes files smaller |
+| `quality` | The JPEG quality, 1 to 100 (default 80) |
+
+The size is the one that keeps the smallest text `text_height` high, within the maximums, and at least the minimums: a maximum wins over a minimum. Unlike PaperDotNet, nothing is enlarged. The result's `metrics` repeat the options and describe each page: its source and final size, `scale`, `smallest_text_height`, `measured_lines` (the lines measured for `text_height`), `text_lines` (the lines of a PDF's text layer) and the EXIF `orientation` applied.
+
 ## Photos to PDF
 
-`POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item whose result is an [artifact](#artifacts-and-staged-files), with `item_ids` (the photos in page order, the item among them), `target_height` and `quality`:
+`POST /v1/items/{id}/compose-pdf` ports PaperDotNet's photo to document conversion. It is a background operation on the primary item whose result is an [artifact](#artifacts-and-staged-files), with `item_ids` (the photos in page order, the item among them), the [sizing and color options](#sizing-and-coloring-photos) and `text_layer`:
 
 1. **Snapshot.** Every item must be an item of the primary item's library that the caller may write, with a JPEG, PNG or WebP file. The request records each file version; at most 100 photos.
-2. **Pages.** Each photo, in order, is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white. A copy at most 2600 pixels long goes to the OCR detector. Text lines that score at least 50, are at least 6 analysis pixels high and at least 1.5 times as long as high count; each line's height is its shortest side, projected back to the photo's pixels. The page is scaled so that its smallest line is `target_height` pixels high (default 32). Unlike PaperDotNet, pages never grow; a page without text keeps its size.
-3. **Text.** OCR reads the full-resolution photo. Each line is placed, invisible, at its position on the scaled page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script.
-4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is an artifact for the primary item, named after its file, with the other items as `others`.
+2. **Pages.** Each photo, in order, is sized and colored by the options.
+3. **Text.** With `text_layer` (the default), OCR reads the full-resolution photo and each line is placed, invisible, at its position on the sized page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script. Without it, and without `text_height`, the PDF needs no OCR.
+4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality`, or losslessly when that is smaller, in RGB or gray. The PDF is an artifact for the primary item, named after its file, with the other items as `others`.
 
 The operation fails if a photo changes before the PDF is made; staging and promotion fail if one changes before they commit. Either way, start a new conversion. The [Photos to PDF](workflows.md#built-in-workflows) built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
 
-## Shrinking a photo
+## A photo as JPEG
 
-`POST /v1/items/{id}/optimize-image` ports PaperDotNet's image storage optimization. It is a background operation on the item whose result is an [artifact](#artifacts-and-staged-files) with the item's current JPEG, PNG or WebP photo shrunk, with `target_height` and `quality`, as for [Photos to PDF](#photos-to-pdf):
+`POST /v1/items/{id}/optimize-image` ports PaperDotNet's image storage optimization. It is a background operation on the item whose result is an [artifact](#artifacts-and-staged-files): the item's current JPEG, PNG or WebP photo, [sized and colored](#sizing-and-coloring-photos) by the options, as a JPEG at `quality` without the camera's metadata, named after the photo with the `.jpg` extension. The result has its `bytes` and `metrics`. It needs OCR only for `text_height`.
 
-1. **Snapshot.** The item must be one the caller may write, with a JPEG, PNG or WebP file; the request records its file version.
-2. **Size.** The photo is decoded (at most 64 megapixels, not animated), turned upright and flattened onto white, and its text lines are measured as for a PDF page. It is scaled so that its smallest line is `target_height` pixels high (default 32). It never grows; a photo without text keeps its size.
-3. **JPEG.** It is encoded as JPEG at `quality` (default 80), without the camera's metadata, and named after the photo with the `.jpg` extension. The result has its `bytes` and the `metrics` of a composition, with one page whose `text_lines` are the lines measured.
-
-Stage and promote the artifact to make it the item's file: a workflow does it before a model reads the photo, so a camera photo of several MB goes as a few hundred KB. The operation fails if the photo changes before the image is made. An identical request for the same photo reuses an unexpired artifact.
+Stage and promote the artifact to make it the item's file. The operation fails if the photo changes before the image is made. An identical request for the same photo and options reuses an unexpired artifact.
 
 ## Renaming and upload name conflicts
 

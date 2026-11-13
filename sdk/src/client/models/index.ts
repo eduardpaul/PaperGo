@@ -1126,18 +1126,43 @@ export interface CompletionRequest_output_schema extends AdditionalDataHolder, P
 }
 export interface ComposePDF extends Parsable {
     /**
+     * rgb (when omitted) keeps the color; gray keeps 8-bit gray.
+     */
+    color?: ComposePDF_color | null;
+    /**
      * The photo items in page order, the item among them; the item alone when omitted.
      */
     itemIds?: string[] | null;
+    /**
+     * Largest height in pixels.
+     */
+    maxHeight?: number | null;
+    /**
+     * Largest width in pixels.
+     */
+    maxWidth?: number | null;
+    /**
+     * Height in pixels shrinking stops at, unless a maximum or the photo is smaller.
+     */
+    minHeight?: number | null;
+    /**
+     * Width in pixels shrinking stops at, unless a maximum or the photo is smaller.
+     */
+    minWidth?: number | null;
     /**
      * JPEG quality, 80 when omitted.
      */
     quality?: number | null;
     /**
-     * Height in pixels the smallest text of each page keeps, 32 when omitted; pages never grow.
+     * Height in pixels the smallest reliable text line keeps, measured by OCR; omitted, the text does not size the photo. Needs OCR.
      */
-    targetHeight?: number | null;
+    textHeight?: number | null;
+    /**
+     * Put the text OCR recognizes on each page in the PDF, invisible, so it can be searched; true when omitted. Needs OCR.
+     */
+    textLayer?: boolean | null;
 }
+export type ComposePDF_color = (typeof ComposePDF_colorObject)[keyof typeof ComposePDF_colorObject];
 /**
  * The endpoint's answer. Only Content-Type, ETag, Last-Modified and Retry-After are returned. Answers over 4 MiB fail.
  */
@@ -5017,9 +5042,15 @@ export function deserializeIntoCompletionRequest_output_schema(completionRequest
 // @ts-ignore
 export function deserializeIntoComposePDF(composePDF: Partial<ComposePDF> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "color": n => { composePDF.color = n.getEnumValue<ComposePDF_color>(ComposePDF_colorObject); },
         "item_ids": n => { composePDF.itemIds = n.getCollectionOfPrimitiveValues<string>("string"); },
+        "max_height": n => { composePDF.maxHeight = n.getNumberValue(); },
+        "max_width": n => { composePDF.maxWidth = n.getNumberValue(); },
+        "min_height": n => { composePDF.minHeight = n.getNumberValue(); },
+        "min_width": n => { composePDF.minWidth = n.getNumberValue(); },
         "quality": n => { composePDF.quality = n.getNumberValue(); },
-        "target_height": n => { composePDF.targetHeight = n.getNumberValue(); },
+        "text_height": n => { composePDF.textHeight = n.getNumberValue(); },
+        "text_layer": n => { composePDF.textLayer = n.getBooleanValue(); },
     }
 }
 /**
@@ -6126,8 +6157,13 @@ export function deserializeIntoOperationPage(operationPage: Partial<OperationPag
 // @ts-ignore
 export function deserializeIntoOptimizeImage(optimizeImage: Partial<OptimizeImage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "color": n => { optimizeImage.color = n.getEnumValue<OptimizeImage_color>(OptimizeImage_colorObject); },
+        "max_height": n => { optimizeImage.maxHeight = n.getNumberValue(); },
+        "max_width": n => { optimizeImage.maxWidth = n.getNumberValue(); },
+        "min_height": n => { optimizeImage.minHeight = n.getNumberValue(); },
+        "min_width": n => { optimizeImage.minWidth = n.getNumberValue(); },
         "quality": n => { optimizeImage.quality = n.getNumberValue(); },
-        "target_height": n => { optimizeImage.targetHeight = n.getNumberValue(); },
+        "text_height": n => { optimizeImage.textHeight = n.getNumberValue(); },
     }
 }
 /**
@@ -9292,14 +9328,35 @@ export interface OperationPage extends Parsable {
 }
 export interface OptimizeImage extends Parsable {
     /**
+     * rgb (when omitted) keeps the color; gray keeps 8-bit gray.
+     */
+    color?: OptimizeImage_color | null;
+    /**
+     * Largest height in pixels.
+     */
+    maxHeight?: number | null;
+    /**
+     * Largest width in pixels.
+     */
+    maxWidth?: number | null;
+    /**
+     * Height in pixels shrinking stops at, unless a maximum or the photo is smaller.
+     */
+    minHeight?: number | null;
+    /**
+     * Width in pixels shrinking stops at, unless a maximum or the photo is smaller.
+     */
+    minWidth?: number | null;
+    /**
      * JPEG quality, 80 when omitted.
      */
     quality?: number | null;
     /**
-     * Height in pixels the smallest text keeps, 32 when omitted; the photo never grows.
+     * Height in pixels the smallest reliable text line keeps, measured by OCR; omitted, the text does not size the photo. Needs OCR.
      */
-    targetHeight?: number | null;
+    textHeight?: number | null;
 }
+export type OptimizeImage_color = (typeof OptimizeImage_colorObject)[keyof typeof OptimizeImage_colorObject];
 export interface PageList extends AdditionalDataHolder, Parsable {
     /**
      * The file version listed.
@@ -11412,9 +11469,15 @@ export function serializeCompletionRequest_output_schema(writer: SerializationWr
 // @ts-ignore
 export function serializeComposePDF(writer: SerializationWriter, composePDF: Partial<ComposePDF> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!composePDF || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<ComposePDF_color>("color", composePDF.color);
     writer.writeCollectionOfPrimitiveValues<string>("item_ids", composePDF.itemIds);
+    writer.writeNumberValue("max_height", composePDF.maxHeight);
+    writer.writeNumberValue("max_width", composePDF.maxWidth);
+    writer.writeNumberValue("min_height", composePDF.minHeight);
+    writer.writeNumberValue("min_width", composePDF.minWidth);
     writer.writeNumberValue("quality", composePDF.quality);
-    writer.writeNumberValue("target_height", composePDF.targetHeight);
+    writer.writeNumberValue("text_height", composePDF.textHeight);
+    writer.writeBooleanValue("text_layer", composePDF.textLayer);
 }
 /**
  * Serializes information the current object
@@ -12543,8 +12606,13 @@ export function serializeOperationPage(writer: SerializationWriter, operationPag
 // @ts-ignore
 export function serializeOptimizeImage(writer: SerializationWriter, optimizeImage: Partial<OptimizeImage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!optimizeImage || isSerializingDerivedType) { return; }
+    writer.writeEnumValue<OptimizeImage_color>("color", optimizeImage.color);
+    writer.writeNumberValue("max_height", optimizeImage.maxHeight);
+    writer.writeNumberValue("max_width", optimizeImage.maxWidth);
+    writer.writeNumberValue("min_height", optimizeImage.minHeight);
+    writer.writeNumberValue("min_width", optimizeImage.minWidth);
     writer.writeNumberValue("quality", optimizeImage.quality);
-    writer.writeNumberValue("target_height", optimizeImage.targetHeight);
+    writer.writeNumberValue("text_height", optimizeImage.textHeight);
 }
 /**
  * Serializes information the current object
@@ -16647,6 +16715,13 @@ export const CompletionRequest_executionObject = {
     Batch: "batch",
 } as const;
 /**
+ * rgb (when omitted) keeps the color; gray keeps 8-bit gray.
+ */
+export const ComposePDF_colorObject = {
+    Rgb: "rgb",
+    Gray: "gray",
+} as const;
+/**
  * GET by default.
  */
 export const ConnectionCall_methodObject = {
@@ -16850,6 +16925,13 @@ export const Operation_waitingObject = {
     Retry: "retry",
     Scheduled: "scheduled",
     Remote: "remote",
+} as const;
+/**
+ * rgb (when omitted) keeps the color; gray keeps 8-bit gray.
+ */
+export const OptimizeImage_colorObject = {
+    Rgb: "rgb",
+    Gray: "gray",
 } as const;
 export const Permissions_effective_grants_actionObject = {
     Read: "read",

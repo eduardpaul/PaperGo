@@ -1,7 +1,8 @@
 // Package documentfiles makes new files from items' files:
-// POST /v1/items/{id}/compose-pdf combines photos into one searchable PDF,
-// and POST /v1/items/{id}/optimize-image shrinks a photo to its smallest
-// text. Each is an operation whose result is an artifact, kept for reuse by
+// POST /v1/items/{id}/compose-pdf combines photos into one PDF, searchable
+// with their OCR text, and POST /v1/items/{id}/optimize-image makes a photo
+// a JPEG. Both size and color their photos with the same options
+// (compose.Options). Each is an operation whose result is an artifact, kept for reuse by
 // identical requests whoever asks. A consumer stages an artifact with
 // POST /v1/artifacts/{id}/stage to review it; POST
 // /v1/staged-files/{id}/promote makes it the item's file and POST
@@ -44,9 +45,9 @@ const (
 )
 
 var (
-	// ErrNoOCR refuses composition or optimization in a deployment without
+	// ErrNoOCR refuses a text height or a text layer in a deployment without
 	// an OCR engine.
-	ErrNoOCR = errors.New("photos to PDF and image optimization need OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
+	ErrNoOCR = errors.New("a text height and a PDF text layer need OCR; configure ONNXRUNTIME_LIB and OCR_MODELS")
 	// errPhotoChanged fails a file made from photos that changed: the
 	// reviewed file must show the photos as they are.
 	errPhotoChanged = errors.New("a photo changed after the operation started; start a new one")
@@ -98,6 +99,8 @@ type job struct {
 	InputKey string          `json:"input_key"`
 	Files    []file          `json:"files"`
 	Compose  compose.Options `json:"compose"`
+	// TextLayer puts the OCR text in a PDF.
+	TextLayer bool `json:"text_layer,omitempty"`
 }
 
 type file struct {
@@ -134,13 +137,16 @@ func (h module) optimizeImage(w http.ResponseWriter, r *http.Request, in httpapi
 	return nil
 }
 
-// ComposeRequest names the photos to combine, in page order, and tunes the
-// PDF; zero values take the defaults.
+// ComposeRequest names the photos to combine, in page order, and sizes and
+// colors their pages; zero values take the defaults.
 type ComposeRequest struct {
 	compose.Options
 	// ItemIDs are the photo items in page order, the item itself among
 	// them; default the item alone.
 	ItemIDs []string `json:"item_ids,omitempty"`
+	// TextLayer puts the text OCR recognizes on each page in the PDF,
+	// invisible, so it can be searched; default true.
+	TextLayer *bool `json:"text_layer,omitempty"`
 }
 
 // ComposeResult is a finished composition's result: the PDF artifact.
@@ -155,7 +161,8 @@ type ComposeResult struct {
 	Metrics    compose.Metrics `json:"metrics"`
 }
 
-// OptimizeRequest tunes an optimized image; zero values take the defaults.
+// OptimizeRequest sizes and colors the image; zero values take the
+// defaults.
 type OptimizeRequest struct {
 	compose.Options
 }
@@ -172,12 +179,12 @@ type OptimizeResult struct {
 
 // options are the request's options over the defaults.
 func options(in compose.Options) (compose.Options, error) {
-	o := compose.Defaults
-	if in.TargetHeight != 0 {
-		o.TargetHeight = in.TargetHeight
+	o := in
+	if o.Quality == 0 {
+		o.Quality = compose.Defaults.Quality
 	}
-	if in.Quality != 0 {
-		o.Quality = in.Quality
+	if o.Color == "" {
+		o.Color = compose.Defaults.Color
 	}
 	if err := o.Validate(); err != nil {
 		return o, dms.Invalid(err.Error())
@@ -200,16 +207,16 @@ func photo(ctx context.Context, s *dms.Service, subject, id string) (file, error
 	return file{ItemID: id, BlobID: b.ID, Version: b.Version, ObjectKey: b.ObjectKey, Filename: b.Filename}, nil
 }
 
-// StartOptimize shrinks the item's current photo so its smallest text keeps
-// the target height, as a JPEG artifact for the item, as subject, who needs
-// write access to the item.
+// StartOptimize makes the item's current photo a JPEG artifact for the
+// item, sized and colored by the request, as subject, who needs write
+// access to the item.
 func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, itemID string, in OptimizeRequest) (*dms.OperationView, error) {
-	if m.OCR == nil {
-		return nil, dms.Invalid(ErrNoOCR.Error())
-	}
 	o, err := options(in.Options)
 	if err != nil {
 		return nil, err
+	}
+	if m.OCR == nil && o.NeedsOCR() {
+		return nil, dms.Invalid(ErrNoOCR.Error())
 	}
 	r, err := s.Authorize(ctx, subject, itemID, "write")
 	if err != nil {
@@ -229,12 +236,13 @@ func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, item
 // list or library into one PDF for the item, as subject, who needs write
 // access to every photo.
 func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemID string, in ComposeRequest) (*dms.OperationView, error) {
-	if m.OCR == nil {
-		return nil, dms.Invalid(ErrNoOCR.Error())
-	}
 	o, err := options(in.Options)
 	if err != nil {
 		return nil, err
+	}
+	text := in.TextLayer == nil || *in.TextLayer
+	if m.OCR == nil && (o.NeedsOCR() || text) {
+		return nil, dms.Invalid(ErrNoOCR.Error())
 	}
 	ids := in.ItemIDs
 	if len(ids) == 0 {
@@ -247,7 +255,7 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemI
 	if err != nil {
 		return nil, err
 	}
-	j := job{ItemID: itemID, Compose: o}
+	j := job{ItemID: itemID, Compose: o, TextLayer: text}
 	seen := map[string]bool{}
 	for _, id := range ids {
 		if seen[id] {
@@ -299,7 +307,7 @@ func start(ctx context.Context, s *dms.Service, subject, kind string, j job) (*d
 func inputKey(kind string, j job) string {
 	h := sha256.New()
 	enc := json.NewEncoder(h)
-	_ = enc.Encode([]any{kind, j.ItemID, j.Compose})
+	_ = enc.Encode([]any{kind, j.ItemID, j.Compose, j.TextLayer})
 	for _, f := range j.Files {
 		_ = enc.Encode([]string{f.ItemID, f.BlobID})
 	}
@@ -356,7 +364,7 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 		res.Pages = res.Metrics.Pages
 		return finish(ctx, s, op, res)
 	}
-	if m.OCR == nil {
+	if m.OCR == nil && (j.Compose.NeedsOCR() || j.TextLayer) {
 		return ErrNoOCR
 	}
 	var doc bytes.Buffer
@@ -366,7 +374,7 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 			return nil, fmt.Errorf("read %s: %w", j.Files[i].Filename, err)
 		}
 		return data, nil
-	}, m.maxPixels(), j.Compose)
+	}, m.maxPixels(), j.Compose, j.TextLayer)
 	if err != nil {
 		return fmt.Errorf("compose PDF: %w", err)
 	}
@@ -401,8 +409,7 @@ func (m *Maker) compose(ctx context.Context, s *dms.Service, op *operations.Oper
 	})
 }
 
-// optimize shrinks the photo outside the writer and keeps the JPEG as an
-// artifact.
+// optimize makes the JPEG outside the writer and keeps it as an artifact.
 func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Operation) error {
 	var j job
 	if err := json.Unmarshal(op.Payload, &j); err != nil {
@@ -421,7 +428,7 @@ func (m *Maker) optimize(ctx context.Context, s *dms.Service, op *operations.Ope
 		}
 		return finish(ctx, s, op, res)
 	}
-	if m.OCR == nil {
+	if m.OCR == nil && j.Compose.NeedsOCR() {
 		return ErrNoOCR
 	}
 	f := j.Files[0]

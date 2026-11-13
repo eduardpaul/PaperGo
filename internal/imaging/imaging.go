@@ -200,6 +200,14 @@ func Flatten(img image.Image) *image.RGBA {
 	return out
 }
 
+// Gray returns img as 8-bit luminance, from its top left corner.
+func Gray(img image.Image) *image.Gray {
+	b := img.Bounds()
+	out := image.NewGray(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), img, b.Min, draw.Src)
+	return out
+}
+
 // Resize scales img to w×h with the Mitchell filter, flattening
 // transparency onto white.
 func Resize(img image.Image, w, h int) *image.RGBA {

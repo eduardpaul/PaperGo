@@ -47,6 +47,7 @@ type Text struct {
 
 // Page is an opaque page image with its text lines. Transparent pixels are
 // flattened onto white in lossless images only, so callers flatten first.
+// An *image.Gray image is embedded in gray, any other in RGB.
 type Page struct {
 	Image image.Image
 	Lines []Text
@@ -260,7 +261,8 @@ func (o *objects) fontAt(id int, order []rune, codes map[rune]int) {
 	o.set(id, fmt.Sprintf("<< /Type /Font /Subtype /Type0 /BaseFont /PaperDotNetOcrText /Encoding /Identity-H /DescendantFonts [%d 0 R] /ToUnicode %d 0 R >>", descendant, unicode))
 }
 
-// image adds a page image as JPEG, or as Flate-compressed RGB when smaller.
+// image adds a page image as JPEG, or as Flate-compressed pixels when
+// smaller: gray for an *image.Gray, RGB for any other.
 func (o *objects) image(img image.Image, quality int) (int, error) {
 	b := img.Bounds()
 	var jpg bytes.Buffer
@@ -272,11 +274,18 @@ func (o *objects) image(img image.Image, quality int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	row := make([]byte, b.Dx()*3)
+	gray, _ := img.(*image.Gray)
+	space, components := "/DeviceRGB", 3
+	if gray != nil {
+		space, components = "/DeviceGray", 1
+	}
+	row := make([]byte, b.Dx()*components)
 	rgba, _ := img.(*image.RGBA)
 	complete := true
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		if rgba != nil {
+		if gray != nil {
+			copy(row, gray.Pix[gray.PixOffset(b.Min.X, y):])
+		} else if rgba != nil {
 			// Opaque RGBA rows need no color conversion.
 			pix := rgba.Pix[rgba.PixOffset(b.Min.X, y):]
 			for i := range b.Dx() {
@@ -303,7 +312,7 @@ func (o *objects) image(img image.Image, quality int) (int, error) {
 	if err = z.Close(); err != nil {
 		return 0, err
 	}
-	dict := fmt.Sprintf("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8", b.Dx(), b.Dy())
+	dict := fmt.Sprintf("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace %s /BitsPerComponent 8", b.Dx(), b.Dy(), space)
 	if complete && flate.Len() < jpg.Len() {
 		return o.stream(dict+" /Filter /FlateDecode", flate.Bytes()), nil
 	}

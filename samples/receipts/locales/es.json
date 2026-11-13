@@ -62,5 +62,21 @@
     "receipts-desk": {
       "name": "Mesa de tiques"
     }
+  },
+  "settings": {
+    "read_text_height": {
+      "title": "Altura del texto para el modelo (px)",
+      "description": "Cada foto se reduce hasta que su texto más pequeño mide esto antes de que la lea el modelo."
+    },
+    "read_quality": {
+      "title": "Calidad JPEG para el modelo"
+    },
+    "pdf_color": {
+      "title": "Color del PDF guardado",
+      "description": "gray hace el PDF más pequeño; rgb mantiene el color."
+    },
+    "pdf_quality": {
+      "title": "Calidad JPEG del PDF guardado"
+    }
   }
 }

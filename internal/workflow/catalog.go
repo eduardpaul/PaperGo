@@ -22,6 +22,7 @@ func init() {
 		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {
 			"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text of each page keeps; pages never grow.", "minimum": 8, "maximum": 200, "default": 32},
 			"quality": {"type": "integer", "title": "JPEG quality", "minimum": 1, "maximum": 100, "default": 80},
+			"color": {"type": "string", "title": "Color", "description": "Keep the pages in color, or in gray, which makes the PDF smaller.", "enum": ["rgb", "gray"], "default": "rgb"},
 			` + approvers + `
 		}}`)})
 }

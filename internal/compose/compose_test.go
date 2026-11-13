@@ -75,6 +75,9 @@ func pdftotext(t *testing.T, doc []byte) []string {
 	return strings.Split(string(out), "\f")
 }
 
+// byText sizes photos so their smallest text is 32 pixels high.
+var byText = Options{TextHeight: 32, Quality: 80, Color: ColorRGB}
+
 func TestPagesScaleToTheSmallestTextAndKeepTheirOrder(t *testing.T) {
 	photos := [][]byte{photo(t, 1000, 800), photo(t, 1200, 900), photo(t, 600, 400)}
 	engines := []fake{{height: 64}, {height: 0}, {height: 16}}
@@ -83,7 +86,7 @@ func TestPagesScaleToTheSmallestTextAndKeepTheirOrder(t *testing.T) {
 	m, err := PDF(context.Background(), engineFunc(func() fake { return engines[page] }), &buf, len(photos), func(i int) ([]byte, error) {
 		page = i
 		return photos[i], nil
-	}, 64e6, Defaults)
+	}, 64e6, byText, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,9 +96,9 @@ func TestPagesScaleToTheSmallestTextAndKeepTheirOrder(t *testing.T) {
 	// 64-pixel text halves the page; a page without text, and 16-pixel
 	// text, keep their size: pages never grow.
 	for i, want := range []Page{
-		{SourceWidth: 1000, SourceHeight: 800, Width: 500, Height: 400, SmallestTextHeight: 64, Scale: 0.5, TextLines: 1},
+		{SourceWidth: 1000, SourceHeight: 800, Width: 500, Height: 400, SmallestTextHeight: 64, Scale: 0.5, MeasuredLines: 1, TextLines: 1},
 		{SourceWidth: 1200, SourceHeight: 900, Width: 1200, Height: 900, Scale: 1, TextLines: 1},
-		{SourceWidth: 600, SourceHeight: 400, Width: 600, Height: 400, SmallestTextHeight: 16, Scale: 1, TextLines: 1},
+		{SourceWidth: 600, SourceHeight: 400, Width: 600, Height: 400, SmallestTextHeight: 16, Scale: 1, MeasuredLines: 1, TextLines: 1},
 	} {
 		if m.PageDetails[i] != want {
 			t.Errorf("page %d: %+v, want %+v", i+1, m.PageDetails[i], want)
@@ -117,28 +120,92 @@ func TestImageShrinksToTheSmallestText(t *testing.T) {
 	}{
 		// 64-pixel text halves the photo; without text, or with 16-pixel
 		// text, it keeps its size: images never grow.
-		{"large text", 64, Page{SourceWidth: 1000, SourceHeight: 800, Width: 500, Height: 400, SmallestTextHeight: 64, Scale: 0.5, TextLines: 1}},
+		{"large text", 64, Page{SourceWidth: 1000, SourceHeight: 800, Width: 500, Height: 400, SmallestTextHeight: 64, Scale: 0.5, MeasuredLines: 1}},
 		{"no text", 0, Page{SourceWidth: 1000, SourceHeight: 800, Width: 1000, Height: 800, Scale: 1}},
-		{"small text", 16, Page{SourceWidth: 1000, SourceHeight: 800, Width: 1000, Height: 800, SmallestTextHeight: 16, Scale: 1, TextLines: 1}},
+		{"small text", 16, Page{SourceWidth: 1000, SourceHeight: 800, Width: 1000, Height: 800, SmallestTextHeight: 16, Scale: 1, MeasuredLines: 1}},
 	} {
 		src := photo(t, 1000, 800)
-		out, m, err := Image(context.Background(), fake{height: c.height}, src, 64e6, Defaults)
+		out, m, err := Image(context.Background(), fake{height: c.height}, src, 64e6, byText)
 		if err != nil {
 			t.Fatal(c.name, err)
 		}
-		if len(m.PageDetails) != 1 || m.PageDetails[0] != c.want || m.Pages != 1 || m.Bytes != int64(len(out)) || m.SourceBytes != int64(len(src)) || m.Quality != Defaults.Quality {
+		if len(m.PageDetails) != 1 || m.PageDetails[0] != c.want || m.Pages != 1 || m.Bytes != int64(len(out)) || m.SourceBytes != int64(len(src)) || m.Options != byText {
 			t.Fatalf("%s: metrics %+v", c.name, m)
 		}
 		cfg, format, err := image.DecodeConfig(bytes.NewReader(out))
-		if err != nil || format != "jpeg" || cfg.Width != c.want.Width || cfg.Height != c.want.Height {
+		if err != nil || format != "jpeg" || cfg.Width != c.want.Width || cfg.Height != c.want.Height || cfg.ColorModel == color.GrayModel {
 			t.Errorf("%s: %s %dx%d %v", c.name, format, cfg.Width, cfg.Height, err)
 		}
 	}
 	if _, _, err := Image(context.Background(), fake{}, []byte("%PDF-1.7"), 64e6, Defaults); err == nil {
 		t.Error("a PDF is accepted")
 	}
-	if _, _, err := Image(context.Background(), fake{}, photo(t, 10, 10), 64e6, Options{TargetHeight: 32, Quality: 0}); err == nil {
-		t.Error("quality 0 is accepted")
+}
+
+func TestSizing(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		smallest float64
+		o        Options
+		want     float64
+	}{
+		{"nothing asked", 64, Options{}, 1},
+		{"text", 64, Options{TextHeight: 32}, 0.5},
+		{"text never enlarges", 16, Options{TextHeight: 32}, 1},
+		{"text unmeasured", 0, Options{TextHeight: 32}, 1},
+		{"max width", 0, Options{MaxWidth: 500}, 0.5},
+		{"max height", 0, Options{MaxHeight: 200}, 0.25},
+		{"the tighter maximum", 0, Options{MaxWidth: 500, MaxHeight: 200}, 0.25},
+		{"text within a maximum", 64, Options{TextHeight: 32, MaxWidth: 250}, 0.25},
+		{"min width stops the text", 128, Options{TextHeight: 32, MinWidth: 400}, 0.4},
+		{"min height stops the text", 128, Options{TextHeight: 32, MinHeight: 400}, 0.5},
+		{"a maximum wins over a minimum", 128, Options{TextHeight: 32, MinWidth: 600, MaxHeight: 400}, 0.5},
+		{"minimum never enlarges", 64, Options{TextHeight: 32, MinWidth: 2000}, 1},
+	} {
+		if got := scale(1000, 800, c.smallest, c.o); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Gray photos and pages are kept in gray, and sizing by the dimensions
+// alone needs no OCR.
+func TestGrayWithoutOCR(t *testing.T) {
+	o := Options{MaxWidth: 400, Quality: 80, Color: ColorGray}
+	out, m, err := Image(context.Background(), nil, photo(t, 1000, 800), 64e6, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(out))
+	if err != nil || cfg.ColorModel != color.GrayModel || cfg.Width != 400 || cfg.Height != 320 || m.Detector != "" {
+		t.Fatalf("%+v %v %+v", cfg, err, m)
+	}
+	var buf bytes.Buffer
+	if _, err = PDF(context.Background(), nil, &buf, 1, func(int) ([]byte, error) { return photo(t, 1000, 800), nil }, 64e6, o, false); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("/Width 400 /Height 320 /ColorSpace /DeviceGray")) {
+		t.Error("the page is not gray")
+	}
+	if _, _, err = Image(context.Background(), nil, photo(t, 10, 10), 64e6, byText); err == nil {
+		t.Error("text height without OCR is accepted")
+	}
+	if _, err = PDF(context.Background(), nil, &buf, 1, func(int) ([]byte, error) { return photo(t, 10, 10), nil }, 64e6, Defaults, true); err == nil {
+		t.Error("a text layer without OCR is accepted")
+	}
+}
+
+func TestOptionsRejected(t *testing.T) {
+	for _, o := range []Options{
+		{TextHeight: 4, Quality: 80, Color: ColorRGB},
+		{Quality: 0, Color: ColorRGB},
+		{Quality: 80, Color: "cmyk"},
+		{Quality: 80, Color: ColorRGB, MinWidth: 600, MaxWidth: 500},
+		{Quality: 80, Color: ColorRGB, MaxHeight: -1},
+	} {
+		if o.Validate() == nil {
+			t.Errorf("%+v is accepted", o)
+		}
 	}
 }
 
@@ -158,23 +225,20 @@ func TestPDFRejects(t *testing.T) {
 	apng, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACGFjVEwAAAACAAAAAPONk3AAAAAaZmNUTAAAAAAAAAABAAAAAQAAAAAAAAAAAAEACgAAWn8w0AAAAA1JREFUeJxj+M/A8B8ABQAB/4mZPR0AAAAaZmNUTAAAAAEAAAABAAAAAQAAAAAAAAAAAAEACgAAwQzaBAAAABFmZEFUAAAAAnicY2Bg+P8fAAMCAf/1e6XXAAAAAElFTkSuQmCC")
 	read := func(data []byte) func(int) ([]byte, error) { return func(int) ([]byte, error) { return data, nil } }
 	var buf bytes.Buffer
-	if _, err := PDF(context.Background(), fake{}, &buf, 1, read(apng), 64e6, Defaults); !errors.Is(err, errAnimated) {
+	if _, err := PDF(context.Background(), fake{}, &buf, 1, read(apng), 64e6, Defaults, false); !errors.Is(err, errAnimated) {
 		t.Errorf("animated: %v", err)
 	}
-	if _, err := PDF(context.Background(), fake{}, &buf, 1, read([]byte("%PDF-1.7")), 64e6, Defaults); err == nil {
+	if _, err := PDF(context.Background(), fake{}, &buf, 1, read([]byte("%PDF-1.7")), 64e6, Defaults, false); err == nil {
 		t.Error("a PDF page is accepted")
 	}
-	if _, err := PDF(context.Background(), fake{}, &buf, 0, read(nil), 64e6, Defaults); err == nil {
+	if _, err := PDF(context.Background(), fake{}, &buf, 0, read(nil), 64e6, Defaults, false); err == nil {
 		t.Error("no pages are accepted")
 	}
-	if _, err := PDF(context.Background(), fake{}, &buf, MaxPages+1, read(nil), 64e6, Defaults); err == nil {
+	if _, err := PDF(context.Background(), fake{}, &buf, MaxPages+1, read(nil), 64e6, Defaults, false); err == nil {
 		t.Error("too many pages are accepted")
 	}
-	if _, err := PDF(context.Background(), fake{}, &buf, 1, read(nil), 64e6, Options{TargetHeight: 4, Quality: 80}); err == nil {
-		t.Error("a target of 4 px is accepted")
-	}
 	failing := errors.New("storage is down")
-	if _, err := PDF(context.Background(), fake{}, &buf, 1, func(int) ([]byte, error) { return nil, failing }, 64e6, Defaults); !errors.Is(err, failing) {
+	if _, err := PDF(context.Background(), fake{}, &buf, 1, func(int) ([]byte, error) { return nil, failing }, 64e6, Defaults, false); !errors.Is(err, failing) {
 		t.Errorf("read error: %v", err)
 	}
 }
@@ -219,7 +283,7 @@ func TestPDFWithPaddleOCR(t *testing.T) {
 	}
 	photos := [][]byte{render(72, "Invoice 2026-0042", "Total EUR 21.30"), render(40, "Second page")}
 	var buf bytes.Buffer
-	m, err := PDF(context.Background(), e, &buf, 2, func(i int) ([]byte, error) { return photos[i], nil }, 64e6, Defaults)
+	m, err := PDF(context.Background(), e, &buf, 2, func(i int) ([]byte, error) { return photos[i], nil }, 64e6, byText, true)
 	if err != nil {
 		t.Fatal(err)
 	}

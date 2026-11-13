@@ -2,7 +2,44 @@
   "key": "receipts",
   "name": "Receipts desk",
   "description": "Photos of purchase receipts and the lines read from them.",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "settings": {
+    "type": "object",
+    "properties": {
+      "read_text_height": {
+        "type": "number",
+        "title": "Text height for the model (px)",
+        "description": "Each photo is shrunk so its smallest text is this high before the model reads it.",
+        "minimum": 8,
+        "maximum": 200,
+        "default": 32
+      },
+      "read_quality": {
+        "type": "integer",
+        "title": "JPEG quality for the model",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 80
+      },
+      "pdf_color": {
+        "type": "string",
+        "title": "Color of the kept PDF",
+        "description": "gray makes the PDF smaller; rgb keeps the color.",
+        "enum": [
+          "rgb",
+          "gray"
+        ],
+        "default": "gray"
+      },
+      "pdf_quality": {
+        "type": "integer",
+        "title": "JPEG quality of the kept PDF",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 80
+      }
+    }
+  },
   "requires": {
     "ai.batch": true,
     "ocr": false

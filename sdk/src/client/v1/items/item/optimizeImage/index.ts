@@ -11,7 +11,7 @@ import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type Requ
  */
 export interface OptimizeImageRequestBuilder extends BaseRequestBuilder<OptimizeImageRequestBuilder> {
     /**
-     * Shrinks the item's current photo, as a JPEG artifact for the item: turned upright, flattened onto white and scaled so its smallest reliable text line keeps target_height, never enlarged, like a page of compose-pdf. Stage and promote the artifact to make it the item's file, before reading the photo with a model or composing a PDF of it. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.
+     * Makes the item's current photo a JPEG artifact for the item: turned upright, flattened onto white, without the camera's metadata, sized and colored by the options. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. Stage and promote the artifact to make it the item's file. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Operation>}
@@ -25,7 +25,7 @@ export interface OptimizeImageRequestBuilder extends BaseRequestBuilder<Optimize
      */
      post(body: OptimizeImage, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Operation | undefined>;
     /**
-     * Shrinks the item's current photo, as a JPEG artifact for the item: turned upright, flattened onto white and scaled so its smallest reliable text line keeps target_height, never enlarged, like a page of compose-pdf. Stage and promote the artifact to make it the item's file, before reading the photo with a model or composing a PDF of it. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.
+     * Makes the item's current photo a JPEG artifact for the item: turned upright, flattened onto white, without the camera's metadata, sized and colored by the options. Photos never grow: each is sized to keep its smallest text text_height high, at most max_width×max_height, and at least min_width×min_height unless a maximum or the photo is smaller; every sizing option is off when omitted. Stage and promote the artifact to make it the item's file. An identical request for the same photo reuses an unexpired artifact (reused). The operation fails when the photo changes before the image is made. Requires write access to the item.
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
