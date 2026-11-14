@@ -2,6 +2,8 @@ package documentsearch
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -307,9 +309,11 @@ type SyncResult struct {
 const maxSync = 500
 
 // syncAdmission puts every sync in one group, so the worker runs them
-// together.
+// together. Syncs of the same entries are one input: the payload's digest,
+// whatever the number of entries it names.
 func syncAdmission(payload json.RawMessage) (string, string, error) {
-	return "search", string(payload), nil
+	sum := sha256.Sum256(payload)
+	return "search", hex.EncodeToString(sum[:]), nil
 }
 
 // validateSync runs in the transaction that queues a sync: the entries

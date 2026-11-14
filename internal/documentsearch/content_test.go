@@ -157,6 +157,14 @@ func TestContentSteps(t *testing.T) {
 	if op := accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":["`+item.ID+`","gone"]}`); json.Unmarshal(op.Result, &sync) != nil || sync.Written != 1 {
 		t.Fatalf("%s", op.Result)
 	}
+	// A sync names as many entries as a term's relabel finds, up to 500.
+	many := `"` + item.ID + `"`
+	for i := 0; i < 9; i++ {
+		many += `,"00000000-0000-4000-8000-00000000000` + itoa(i) + `"`
+	}
+	if op := accepted("/v1/workspaces/"+ws.ID+"/search/sync", `{"resource_ids":[`+many+`]}`); json.Unmarshal(op.Result, &sync) != nil || sync.Written != 1 {
+		t.Fatalf("%s", op.Result)
+	}
 	other, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
 	if err != nil {
 		t.Fatal(err)
