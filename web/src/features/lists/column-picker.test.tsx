@@ -28,6 +28,7 @@ function open(props: Partial<Parameters<typeof ColumnPicker>[0]> = {}) {
         columns={['$name', 'amount']}
         available={available}
         changed={false}
+        filters={[]}
         canManage
         onChange={onChange}
         onSaved={onSaved}
@@ -72,6 +73,24 @@ it('saves the columns and the sort into the open table view', async () => {
     layout: 'table',
     is_default: false,
     query: { filter: { field: 'status', op: 'eq', value: 'Open' }, sort: [{ field: 'amount', direction: 'desc' }] },
+  });
+});
+
+it('saves the column filters into the view, ANDed with its own filter', async () => {
+  const bodies: unknown[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_input: URL | string, init: RequestInit = {}) => {
+      bodies.push(parseJSON(String(init.body)));
+      return new Response(stringifyJSON({ id: 'view' }), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
+  const view: ListView = { id: 'view', container_id: 'list', name: 'Open', columns: ['$name', 'amount'], layout: 'table', version: 4, query: { filter: { and: [{ field: 'status', op: 'eq', value: 'Open' }, { field: 'amount', op: 'present' }] } } };
+  const { onSaved } = open({ view, filters: [{ field: 'amount', op: 'gte', value: 5 }] });
+  fireEvent.click(screen.getByRole('button', { name: 'Save to “Open”' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith('view'));
+  expect(bodies[0]).toMatchObject({
+    query: { filter: { and: [{ field: 'status', op: 'eq', value: 'Open' }, { field: 'amount', op: 'present' }, { field: 'amount', op: 'gte', value: 5 }] } },
   });
 });
 

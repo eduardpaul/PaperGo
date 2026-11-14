@@ -60,6 +60,16 @@ describe('createFormatter', () => {
     expect(newYork.weekday(moment)).toBe('Samstag');
   });
 
+  it('gives the moment a calendar day begins in the user time zone', () => {
+    expect(createFormatter({ timeZone: 'Europe/Madrid' }).dayStart('2026-10-01')).toBe('2026-09-30T22:00:00.000Z');
+    // The clocks went back on 25 October; the first of November begins an hour later in UTC.
+    expect(createFormatter({ timeZone: 'Europe/Madrid' }).dayStart('2026-11-01')).toBe('2026-10-31T23:00:00.000Z');
+    expect(createFormatter({ timeZone: 'America/New_York' }).dayStart('2026-03-08')).toBe('2026-03-08T05:00:00.000Z');
+    expect(createFormatter({ timeZone: 'America/New_York' }).dayStart('2026-03-09')).toBe('2026-03-09T04:00:00.000Z');
+    expect(createFormatter({ timeZone: 'Asia/Kolkata' }).dayStart('2026-01-15')).toBe('2026-01-14T18:30:00.000Z');
+    expect(createFormatter({ timeZone: 'UTC' }).dayStart('2026-01-15')).toBe('2026-01-15T00:00:00.000Z');
+  });
+
   it('describes relative times', () => {
     const format = createFormatter({ language: 'en' });
     expect(format.relative(new Date('2026-01-01T12:00:00Z'), new Date('2026-01-01T15:00:00Z'))).toBe('3 hours ago');

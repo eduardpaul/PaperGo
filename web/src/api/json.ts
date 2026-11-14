@@ -27,6 +27,11 @@ export function decimalText(text: string): string {
   return withDecimalPoint(text, decimalMark);
 }
 
+/** A typed number as the text of a JSON number, read with the person's decimal separator; undefined when it is not one. */
+export function typedNumberText(text: string, integer = false): string | undefined {
+  return typedNumber(text, decimalMark, integer);
+}
+
 /** Convert a numeric input to a JSON number without passing its digits through float64. */
 export function numericInput(text: string, integer = false): number | LosslessNumber {
   const number = typedNumber(text, decimalMark, integer);

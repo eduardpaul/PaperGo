@@ -20,7 +20,7 @@ import { cloneElement, useEffect, useRef, useState, type HTMLAttributes, type Re
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
-import { countRequest, formatNavigation, listingQuery, listingRequest, parseNavigation, type ApiCall } from '@/api/requests';
+import { andFilter, countRequest, formatNavigation, listingQuery, listingRequest, parseNavigation, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
 import type { Page, QuerySpec, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
@@ -49,6 +49,7 @@ import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { useTranslation } from '@/i18n';
+import { problemMessage } from '@/lib/errors';
 import { typingIn } from '@/lib/keys';
 import { useFormat } from '@/lib/preferences';
 import { RunWorkflowAction } from '@/features/workflows/item-workflows';
@@ -62,7 +63,9 @@ import { ItemSheet } from './item-sheet';
 import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
 import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
-import { ColumnPicker } from './column-picker';
+import { ColumnPicker, savedQuery, useSaveView } from './column-picker';
+import { AddFilterButton, ColumnFilterBar, ColumnFilterButton, type ColumnFiltering } from './column-filter';
+import { activeFilters, columnConditions, withColumnFilter, withinLimits, type ColumnFilters } from './column-filters';
 import { ItemsNavigation } from './navigation-layout';
 import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam, systemFields } from './schema';
 
@@ -91,6 +94,8 @@ export interface CollectionSearch {
   cols?: string;
   /** The terms a navigation view has open as `field~term` pairs, the latest last; `none` for items without one. */
   nav?: string;
+  /** Column filters, by column, on top of the view's own filter. */
+  filters?: ColumnFilters;
 }
 
 interface Listing {
@@ -147,12 +152,35 @@ export function CollectionPage({
     ?.split(',')
     .filter((key) => columnChoices.some((choice) => choice.key === key));
   const pageColumns = chosenColumns?.length ? [...new Set(['$name', ...chosenColumns])] : undefined;
-  const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort, columns: pageColumns });
+  // Column filters narrow what the view shows, on top of its own filter. Navigation views are served by the server
+  // from their saved query alone, so they take none.
+  const filterable = layout !== 'navigation';
+  const filterFields = fields.data ?? [];
+  const filters = filterable ? search.filters : undefined;
+  const active = activeFilters(filters, filterFields);
+  const conditions = columnConditions(filters, filterFields, format.dayStart);
+  const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort, columns: pageColumns, filters: conditions });
+  // Boards and calendars load their own rows, so the column filters go into the view they read.
+  const shownView = view && conditions.length > 0 ? { ...view, query: { ...view.query, filter: andFilter(view.query?.filter, ...conditions) } } : view;
+  const filtering: ColumnFiltering = {
+    collectionId: listId,
+    fields: filterFields,
+    filters,
+    apply: (column, filter) => {
+      const next = withColumnFilter(filters, column, filter);
+      if (filter && !withinLimits(andFilter(view?.query?.filter, ...columnConditions(next, filterFields, format.dayStart)))) return false;
+      onSearch({ filters: next }, true);
+      return true;
+    },
+    valuesQuery: (column) =>
+      listingQuery(listingRequest(listId, { folder: search.folder, view, q: search.q, filters: columnConditions(filters, filterFields, format.dayStart, column) }), listId),
+  };
+  const saveFilters = useSaveView(listId, view, () => onSearch({ filters: undefined }, true));
   // Boards, calendars and navigation views load their own rows: per column, per month, per term.
   const ownRows = !!view && (layout === 'board' || layout === 'calendar' || layout === 'navigation');
   const listing = useQuery({
     queryKey: ['resources', listId, 'rows', request],
-    enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess) && !ownRows,
+    enabled: !!collection.data && views.isSuccess && ((!search.sort && !search.filters) || fields.isSuccess) && !ownRows,
     queryFn: () => loadListing(request),
   });
   const [snapshot, setSnapshot] = useState(listing.data);
@@ -441,11 +469,11 @@ export function CollectionPage({
         {(views.data?.length ?? 0) > 0 && (
           <div role="tablist" aria-label={t('page.views')} className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
-              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, folder: undefined, q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, folder: undefined, q: undefined, sort: undefined, cols: undefined, nav: undefined, filters: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
-            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined, nav: undefined })}>
+            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined, nav: undefined, filters: undefined })}>
               {t('page.activeItems')}
             </ViewTab>
           </div>
@@ -458,13 +486,33 @@ export function CollectionPage({
             changed={!!pageColumns}
             view={view}
             sort={sort}
+            filters={conditions}
             canManage={canManage}
             onChange={(next) => onSearch({ cols: next?.join(',') }, true)}
-            onSaved={(id) => onSearch({ view: id, cols: undefined, sort: undefined })}
+            onSaved={(id) => onSearch({ view: id, cols: undefined, sort: undefined, filters: undefined })}
           />
         )}
+        {filterable && <AddFilterButton filtering={filtering} columns={columnChoices} />}
         <SearchBox initial={search.q ?? ''} library={library} onSearch={(q) => onSearch({ q }, true)} />
       </div>
+
+      {filterable && (
+        <ColumnFilterBar
+          filtering={filtering}
+          active={active}
+          onClear={() => onSearch({ filters: undefined }, true)}
+          save={
+            canManage && view && !view.system_key
+              ? {
+                  label: t('columnFilter.saveTo', { name: view.name }),
+                  pending: saveFilters.isPending,
+                  error: saveFilters.isError ? problemMessage(saveFilters.error) : undefined,
+                  onSave: () => saveFilters.mutate({ target: 'view', columns: view.columns ?? ['$name'], query: savedQuery(view.query, undefined, conditions) }),
+                }
+              : undefined
+          }
+        />
+      )}
 
       {search.folder && (
         <nav aria-label={t('page.folders')} className="mb-3 flex flex-wrap items-center gap-1 text-[13px]">
@@ -596,7 +644,7 @@ export function CollectionPage({
             filePreviews={library}
             renderItem={renderItem}
             collectionId={listId}
-            view={view}
+            view={shownView!}
             fields={fieldList.filter((field) => view.columns?.includes(field.key))}
             groupBy={fieldList.find((field) => field.key === view.query?.group_by)}
             readOnly={!canEdit}
@@ -605,7 +653,7 @@ export function CollectionPage({
         ) : ownRows ? (
           <ItemsCalendar
             collectionId={listId}
-            view={view}
+            view={shownView!}
             dateField={[...systemFields, ...fieldList].find((field) => field.key === view.query?.group_by)}
             onOpen={open}
           />
@@ -620,12 +668,16 @@ export function CollectionPage({
         ) : rows.length === 0 ? (
           <Card>
             <EmptyState
-              icon={search.q ? Search : search.folder ? FolderOpen : undefined}
-              title={search.q ? t('page.noMatches') : search.folder ? t('page.emptyFolder') : library ? t('page.emptyLibrary') : t('page.emptyList')}
+              icon={search.q || active.length > 0 ? Search : search.folder ? FolderOpen : undefined}
+              title={search.q ? t('page.noMatches') : active.length > 0 ? t('columnFilter.noMatches') : search.folder ? t('page.emptyFolder') : library ? t('page.emptyLibrary') : t('page.emptyList')}
             >
               {search.q ? (
                 <Button className="mt-2" onClick={() => onSearch({ q: undefined }, true)}>
                   {t('page.clearSearch')}
+                </Button>
+              ) : active.length > 0 ? (
+                <Button className="mt-2" onClick={() => onSearch({ filters: undefined }, true)}>
+                  {t('columnFilter.clearAll')}
                 </Button>
               ) : !canAdd ? null : library ? (
                 <>
@@ -671,6 +723,7 @@ export function CollectionPage({
             }}
             locations={search.q ? folderNames : undefined}
             onOpen={open}
+            headerAction={(column, label) => <ColumnFilterButton filtering={filtering} column={column} label={label} />}
           />
         )}
       </div>

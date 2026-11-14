@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CollectionPage, type CollectionSearch } from '@/features/lists/collection-page';
+import { parseColumnFilters } from '@/features/lists/column-filters';
 import { flagParam, pageParam, textParam } from '@/lib/search';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     sort: textParam(search.sort),
     cols: textParam(search.cols),
     nav: textParam(search.nav),
+    filters: parseColumnFilters(search.filters),
   }),
   component: CollectionRoute,
 });

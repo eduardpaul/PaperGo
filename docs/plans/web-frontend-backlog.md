@@ -43,9 +43,28 @@ All product screens in this section are implemented against the registered `/v1`
 - The collection shows one level of children at a time.
 - Preference language and number-format choices include tags the server may reject. The server accepts a BCP-47 tag whose base language matches with exact confidence. A rejected value returns 422.
 - Columns chosen on the page are the `cols` URL parameter. With a saved view they are the query's `select`; managers save them, with the column sort, to a table view (`PUT /v1/views/{id}`) or a new view.
-- Plain browsing reads `GET /v1/resources/{id}/children` of the open folder or collection. A saved view or a column sort uses `POST /v1/resources/{id}/query` with the view's query, the open folder as `parent_id`, the search box as `search` and the chosen sort; the search box replaces a view's own search text. Search matches whole words.
+- Plain browsing reads `GET /v1/resources/{id}/children` of the open folder or collection. A saved view, a column sort or a column filter uses `POST /v1/resources/{id}/query` with the view's query, the open folder as `parent_id`, the search box as `search`, the chosen sort and the column filters; the search box replaces a view's own search text. Search matches whole words.
 - Smart folder create stores a name, an owner (personal or one workspace), folder inclusion and one comparison with a text, number or boolean value. The group path stays in page state.
 - Inbox counts on Home come from `POST /v1/resources/{id}/query` with `include_total`. That total can include folders.
+- Column filters narrow what the open view (or plain browsing, or a search) shows: each table header's funnel, and the Filter button for any column and for board, gallery and calendar layouts, filter one column in the way its type suits. They are the `filters` URL parameter (one entry per column, so they survive paging, sorting and reloading and can be shared), become conditions ANDed into the view's own filter (joining its top-level AND, so they never weaken it), and show as chips with Clear filters. People who manage the collection save them into the view (`PUT /v1/views/{id}` with the combined filter, or with the columns from the column picker); everyone else filters for themselves. Navigation views take none: the server runs their saved query, and `/v1/views/{id}/query` has no ad hoc filter. The page checks the API's 32 nodes and depth 6 before applying a filter.
+
+  | Column type | Filter | Query conditions |
+  | --- | --- | --- |
+  | `$name` | contains, is exactly | `contains`, `eq` |
+  | text, email, URL | contains; is one of (the column's distinct values among what the page shows, from `POST /query/groups`, with counts and a server-side search, and "No value"); is exactly; is empty; has a value | `contains`, `in`/`eq` (`or` with `missing`), `eq`, `missing`, `present` |
+  | integer, decimal, number, currency | is between (both ends included, either open); is exactly; is empty; has a value | `gte`/`lte` with exact numbers (decimals as text), `eq`, `missing`, `present` |
+  | date | is between days (periods: today, yesterday, this/last week from Monday, this/last month, this/last year, last 7 or 30 days, or a month); is a day; is empty; has a value | `gte`/`lte` on days |
+  | date-time, `$created_at`, `$modified_at`, `$archived_at` | as dates, the days read in the person's time zone; built-in dates offer no empty filters | `gte` the first day's start and `lt` the start of the day after the last, as UTC instants |
+  | choice (single or multiple) | is one of / is none of its choices, and "No value" | `in` (any member of a multiple choice), `not`, `missing` |
+  | boolean | Yes, No, "No value" | `in`, `missing` |
+  | person, `$created_by`, `$modified_by`, `$archived_by` | is one of / none of the people picked, "Me", and "No value" for person fields | `in`, `eq` with `value_ref: me`, `missing` |
+  | lookup | is one of / none of the items picked from the looked-up list, "No value" | `in`, `missing` |
+  | term | is one of / none of the terms picked, "Include sub-terms" (always, on a field that applies parents), "No value" | `in`, one `under` per term, `missing` |
+  | keywords, `$keywords` | is one of / none of the keywords picked, "No value" | `in` (`$keywords`: one `eq` per keyword), `missing` |
+  | note | none: notes have no index rows | — |
+  | a field that is not indexed, or whose index is building or failed | none; the header says how to make it filterable | — |
+
+  Value lists hold at most 50 values per `in`; longer selections become several. A quick period fills in its days when chosen, so a saved filter keeps those days; the views editor's relative dates stay the way to save a rolling period.
 - Without a saved view, a table shows the name, the first four columns of the default content type and the modified date. Column headers sort by the name, dates, people and filterable (indexed, ready) single-value columns; the sort is the `sort` URL parameter and replaces the view's sort. Folders sort among items.
 - Table cells and cards name people from `GET /v1/identity/users` (when the caller can read users), terms and keywords from `GET /v1/terms?ids=` (when the caller has `taxonomy.read`) and looked-up items through `$batch` reads, 20 per request. Unreadable looked-up items read "Unavailable item".
 - `GET /v1/people` returns subject strings. Display names come from `GET /v1/identity/users` when the caller has `user.read`.

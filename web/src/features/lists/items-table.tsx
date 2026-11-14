@@ -41,8 +41,11 @@ export function ItemsTable({
   locations,
   renderRow,
   provenance,
+  headerAction,
 }: {
   provenance?: Map<string, string>;
+  /** Shown after a column's label in its header, such as the column's filter. */
+  headerAction?: (column: string, label: string) => ReactNode;
   renderRow?: (item: Resource, row: ReactElement) => ReactNode;
   rows: Resource[];
   columns: string[];
@@ -168,8 +171,9 @@ export function ItemsTable({
                 <th
                   key={column}
                   aria-sort={active === 'asc' ? 'ascending' : active === 'desc' ? 'descending' : undefined}
-                  className="px-3 py-2 font-medium whitespace-nowrap"
+                  className="group/header px-3 py-2 font-medium whitespace-nowrap"
                 >
+                  <span className="inline-flex items-center gap-1">
                   {sortable.has(column) ? (
                     <button
                       type="button"
@@ -200,6 +204,8 @@ export function ItemsTable({
                   ) : (
                     <span title={t('table.notSortable')}>{label}</span>
                   )}
+                  {headerAction?.(column, label)}
+                  </span>
                 </th>
               );
             })}

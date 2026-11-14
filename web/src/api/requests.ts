@@ -22,19 +22,22 @@ export interface ListingOptions {
   view?: { query?: QuerySpec; columns?: string[] | null };
   q?: string;
   sort?: ListingSort;
+  /** Conditions the page adds to the view's filter (column filters); all must hold. */
+  filters?: FilterExpr[];
   /** Columns chosen on the page instead of the view's. */
   columns?: string[];
 }
 
 /**
- * The rows of a list or library. Plain browsing reads the open folder's children. A saved view, a column sort or a
- * search runs a collection query: the view's query with the open folder, the search text and the chosen sort on top.
+ * The rows of a list or library. Plain browsing reads the open folder's children. A saved view, a column sort, a
+ * column filter or a search runs a collection query: the view's query with the open folder, the search text, the
+ * chosen sort and the column filters (ANDed with the view's filter) on top.
  * A search looks in the open folder and everything below it (the whole list at the top). Totals come separately
  * (`countRequest`), so the first page never waits for a count.
  */
 export function listingRequest(collectionId: string, options: ListingOptions): ApiCall {
-  const { folder, view, q, sort } = options;
-  if (!view && !sort && !q) {
+  const { folder, view, q, sort, filters = [] } = options;
+  if (!view && !sort && !q && filters.length === 0) {
     return { path: `/v1/resources/${folder || collectionId}/children`, method: 'GET', query: { $top: 50 } };
   }
   const base = view?.query ?? {};
@@ -49,6 +52,8 @@ export function listingRequest(collectionId: string, options: ListingOptions): A
     if (parent) query.parent_id = parent;
   }
   if (sort) query.sort = [sort];
+  const filter = andFilter(base.filter, ...filters);
+  if (filter) query.filter = filter;
   // A view's rows carry only its columns; the page asks for the columns it shows.
   const columns = view ? ((options.columns ?? view.columns)?.filter(Boolean) ?? []) : [];
   const select = columns.length
@@ -83,11 +88,13 @@ export function countRequest(collectionId: string, query: QuerySpec): ApiCall {
   };
 }
 
-/** Both conditions; either may be absent. */
-export function andFilter(base: FilterExpr | undefined, extra: FilterExpr | undefined): FilterExpr | undefined {
-  if (!base) return extra;
-  if (!extra) return base;
-  return { and: [base, extra] };
+/**
+ * A filter and more conditions, all of which must hold; any may be absent. ANDs join into one top-level AND rather
+ * than nest, so combining never takes a filter past the API's depth limit.
+ */
+export function andFilter(base: FilterExpr | undefined, ...extra: (FilterExpr | undefined)[]): FilterExpr | undefined {
+  const parts = [base, ...extra].flatMap((entry) => entry?.and ?? (entry ? [entry] : []));
+  return parts.length <= 1 ? parts[0] : { and: parts };
 }
 
 type ViewLike = { query?: QuerySpec; columns?: string[] | null };

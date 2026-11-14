@@ -36,6 +36,8 @@ export interface Formatter {
   fileSize(bytes: number | null | undefined): string;
   /** The calendar day (yyyy-MM-dd) of a moment in the user's time zone. */
   dayKey(value: Date | string): string;
+  /** The moment a calendar day (yyyy-MM-dd) begins in the user's time zone, as a UTC timestamp. */
+  dayStart(day: string): string;
   /** The hour (0–23) of a moment in the user's time zone. */
   hour(value: Date | string): number;
   /** The weekday name of a moment in the user's time zone and language. */
@@ -98,6 +100,12 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
     return result as unknown as Parts;
   };
 
+  // How far the user's clock is ahead of UTC at a moment, to the minute.
+  const offset = (instant: number) => {
+    const { year, month, day, hour, minute } = parts(new Date(instant));
+    return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour) % 24, Number(minute)) - Math.floor(instant / 60_000) * 60_000;
+  };
+
   const date = (value: Date | string) => {
     const { year, month, day } = parts(value);
     return formatDay(p.dateFormat, { year: Number(year), month: Number(month), day: Number(day) });
@@ -143,6 +151,18 @@ export function createFormatter(preferences: Partial<FormatPreferences> = {}): F
     dayKey: (value) => {
       const { year, month, day } = parts(value);
       return `${year}-${month}-${day}`;
+    },
+    dayStart: (day) => {
+      const [year, month, date] = day.split('-').map(Number);
+      const midnight = Date.UTC(year, month - 1, date);
+      // The offset at midnight local time, found from the offset at midnight UTC; a second step settles a DST change.
+      let start = midnight;
+      for (let step = 0; step < 3; step++) {
+        const next = midnight - offset(start);
+        if (next === start) break;
+        start = next;
+      }
+      return new Date(start).toISOString();
     },
     hour: (value) => Number(parts(value).hour),
     weekday: (value, style = 'long') => {
