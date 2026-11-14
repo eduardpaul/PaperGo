@@ -230,7 +230,7 @@ HTTP services have no triggers: a Node-RED flow that wants to start something ca
 | Method | Route | Purpose |
 | --- | --- | --- |
 | GET, POST | `/v1/connections?workspace={id}`, `/v1/connections` | List with targets and status; create `{workspace_id, kind, …}` |
-| GET, PUT, DELETE | `/v1/connections/{id}` | Read, replace (`If-Match`; credentials and signing secret kept unless given), delete (`If-Match`) |
+| GET, PUT, DELETE | `/v1/connections/{id}` | Read, replace (`If-Match`; credentials and signing secret kept unless given; credentials are given again when the target's scheme, host or port changes), delete (`If-Match`) |
 | POST | `/v1/connections/{id}/test` | Connect or call once and say what went wrong |
 | POST | `/v1/connections/{id}/signing-secret` | Make a new signing secret, shown once |
 | GET | `/v1/connections/{id}/calls` | An HTTP connection's last 50 calls |

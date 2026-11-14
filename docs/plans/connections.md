@@ -258,7 +258,7 @@ Management routes live under `/v1/connections`. Routes for callers live under th
 | Method | Route | Purpose | Needs |
 | --- | --- | --- | --- |
 | GET / POST | `/v1/connections?workspace={id}` / `/v1/connections` | List with target and status; create `{workspace_id, …}` | manage + `connection.manage` |
-| GET / PUT / DELETE | `/v1/connections/{id}` | Read, replace (`If-Match`; credentials and signing secret kept unless given), delete (`If-Match`) | manage + `connection.manage` |
+| GET / PUT / DELETE | `/v1/connections/{id}` | Read, replace (`If-Match`; credentials and signing secret kept unless given; credentials are given again when the target's scheme, host or port changes), delete (`If-Match`) | manage + `connection.manage` |
 | POST | `/v1/connections/{id}/test` | Connect or call once and report what went wrong | manage + `connection.manage` |
 | POST | `/v1/connections/{id}/signing-secret` | Make a new signing secret, shown once | manage + `connection.manage` |
 | GET | `/v1/workspaces/{id}/connections` | Key, name, kind, status (`connected`/`ok` or not) and channels, each with what the caller may do; no target or credentials | workspace read |

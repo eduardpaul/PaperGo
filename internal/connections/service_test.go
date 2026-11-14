@@ -181,9 +181,14 @@ func TestChannelAccessIsBorrowed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Replacing keeps the credentials; deleting the list a channel borrows
-	// from refuses its use and says so.
-	replaced, err := h.svc.Replace(h.ctx, h.s, "alice", created.ID, created.Version, Save{Name: "Broker", Target: "mqtt://127.0.0.1:2", Channels: channels})
+	// Replacing keeps the credentials while the target keeps its address,
+	// and asks for them again when it moves, so they never follow it;
+	// deleting the list a channel borrows from refuses its use and says so.
+	var invalid *dms.ValidationError
+	if _, err = h.svc.Replace(h.ctx, h.s, "alice", created.ID, created.Version, Save{Name: "Broker", Target: "mqtt://127.0.0.1:2", Channels: channels}); !errors.As(err, &invalid) {
+		t.Fatalf("kept credentials followed a moved target: %v", err)
+	}
+	replaced, err := h.svc.Replace(h.ctx, h.s, "alice", created.ID, created.Version, Save{Name: "Home broker", Target: "mqtt://127.0.0.1:1", Channels: channels})
 	if err != nil {
 		t.Fatal(err)
 	}

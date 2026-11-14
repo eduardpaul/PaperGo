@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -315,6 +316,11 @@ func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, k
 	case in.Credentials != nil:
 		v.Credentials = *in.Credentials
 	case previous != nil:
+		// Kept credentials go only where they went: a manager, who never
+		// sees them, cannot send them to an address of their choosing.
+		if c := previous.Credentials; c.Type != "" && c.Type != CredentialNone && !sameOrigin(previous.Target, u) {
+			return Settings{}, nil, sealed{}, dms.Invalid("credentials: give them again when the target's scheme, host or port changes")
+		}
 		v.Credentials = previous.Credentials
 	}
 	if previous != nil {
@@ -357,6 +363,13 @@ func prepare(ctx context.Context, t *dms.Service, subject, workspaceID string, k
 		}
 	}
 	return settings, channels, v, nil
+}
+
+// sameOrigin reports whether target u has the scheme, host and port of the
+// stored target previous.
+func sameOrigin(previous string, u *url.URL) bool {
+	p, err := url.Parse(previous)
+	return err == nil && p.Scheme == u.Scheme && p.Host == u.Host
 }
 
 func (s *Service) view(c store.Connection, v sealed) View {

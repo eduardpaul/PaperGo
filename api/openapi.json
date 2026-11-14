@@ -25541,7 +25541,7 @@
         "tags": [
           "Connections"
         ],
-        "description": "Replaces a connection at the version If-Match names. Its workspace, key and kind never change. Credentials and the signing secret are kept when left out. The running connection reconnects with what is saved. Needs manage access to the workspace and connection.manage.",
+        "description": "Replaces a connection at the version If-Match names. Its workspace, key and kind never change. Credentials and the signing secret are kept when left out; credentials are given again when the target's scheme, host or port changes. The running connection reconnects with what is saved. Needs manage access to the workspace and connection.manage.",
         "parameters": [
           {
             "name": "id",
