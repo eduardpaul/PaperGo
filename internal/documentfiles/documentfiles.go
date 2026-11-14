@@ -30,6 +30,7 @@ import (
 
 	"papergo/internal/compose"
 	"papergo/internal/dal/operations"
+	"papergo/internal/dal/refs"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/model"
@@ -222,7 +223,7 @@ func (m *Maker) StartOptimize(ctx context.Context, s *dms.Service, subject, item
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != "item" {
+	if r.Kind != refs.KindItem {
 		return nil, dms.Invalid("only an item's photo can be optimized")
 	}
 	f, err := photo(ctx, s, subject, itemID)
@@ -266,7 +267,7 @@ func (m *Maker) StartCompose(ctx context.Context, s *dms.Service, subject, itemI
 		if err != nil {
 			return nil, err
 		}
-		if r.Kind != "item" || r.ContainerID == nil || primary.ContainerID == nil || *r.ContainerID != *primary.ContainerID {
+		if r.Kind != refs.KindItem || r.ContainerID == nil || primary.ContainerID == nil || *r.ContainerID != *primary.ContainerID {
 			return nil, dms.Invalid("every photo must be an item of the item's list or library")
 		}
 		f, err := photo(ctx, s, subject, id)
