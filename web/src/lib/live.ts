@@ -1,7 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { clearToken } from '@/api/http';
-import { authorizationHeaders } from '@/api/auth';
+import { authorizationHeaders, signInAgain } from '@/api/auth';
 import { keys } from '@/api/queries';
 
 /**
@@ -223,10 +222,7 @@ export function useLiveEvents() {
       if (event === 'run') schedule('run');
       if (event === 'comment' || event === 'connected' || event === 'resync') schedule('comment');
       if (event === 'notification' || event === 'connected' || event === 'resync') schedule('notification');
-      if (event === 'reauthenticate') {
-        clearToken();
-        window.location.assign('/login');
-      }
+      if (event === 'reauthenticate') signInAgain();
     });
     return () => {
       controller.abort();

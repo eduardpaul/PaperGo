@@ -135,6 +135,13 @@ export function clearToken() {
   oidc?.forget();
 }
 
+/** Forgets the sign-in and opens the sign-in page, which returns to the page that was open: for an installed app, the app. */
+export function signInAgain() {
+  clearToken();
+  const { pathname, search, hash } = window.location;
+  if (!pathname.startsWith('/login')) window.location.assign(`/login?returnTo=${encodeURIComponent(pathname + search + hash)}`);
+}
+
 /** Proxy and local deployments use browser credentials; only bearer deployments add Authorization. */
 export function authorizationHeaders(): Record<string, string> {
   const bearer = mode === 'bearer' ? token() : null;
