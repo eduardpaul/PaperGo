@@ -3,6 +3,7 @@ package connections
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -112,6 +113,12 @@ func (sub *subscription) Check(ctx context.Context) error {
 	id, err := sub.svc.checkSpec(ctx, sub.in.DMS, sub.in.Subject, &spec)
 	if err == nil && id != sub.conn {
 		err = dms.ErrNotFound
+	}
+	// A failure to find out, such as a busy database, ends nothing: the
+	// next check asks again.
+	var invalid *dms.ValidationError
+	if err != nil && !refused(err) && !errors.As(err, &invalid) {
+		return nil
 	}
 	return err
 }
