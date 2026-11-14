@@ -198,10 +198,15 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 				values[key] = nil
 			}
 		}
+		// Terms deleted since the revision was written stay out.
+		keywords, err := t.dropDeletedTerms(ctx, defs, old.Keywords, values)
+		if err != nil {
+			return err
+		}
 		if err = t.restoreIntegrationData(ctx, old.ID, id); err != nil {
 			return err
 		}
-		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Keywords: &old.Keywords, Values: &values, ContentTypeID: &typeID})
+		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Keywords: &keywords, Values: &values, ContentTypeID: &typeID})
 		if err != nil {
 			return err
 		}

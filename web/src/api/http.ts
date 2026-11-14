@@ -2,12 +2,29 @@ import { parseJSON, stringifyJSON } from './json';
 import { authenticationMode, authorizationHeaders } from './auth';
 export { clearToken, setToken, token } from './auth';
 
+/** What still names a term, on a term_in_use conflict. */
+export interface TermUsage {
+  child_terms: number;
+  items: number;
+  deleted_items: number;
+  workspaces: number;
+  collections: number;
+  fields: number;
+  content_types: number;
+  templates: number;
+  views: number;
+  smart_folders: number;
+  workflows: number;
+  relationships: number;
+}
+
 export interface ProblemDetails {
   code?: string;
   detail?: string;
   title?: string;
   existing_item?: { id: string; version: number };
   source_item_id?: string;
+  usage?: TermUsage;
 }
 
 export class ApiError extends Error {

@@ -220,6 +220,11 @@ func (q Queries) RepointMerged(ctx context.Context, from, to string, at time.Tim
 	return dberr.Translate(err)
 }
 
+func (q Queries) DeleteTerm(ctx context.Context, id string) error {
+	_, err := models.Terms.Delete(models.DeleteWhere.Terms.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
+}
+
 func (q Queries) MatchTerms(ctx context.Context, terms, values []string) ([]string, error) {
 	roots, _ := json.Marshal(terms)
 	held, _ := json.Marshal(values)

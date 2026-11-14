@@ -3878,6 +3878,15 @@ export function createTermSetPageFromDiscriminatorValue(parseNode: ParseNode | u
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TermUsage}
+ */
+// @ts-ignore
+export function createTermUsageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTermUsage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {UpdateField}
  */
 // @ts-ignore
@@ -6344,6 +6353,7 @@ export function deserializeIntoProblem(problem: Partial<Problem> | undefined = {
         "status": n => { problem.status = n.getNumberValue(); },
         "title": n => { problem.title = n.getStringValue(); },
         "type": n => { problem.type = n.getStringValue(); },
+        "usage": n => { problem.usage = n.getObjectValue<TermUsage>(createTermUsageFromDiscriminatorValue); },
     }
 }
 /**
@@ -7899,6 +7909,28 @@ export function deserializeIntoTermSetPage(termSetPage: Partial<TermSetPage> | u
     return {
         "@odata.nextLink": n => { termSetPage.odataNextLink = n.getStringValue(); },
         "value": n => { termSetPage.value = n.getCollectionOfObjectValues<TermSet>(createTermSetFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TermUsage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTermUsage(termUsage: Partial<TermUsage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "child_terms": n => { termUsage.childTerms = n.getNumberValue(); },
+        "collections": n => { termUsage.collections = n.getNumberValue(); },
+        "content_types": n => { termUsage.contentTypes = n.getNumberValue(); },
+        "deleted_items": n => { termUsage.deletedItems = n.getNumberValue(); },
+        "fields": n => { termUsage.fields = n.getNumberValue(); },
+        "items": n => { termUsage.items = n.getNumberValue(); },
+        "relationships": n => { termUsage.relationships = n.getNumberValue(); },
+        "smart_folders": n => { termUsage.smartFolders = n.getNumberValue(); },
+        "templates": n => { termUsage.templates = n.getNumberValue(); },
+        "views": n => { termUsage.views = n.getNumberValue(); },
+        "workflows": n => { termUsage.workflows = n.getNumberValue(); },
+        "workspaces": n => { termUsage.workspaces = n.getNumberValue(); },
     }
 }
 /**
@@ -9635,6 +9667,10 @@ export interface Problem extends ApiError, Parsable {
      * The type property
      */
     type?: string | null;
+    /**
+     * On a term_in_use conflict, what still names the term.
+     */
+    usage?: TermUsage | null;
 }
 /**
  * On an upload or move-selection name_conflict, the existing writable file available for conditional replacement. Omitted for inaccessible items and folders.
@@ -12794,6 +12830,7 @@ export function serializeProblem(writer: SerializationWriter, problem: Partial<P
     writer.writeNumberValue("status", problem.status);
     writer.writeStringValue("title", problem.title);
     writer.writeStringValue("type", problem.type);
+    writer.writeObjectValue<TermUsage>("usage", problem.usage, serializeTermUsage);
 }
 /**
  * Serializes information the current object
@@ -14378,6 +14415,28 @@ export function serializeTermSetPage(writer: SerializationWriter, termSetPage: P
     if (!termSetPage || isSerializingDerivedType) { return; }
     writer.writeStringValue("@odata.nextLink", termSetPage.odataNextLink);
     writer.writeCollectionOfObjectValues<TermSet>("value", termSetPage.value, serializeTermSet);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TermUsage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTermUsage(writer: SerializationWriter, termUsage: Partial<TermUsage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!termUsage || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("child_terms", termUsage.childTerms);
+    writer.writeNumberValue("collections", termUsage.collections);
+    writer.writeNumberValue("content_types", termUsage.contentTypes);
+    writer.writeNumberValue("deleted_items", termUsage.deletedItems);
+    writer.writeNumberValue("fields", termUsage.fields);
+    writer.writeNumberValue("items", termUsage.items);
+    writer.writeNumberValue("relationships", termUsage.relationships);
+    writer.writeNumberValue("smart_folders", termUsage.smartFolders);
+    writer.writeNumberValue("templates", termUsage.templates);
+    writer.writeNumberValue("views", termUsage.views);
+    writer.writeNumberValue("workflows", termUsage.workflows);
+    writer.writeNumberValue("workspaces", termUsage.workspaces);
 }
 /**
  * Serializes information the current object
@@ -16078,6 +16137,59 @@ export interface TermSetPage extends Parsable {
      * The value property
      */
     value?: TermSet[] | null;
+}
+/**
+ * What names a term, or a term merged into it, and so keeps it from being deleted.
+ */
+export interface TermUsage extends Parsable {
+    /**
+     * Terms below it.
+     */
+    childTerms?: number | null;
+    /**
+     * Lists and libraries that carry it as a keyword.
+     */
+    collections?: number | null;
+    /**
+     * Content types that give it as a field's default or test for it in a rule.
+     */
+    contentTypes?: number | null;
+    /**
+     * Items and folders in a recycle bin whose content holds it.
+     */
+    deletedItems?: number | null;
+    /**
+     * Fields that give it as their default.
+     */
+    fields?: number | null;
+    /**
+     * Live items and folders whose current or published content holds it, as a keyword or in a field.
+     */
+    items?: number | null;
+    /**
+     * Relationships of the type it names.
+     */
+    relationships?: number | null;
+    /**
+     * Smart folders that select or filter on it.
+     */
+    smartFolders?: number | null;
+    /**
+     * Collection templates whose fields give it as a default.
+     */
+    templates?: number | null;
+    /**
+     * List views that filter on it.
+     */
+    views?: number | null;
+    /**
+     * Workflows whose current version names it in a trigger or a form.
+     */
+    workflows?: number | null;
+    /**
+     * Workspaces that carry it as a keyword.
+     */
+    workspaces?: number | null;
 }
 /**
  * Uses container If-Match. Key, type and scale are immutable. Changes affect future revisions; historical content retains its schema.

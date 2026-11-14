@@ -235,8 +235,7 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 	return
 }
 
-// DeleteTermSet deletes a term set that has no terms and no fields. Terms are
-// retained, so a set that ever had terms stays.
+// DeleteTermSet deletes a term set that has no terms and no fields.
 func (s *Service) DeleteTermSet(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
 		if _, e := t.termSet(ctx, subject, id, "manage"); e != nil {

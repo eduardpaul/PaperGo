@@ -23,6 +23,21 @@ export interface TermsItemRequestBuilder extends BaseRequestBuilder<TermsItemReq
      */
     get move(): MoveRequestBuilder;
     /**
+     * Deletes a term that nothing names, with the terms merged into it, and frees its name. Refused with 409 term_in_use, and the problem's usage counts, while the term or a term merged into it has children or is named by an item's current content (also in a recycle bin), a workspace or collection keyword, a field default, a content type, a collection template, a list view, a smart folder, a workflow or a relationship. Merged terms are read-only. Revisions that are no item's current content may keep the ID; restoring one leaves the term out. Raises term.deleted. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @throws {Problem} error when the service returns a 400 status code
+     * @throws {Problem} error when the service returns a 401 status code
+     * @throws {Problem} error when the service returns a 403 status code
+     * @throws {Problem} error when the service returns a 404 status code
+     * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 412 status code
+     * @throws {Problem} error when the service returns a 413 status code
+     * @throws {Problem} error when the service returns a 415 status code
+     * @throws {Problem} error when the service returns a 422 status code
+     * @throws {Problem} error when the service returns a 500 status code
+     */
+     delete(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<void>;
+    /**
      *  Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<Term>}
@@ -54,6 +69,12 @@ export interface TermsItemRequestBuilder extends BaseRequestBuilder<TermsItemReq
      * @throws {Problem} error when the service returns a 500 status code
      */
      put(body: TermInput, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<Term | undefined>;
+    /**
+     * Deletes a term that nothing names, with the terms merged into it, and frees its name. Refused with 409 term_in_use, and the problem's usage counts, while the term or a term merged into it has children or is named by an item's current content (also in a recycle bin), a workspace or collection keyword, a field default, a content type, a collection template, a list view, a smart folder, a workflow or a relationship. Merged terms are read-only. Revisions that are no item's current content may keep the ID; restoring one leaves the term out. Raises term.deleted. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @returns {RequestInformation}
+     */
+     toDeleteRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
      *  Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -87,6 +108,23 @@ export const TermsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof Ter
  * Metadata for all the requests in the request builder.
  */
 export const TermsItemRequestBuilderRequestsMetadata: RequestsMetadata = {
+    delete: {
+        uriTemplate: TermsItemRequestBuilderUriTemplate,
+        responseBodyContentType: "application/problem+json",
+        errorMappings: {
+            400: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            401: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            422: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            500: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+        },
+        adapterMethodName: "sendNoResponseContent",
+    },
     get: {
         uriTemplate: TermsItemRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",

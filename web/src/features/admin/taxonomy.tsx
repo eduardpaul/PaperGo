@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { api } from '@/api/http';
+import { api, isApiError, type TermUsage } from '@/api/http';
 import { allPages } from '@/api/pages';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -279,6 +279,7 @@ function TaxonomyNameDialog({
 function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string; canEdit: boolean }) {
   const { t } = useTranslation('admin');
   const [editing, setEditing] = useState<ManagedTerm | 'new'>();
+  const [deleting, setDeleting] = useState<ManagedTerm>();
   const [expanded, setExpanded] = useState('');
   const terms = useQuery({
     queryKey: ['termStore', 'terms', set.id, parentId ?? 'root'],
@@ -305,9 +306,14 @@ function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string
                 {term.name} {term.deprecated && <Badge>{t('terms.deprecated')}</Badge>}
               </span>
               {canEdit && (
-                <Button size="icon" variant="ghost" aria-label={t('terms.edit', { name: term.name })} onClick={() => setEditing(term)}>
-                  <Pencil />
-                </Button>
+                <>
+                  <Button size="icon" variant="ghost" aria-label={t('terms.edit', { name: term.name })} onClick={() => setEditing(term)}>
+                    <Pencil />
+                  </Button>
+                  <Button size="icon" variant="ghost" aria-label={t('terms.delete', { name: term.name })} onClick={() => setDeleting(term)}>
+                    <Trash2 />
+                  </Button>
+                </>
               )}
             </div>
             {expanded === term.id && <TermLevel set={set} parentId={term.id} canEdit={canEdit} />}
@@ -327,7 +333,68 @@ function TermLevel({ set, parentId, canEdit }: { set: TermSet; parentId?: string
           onClose={() => setEditing(undefined)}
         />
       )}
+      {deleting && <DeleteTermDialog key={deleting.id} term={deleting} onClose={() => setDeleting(undefined)} />}
     </div>
+  );
+}
+
+// What can hold a term, in the order the dialog lists it.
+const termUses = [
+  'items',
+  'deleted_items',
+  'child_terms',
+  'workspaces',
+  'collections',
+  'fields',
+  'content_types',
+  'templates',
+  'views',
+  'smart_folders',
+  'workflows',
+  'relationships',
+] as const satisfies readonly (keyof TermUsage)[];
+
+function DeleteTermDialog({ term, onClose }: { term: ManagedTerm; onClose: () => void }) {
+  const { t } = useTranslation(['admin', 'common']);
+  const client = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => api(`/v1/terms/${term.id}`, { method: 'DELETE', ifMatch: term.version }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['termStore'] }),
+        client.invalidateQueries({ queryKey: ['resources'] }),
+      ]);
+      onClose();
+    },
+  });
+  // The server refuses a term in use and counts what still holds it.
+  const usage = isApiError(remove.error, 409) && remove.error.code === 'term_in_use' ? remove.error.problem?.usage : undefined;
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t('terms.deleteTitle', { name: term.name })}
+      description={
+        usage ? (
+          <>
+            {t('terms.deleteTerm.inUse')}
+            {termUses
+              .filter((use) => usage[use] > 0)
+              .map((use) => (
+                <span key={use} className="block">
+                  {t(`terms.deleteTerm.usage.${use}`, { count: usage[use] })}
+                </span>
+              ))}
+          </>
+        ) : (
+          t('terms.deleteTerm.description')
+        )
+      }
+      confirm={t('common:actions.delete')}
+      busy={remove.isPending}
+      error={usage ? undefined : remove.error}
+      onConfirm={() => remove.mutate()}
+    />
   );
 }
 

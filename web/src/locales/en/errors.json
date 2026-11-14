@@ -16,6 +16,7 @@
     "payload_too_large": "That is larger than the server accepts.",
     "precondition_failed": "Someone else changed this in the meantime. Reload and try again.",
     "storage_unavailable": "File storage is unavailable. Try again shortly.",
+    "term_in_use": "This term is still in use. Remove it from what holds it first.",
     "text_not_read": "The file's text has not been read yet. A workflow with document.read_text reads it.",
     "timeout": "The server took too long. Try again.",
     "unauthorized": "You need to sign in.",

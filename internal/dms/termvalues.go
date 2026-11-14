@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"errors"
 
 	"papergo/internal/dal/catalog"
 	"papergo/internal/dal/dberr"
@@ -21,7 +22,12 @@ import (
 //     name or synonym, or adds it to the keywords set.
 //
 // An ID of a merged term stands for the term it was merged into. Deprecated
-// terms are rejected unless the value was already there.
+// terms are rejected unless the value was already there. A value in the form
+// of a term ID that names no term, because the term was deleted, is never a
+// label: it is rejected, or dropped when the value was already there.
+
+// errTermGone marks a value in the form of a term ID that names no term.
+var errTermGone = errors.New("term does not exist")
 
 func (s *Service) resolveTermValues(ctx context.Context, subject string, d *catalog.FieldDefinition, values []any, old map[string]bool) ([]any, error) {
 	setID := taxonomy.KeywordsSetID
@@ -37,6 +43,12 @@ func (s *Service) resolveTermValues(ctx context.Context, subject string, d *cata
 	for _, v := range values {
 		raw := v.(string)
 		id, e := s.resolveTermID(ctx, subject, d, set, raw, old[raw])
+		if errors.Is(e, errTermGone) {
+			if old[raw] {
+				continue
+			}
+			return nil, invalid("term " + raw + " of " + d.Key + " does not exist")
+		}
 		if e != nil {
 			return nil, e
 		}
@@ -65,6 +77,9 @@ func (s *Service) resolveTermID(ctx context.Context, subject string, d *catalog.
 	}
 	if !dberr.IsNotFound(e) {
 		return "", e
+	}
+	if taxonomy.IsID(raw) {
+		return "", errTermGone
 	}
 	if d.Type == catalog.FieldKeywords {
 		kw, _, found, e := terms.Keyword(ctx, raw)

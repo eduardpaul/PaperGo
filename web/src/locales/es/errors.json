@@ -16,6 +16,7 @@
     "payload_too_large": "Supera el tamaño que acepta el servidor.",
     "precondition_failed": "Otra persona lo cambió mientras tanto. Vuelve a cargar e inténtalo de nuevo.",
     "storage_unavailable": "El almacenamiento de archivos no está disponible. Inténtalo de nuevo en breve.",
+    "term_in_use": "Este término sigue en uso. Quítalo primero de donde se usa.",
     "text_not_read": "Todavía no se ha leído el texto del archivo. Lo lee un flujo de trabajo con document.read_text.",
     "timeout": "El servidor tardó demasiado. Inténtalo de nuevo.",
     "unauthorized": "Tienes que iniciar sesión.",

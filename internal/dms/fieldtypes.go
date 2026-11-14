@@ -452,9 +452,13 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs 
 			if e != nil {
 				return e
 			}
-			if d.Options.Multiple {
+			// A held value whose term was deleted is gone from resolved.
+			switch {
+			case d.Options.Multiple:
 				values[d.Key] = resolved
-			} else {
+			case len(resolved) == 0:
+				values[d.Key] = nil
+			default:
 				values[d.Key] = resolved[0]
 			}
 			continue

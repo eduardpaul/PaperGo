@@ -779,23 +779,26 @@ func validateWorkspaceReferences(p corePackage) error {
 	}
 	currentApps := currentAppVersions(map[string][]map[string]any{"apps": packageMaps(p.Tables["apps"]), "app_versions": packageMaps(p.Tables["app_versions"])})
 	referenceKeys := []string{"lookup_container_id", "term_set_id", "definition_id", "collection_id", "container_id", "workspace_id", "content_type_id", "schema_revision_id", "item_id", "workflow_id", "blob_id", "task_id", "run_id"}
-	var walk func(any, string) error
-	walk = func(value any, key string) error {
+	current := currentRevisions(packageMaps(p.Tables["resources"]))
+	// history rows may name terms deleted since they were written.
+	var walk func(any, string, bool) error
+	walk = func(value any, key string, history bool) error {
 		switch v := value.(type) {
 		case map[string]any:
 			for childKey, child := range v {
-				if err := walk(child, childKey); err != nil {
+				if err := walk(child, childKey, history); err != nil {
 					return err
 				}
 			}
 		case []any:
 			for _, child := range v {
-				if err := walk(child, key); err != nil {
+				if err := walk(child, key, history); err != nil {
 					return err
 				}
 			}
 		case string:
-			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "hidden_field_ids" || key == "terms" || key == "keywords" || key == "keyword" {
+			term := key == "terms" || key == "keywords" || key == "keyword"
+			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "hidden_field_ids" || term && !history {
 				if _, err := uuid.Parse(v); err == nil && !known[v] {
 					return invalid("workspace package has an unresolved reference in " + key)
 				}
@@ -815,7 +818,8 @@ func validateWorkspaceReferences(p corePackage) error {
 				if text, ok := value.(string); ok && (strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[")) {
 					var node any
 					if json.Unmarshal([]byte(text), &node) == nil {
-						if err := walk(node, column); err != nil {
+						history := table == "publications" || table == "item_revisions" && !current[fmt.Sprint(row["id"])]
+						if err := walk(node, column, history); err != nil {
 							return err
 						}
 					}
@@ -943,6 +947,22 @@ func portableReferenceType(kind catalog.FieldType) bool {
 	return kind == catalog.FieldLookup || kind.Terms()
 }
 
+// currentRevisions are the revisions that are an item's head or published
+// content. They, and the schemas collections now have, carry their terms;
+// older revisions, publication snapshots and earlier schemas may name terms
+// deleted since they were written.
+func currentRevisions(resources []map[string]any) map[string]bool {
+	current := map[string]bool{}
+	for _, row := range resources {
+		for _, column := range []string{"head_revision_id", "published_revision_id"} {
+			if id, ok := row[column].(string); ok {
+				current[id] = true
+			}
+		}
+	}
+	return current
+}
+
 func validateWorkspaceValues(p corePackage) error {
 	rows := map[string][]map[string]any{}
 	for table, data := range p.Tables {
@@ -951,6 +971,11 @@ func validateWorkspaceValues(p corePackage) error {
 	graph, err := workspaceValueGraphFor(rows)
 	if err != nil {
 		return err
+	}
+	current := currentRevisions(rows["resources"])
+	heads := map[string]bool{}
+	for _, id := range graph.resourceSchemas {
+		heads[id] = true
 	}
 	knownResources, terms, users := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, row := range rows["identity_users"] {
@@ -982,8 +1007,8 @@ func validateWorkspaceValues(p corePackage) error {
 		}
 		return nil
 	}
-	checkField := func(field SchemaField, value any) error {
-		if !portableDependencyType(field.Type) {
+	checkField := func(field SchemaField, value any, history bool) error {
+		if !portableDependencyType(field.Type) || history && field.Type.Terms() {
 			return nil
 		}
 		known := terms
@@ -997,6 +1022,9 @@ func validateWorkspaceValues(p corePackage) error {
 	}
 	for _, table := range []string{"resources", "item_revisions", "item_surfaces"} {
 		for _, row := range rows[table] {
+			if table == "item_revisions" && !current[fmt.Sprint(row["id"])] {
+				continue
+			}
 			var ids any
 			if err := json.Unmarshal([]byte(fmt.Sprint(row["keywords"])), &ids); err != nil {
 				return err
@@ -1006,14 +1034,14 @@ func validateWorkspaceValues(p corePackage) error {
 			}
 		}
 	}
-	for _, schema := range graph.schemas {
+	for id, schema := range graph.schemas {
 		for _, field := range schema.Fields {
 			if len(field.Options.DefaultValue) > 0 && portableDependencyType(field.Type) {
 				var value any
 				if err := json.Unmarshal(field.Options.DefaultValue, &value); err != nil {
 					return err
 				}
-				if err := checkField(field, value); err != nil {
+				if err := checkField(field, value, !heads[id]); err != nil {
 					return err
 				}
 			}
@@ -1030,15 +1058,13 @@ func validateWorkspaceValues(p corePackage) error {
 				return err
 			}
 			schemaID := row["schema_revision_id"]
+			history := table == "publications" || !current[fmt.Sprint(row["id"])]
 			if table == "publications" {
-				if err := check(values["keywords"], terms); err != nil {
-					return err
-				}
 				schemaID = values["schema_revision_id"]
 				values, _ = values["values"].(map[string]any)
 			}
 			for _, field := range graph.schemas[fmt.Sprint(schemaID)].Fields {
-				if err := checkField(field, values[field.ID]); err != nil {
+				if err := checkField(field, values[field.ID], history); err != nil {
 					return err
 				}
 			}

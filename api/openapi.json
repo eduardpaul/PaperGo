@@ -10970,6 +10970,132 @@
         "x-module-scopes": [
           "taxonomy.manage"
         ]
+      },
+      "delete": {
+        "summary": "Delete Term",
+        "operationId": "deleteTerm",
+        "description": "Deletes a term that nothing names, with the terms merged into it, and frees its name. Refused with 409 term_in_use, and the problem's usage counts, while the term or a term merged into it has children or is named by an item's current content (also in a recycle bin), a workspace or collection keyword, a field default, a content type, a collection template, a list view, a smart folder, a workflow or a relationship. Merged terms are read-only. Revisions that are no item's current content may keep the ID; restoring one leaves the term out. Raises term.deleted. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/terms/{id}/move": {
@@ -12250,7 +12376,7 @@
       ],
       "post": {
         "summary": "Restore historical metadata as a new revision",
-        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, leaving out terms deleted since, and retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: item.write. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -26637,6 +26763,14 @@
           "open_task_id": {
             "type": "string",
             "description": "On a task_open conflict, the open task with the key a unique task asked for."
+          },
+          "usage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TermUsage"
+              }
+            ],
+            "description": "On a term_in_use conflict, what still names the term."
           }
         },
         "required": [
@@ -30150,11 +30284,11 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.changed, wf.{key}.{event}, or a module's type, such as connection.message (options). Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged and term.moved take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.updated, task.completed, task.cancelled, schedule, manual, term.merged, term.moved, term.deleted, term.changed, wf.{key}.{event}, or a module's type, such as connection.message (options). Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed, term.merged, term.moved and term.deleted take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
-            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged or term.moved."
+            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed, term.merged, term.moved or term.deleted."
           },
           "content_type_id": {
             "type": "string",
@@ -31357,6 +31491,87 @@
         },
         "required": [
           "name"
+        ],
+        "additionalProperties": false
+      },
+      "TermUsage": {
+        "type": "object",
+        "description": "What names a term, or a term merged into it, and so keeps it from being deleted.",
+        "properties": {
+          "child_terms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Terms below it."
+          },
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Live items and folders whose current or published content holds it, as a keyword or in a field."
+          },
+          "deleted_items": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Items and folders in a recycle bin whose content holds it."
+          },
+          "workspaces": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Workspaces that carry it as a keyword."
+          },
+          "collections": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Lists and libraries that carry it as a keyword."
+          },
+          "fields": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Fields that give it as their default."
+          },
+          "content_types": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Content types that give it as a field's default or test for it in a rule."
+          },
+          "templates": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Collection templates whose fields give it as a default."
+          },
+          "views": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "List views that filter on it."
+          },
+          "smart_folders": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Smart folders that select or filter on it."
+          },
+          "workflows": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Workflows whose current version names it in a trigger or a form."
+          },
+          "relationships": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Relationships of the type it names."
+          }
+        },
+        "required": [
+          "child_terms",
+          "items",
+          "deleted_items",
+          "workspaces",
+          "collections",
+          "fields",
+          "content_types",
+          "templates",
+          "views",
+          "smart_folders",
+          "workflows",
+          "relationships"
         ],
         "additionalProperties": false
       },

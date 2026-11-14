@@ -107,6 +107,15 @@ func TestKeywordCanonicalizationAndValidation(t *testing.T) {
 		if err := daltest.Tag(ctx, f.Store, f.Item, []string{term.ID}); !errors.Is(err, dberr.ErrInvalidReference) {
 			t.Fatalf("unavailable term accepted as keyword: %v", err)
 		}
+		// A value in the form of a term ID is never a label: the term it
+		// named is gone.
+		gone := "5f1d0c3e-8a51-4c57-9d0b-6f1f6f0e2a11"
+		if err := daltest.Tag(ctx, f.Store, f.Item, []string{gone}); !errors.Is(err, dberr.ErrInvalidReference) {
+			t.Fatalf("the ID of a missing term became a keyword: %v", err)
+		}
+		if found, err := terms.Terms(ctx, taxonomy.TermFilter{SetID: taxonomy.KeywordsSetID, Match: gone, In: taxonomy.MatchName}); err != nil || len(found) != 0 {
+			t.Fatalf("keyword named by an ID: %v %v", found, err)
+		}
 		daltest.Update(t, f.Store, "term_sets", daltest.Row{"is_keywords": false, "is_open": false}, daltest.Row{"id": taxonomy.KeywordsSetID})
 		if err := daltest.Tag(ctx, f.Store, f.Item, []string{"new keyword"}); !errors.Is(err, dberr.ErrInvalidReference) {
 			t.Fatalf("closed keyword set accepted new term: %v", err)

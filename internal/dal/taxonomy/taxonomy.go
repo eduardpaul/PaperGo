@@ -1,8 +1,8 @@
 // Package taxonomy owns the organization term store: term groups, the term
 // sets they hold and the terms of each set, kept as trees by materialized
 // paths. Merged terms stay as deprecated pointers to the term that replaces
-// them. Drivers implement Queries; this package decides what those
-// statements mean.
+// them, and go when it is deleted. Drivers implement Queries; this package
+// decides what those statements mean.
 package taxonomy
 
 import (
@@ -193,6 +193,9 @@ type Queries interface {
 	MoveSubtree(ctx context.Context, from, to, set string, at time.Time) error
 	// RepointMerged points the terms merged into from at to.
 	RepointMerged(ctx context.Context, from, to string, at time.Time) error
+	// DeleteTerm deletes a term with its keyword links and the relationship
+	// type it names.
+	DeleteTerm(ctx context.Context, id string) error
 	// MatchTerms returns which of terms values hold, themselves or below,
 	// following merges on both sides.
 	MatchTerms(ctx context.Context, terms, values []string) ([]string, error)
@@ -347,8 +350,7 @@ func (r *Repo) SaveSet(ctx context.Context, in Set, version int) (Set, error) {
 	return out, err
 }
 
-// DeleteSet deletes a set that never had terms and that no field uses.
-// Terms are retained, so a set that had terms stays.
+// DeleteSet deletes a set that has no terms and that no field uses.
 func (r *Repo) DeleteSet(ctx context.Context, id string, version int) error {
 	return r.write(ctx, func(q Queries) error {
 		s, err := current(ctx, q.TermSet, id, func(s Set) int { return s.Version }, version)
@@ -637,6 +639,63 @@ func (r *Repo) Merge(ctx context.Context, sourceID string, version int, targetID
 	return out, err
 }
 
+// DeleteTerm deletes the unmerged term id and the terms merged into it,
+// which only pointed at it, and returns the term as it was. Its set stays
+// locked while held decides: held gets the IDs about to go and how many
+// unmerged children the term has, and an error from it leaves everything in
+// place. A term merged elsewhere that still sat below the deleted term
+// becomes a root of the set.
+func (r *Repo) DeleteTerm(ctx context.Context, id string, version int, held func(ids []string, children int) error) (Term, error) {
+	var out Term
+	err := r.write(ctx, func(q Queries) error {
+		t, err := lockedTerm(ctx, q, id, version)
+		if err != nil {
+			return err
+		}
+		merged, err := q.Terms(ctx, TermFilter{MergedInto: id, Order: OrderID})
+		if err != nil {
+			return err
+		}
+		below, err := q.Terms(ctx, TermFilter{ParentID: id, Order: OrderID})
+		if err != nil {
+			return err
+		}
+		ids := []string{id}
+		for _, m := range merged {
+			ids = append(ids, m.ID)
+		}
+		children := 0
+		var pointers []Term
+		for _, c := range below {
+			switch {
+			case !c.Merged():
+				children++
+			case c.MergedIntoID != id:
+				pointers = append(pointers, c)
+			}
+		}
+		if err := held(ids, children); err != nil {
+			return err
+		}
+		if children > 0 {
+			return Violation("delete or move the term's children first")
+		}
+		for _, c := range pointers {
+			if _, err := move(ctx, q, c, c.SetID, ""); err != nil {
+				return err
+			}
+		}
+		for _, m := range merged {
+			if err := q.DeleteTerm(ctx, m.ID); err != nil {
+				return err
+			}
+		}
+		out = t
+		return q.DeleteTerm(ctx, id)
+	})
+	return out, err
+}
+
 // Lookup returns up to two current terms of a set with a name, label or
 // synonym equal to label, comparing the fields in that order and stopping
 // at the first that matches.
@@ -670,10 +729,26 @@ func keyword(ctx context.Context, q Queries, name string) (Term, Set, bool, erro
 	return rows[0], set, true, nil
 }
 
+// IsID reports whether s has the form of the IDs terms are given. Such a
+// value always names a term: once the term is deleted it names nothing, and
+// is never read as a label.
+func IsID(s string) bool { return len(s) == 36 && uuid.Validate(s) == nil }
+
 // ResolveKeywords turns keyword ids and labels into the ids of the active
 // keywords they stand for, adding a keyword for an unknown label. Merged
-// ids stand for their targets, and duplicates collapse.
+// ids stand for their targets, and duplicates collapse. The ID of a term
+// that no longer exists is an invalid reference.
 func ResolveKeywords(ctx context.Context, q Queries, keywords []string) ([]string, error) {
+	return resolveKeywords(ctx, q, keywords, false)
+}
+
+// StoredKeywords resolves the keywords a revision stored, as ResolveKeywords
+// does, leaving out the IDs of terms deleted since it was written.
+func StoredKeywords(ctx context.Context, q Queries, keywords []string) ([]string, error) {
+	return resolveKeywords(ctx, q, keywords, true)
+}
+
+func resolveKeywords(ctx context.Context, q Queries, keywords []string, stored bool) ([]string, error) {
 	out := make([]string, 0, len(keywords))
 	if len(keywords) == 0 {
 		return out, nil
@@ -688,6 +763,12 @@ func ResolveKeywords(ctx context.Context, q Queries, keywords []string) ([]strin
 			continue
 		}
 		t, err := canonical(ctx, q, label)
+		if dberr.IsNotFound(err) && IsID(label) {
+			if stored {
+				continue
+			}
+			return nil, fmt.Errorf("%w: keyword term %s does not exist", dberr.ErrInvalidReference, label)
+		}
 		if dberr.IsNotFound(err) {
 			var set Set
 			var found bool

@@ -23,6 +23,7 @@
       },
       "term": {
         "changed": "When a term changes",
+        "deleted": "When a term is deleted",
         "merged": "When terms merge",
         "moved": "When a term moves"
       },

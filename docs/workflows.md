@@ -243,6 +243,7 @@ a workflow. The server rechecks write permission on every item before starting.
 | `call` | another run calls it with `ctx.call` (see [calling workflows](#calling-workflows)) | the called item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `term.moved` | a term moves under another parent, or a keyword is promoted into another set | none |
+| `term.deleted` | a term that nothing named is deleted, with the terms merged into it | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
 | `task.created`, `task.updated`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, updated, completed or cancelled | the task's item, or none |
 | `wf.{key}.completed`, `wf.{key}.failed` | a run of workflow `key` ends | that run's item |
@@ -294,6 +295,7 @@ The `data` for each event type:
 - `call`: `workflow_id`, `parent_run_id`; the input is `ctx.trigger.input` and `run(ctx, input)`'s second argument
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.moved`: `term_id`, `term_set_id`, `previous_term_set_id`, `parent_id`, `previous_parent_id` (empty at the root)
+- `term.deleted`: `term_id`, `term_set_id`, `parent_id` (empty at the root), `name`, `merged_term_ids` (the terms merged into it, deleted with it)
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
 - `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.updated` adds `changed`, the fields that changed; `task.completed` adds `outcome` and `completed_by`; `task.cancelled` adds `completed_by`, who cancelled it, and `reason` when one was given
 - `wf.*` and `role.*`: `run_id`, `workflow_id` and `status`; `failed` adds `error`, and `completed` adds the run's [`outputs`](#outputs): what its script returned

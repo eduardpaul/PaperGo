@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -75,6 +76,23 @@ func TestTaxonomyRoutes(t *testing.T) {
 	send("POST", "/v1/keywords/"+keyword.ID+"/promote", `{"term_set_id":"`+set.ID+`"}`, `"1"`, json_, 200, &promoted)
 	if promoted.TermSetID != set.ID || !promoted.AvailableAsKeyword {
 		t.Fatalf("promoted: %+v", promoted)
+	}
+
+	// A term in use stays, and the problem counts what holds it.
+	etagOf := func(v dms.TermView) string { return strconv.Quote(strconv.Itoa(v.Version)) }
+	var held struct {
+		Code  string        `json:"code"`
+		Usage dms.TermUsage `json:"usage"`
+	}
+	send("DELETE", "/v1/terms/"+finance.ID, "", "", "", 428, nil)
+	send("DELETE", "/v1/terms/"+finance.ID, "", etagOf(merged), "", 409, &held)
+	if held.Code != "term_in_use" || held.Usage != (dms.TermUsage{ChildTerms: 1}) {
+		t.Fatalf("term in use: %+v", held)
+	}
+	send("DELETE", "/v1/terms/"+child.ID, "", etagOf(child), "", 204, nil)
+	send("DELETE", "/v1/terms/"+finance.ID, "", etagOf(merged), "", 204, nil)
+	for _, id := range []string{finance.ID, money.ID} {
+		send("GET", "/v1/terms/"+id, "", "", "", 404, nil)
 	}
 
 	csv := "Term Set Name,Level 1 Term,Level 2 Term\nRegions,Europe,Spain\n"

@@ -437,6 +437,7 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	var moduleProblem *Problem
 	var openTask *taskstore.OpenError
 	var required *dms.PreconditionRequired
+	var termInUse *dms.TermInUse
 	switch {
 	case errors.As(err, &moveConflict):
 		extensions := map[string]any{"source_item_id": moveConflict.SourceID}
@@ -480,6 +481,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "protected_home", err.Error())
 	case errors.As(err, &openTask):
 		a.extendedProblem(w, r, 409, "task_open", openTask.Error(), map[string]any{"open_task_id": openTask.ID}, operationIndex...)
+	case errors.As(err, &termInUse):
+		a.extendedProblem(w, r, 409, "term_in_use", termInUse.Error(), map[string]any{"usage": termInUse.Usage}, operationIndex...)
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

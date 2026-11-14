@@ -128,6 +128,44 @@ func testTaxonomy(t *testing.T, s *dal.Store) {
 		t.Fatalf("match: %v %v", match, err)
 	}
 
+	// Deleting a term asks the caller what holds it, keeps a term with
+	// children, and takes the terms merged into it along.
+	free := func([]string, int) error { return nil }
+	held := errors.New("held")
+	var asked []string
+	var below int
+	if _, err = r.DeleteTerm(ctx, moved.ID, target.Version, func(ids []string, children int) error {
+		asked, below = ids, children
+		return held
+	}); !errors.Is(err, held) || !slices.Equal(asked, []string{"spain", "asia", "catalonia"}) || below != 2 {
+		t.Fatalf("held term: %v %v %v", asked, below, err)
+	}
+	if _, err = r.DeleteTerm(ctx, moved.ID, target.Version, free); !taxonomy.IsViolation(err) {
+		t.Fatalf("deleted a term with children: %v", err)
+	}
+	if _, err = r.DeleteTerm(ctx, asia.ID, asia.Version, free); !taxonomy.IsViolation(err) {
+		t.Fatalf("deleted a merged term: %v", err)
+	}
+	for _, child := range []taxonomy.Term{madrid, barcelona} {
+		if _, err = r.DeleteTerm(ctx, child.ID, child.Version, free); err != nil {
+			t.Fatalf("delete %s: %v", child.ID, err)
+		}
+	}
+	if _, err = r.DeleteTerm(ctx, moved.ID, target.Version-1, free); !errors.Is(err, dberr.ErrConcurrentUpdate) {
+		t.Fatalf("stale delete: %v", err)
+	}
+	if gone, err := r.DeleteTerm(ctx, moved.ID, target.Version, free); err != nil || gone.Name != "Spain" {
+		t.Fatalf("delete: %+v %v", gone, err)
+	}
+	for _, id := range []string{"spain", "asia", "catalonia"} {
+		if exists, err := r.TermExists(ctx, id); err != nil || exists {
+			t.Fatalf("%s outlived its delete: %v %v", id, exists, err)
+		}
+	}
+	// The names are free again, where the terms were.
+	add(other.ID, world.ID, "spain", "Spain", nil)
+	add(places.ID, "", "asia", "Asia", nil)
+
 	// Keywords match names and synonyms without regard to case.
 	tax := add(taxonomy.KeywordsSetID, "", "tax", "Tax", nil, "Levy")
 	for _, name := range []string{"TAX", "levy"} {

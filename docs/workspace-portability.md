@@ -91,7 +91,10 @@ import rebuilds its lineage. Taxonomy groups are matched by name, sets by key, t
 parent path, and directory groups by name. Existing shared definitions and group
 memberships must agree; conflicts fail the entire import rather than changing
 configuration another workspace uses. Content types and fields the target lacks are
-copied. A group inbox already bound on the target conflicts.
+copied. A group inbox already bound on the target conflicts. A package carries the
+terms its current content, schemas and configuration name; earlier revisions,
+publication snapshots and earlier schemas travel as written and may name terms
+deleted since.
 
 User subjects are the portable directory identity. Existing target accounts keep
 their active status, profile and organization roles. Missing referenced users are

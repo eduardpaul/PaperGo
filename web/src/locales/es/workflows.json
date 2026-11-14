@@ -23,6 +23,7 @@
       },
       "term": {
         "changed": "Cuando cambia un término",
+        "deleted": "Cuando se elimina un término",
         "merged": "Cuando se fusionan términos",
         "moved": "Cuando se mueve un término"
       },

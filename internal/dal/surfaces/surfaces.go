@@ -228,7 +228,7 @@ func (r *Repo) Project(ctx context.Context, p Projection) (Surface, error) {
 		if rev.ItemID != p.ItemID {
 			return fmt.Errorf("%w: the revision belongs to another item", dberr.ErrInvalidReference)
 		}
-		keywords, err := taxonomy.ResolveKeywords(ctx, q, rev.Keywords)
+		keywords, err := taxonomy.StoredKeywords(ctx, q, rev.Keywords)
 		if err != nil {
 			return err
 		}

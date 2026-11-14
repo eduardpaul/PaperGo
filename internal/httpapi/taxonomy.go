@@ -73,6 +73,9 @@ func (a *API) registerTaxonomy(m *router) {
 	m.HandleFunc("PUT /v1/terms/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermInput, v int) (any, error) {
 		return a.dms(r).UpdateTerm(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("DELETE /v1/terms/{id}", a.deletion(func(r *http.Request, v int) error {
+		return a.dms(r).DeleteTerm(r.Context(), subject(r), r.PathValue("id"), v)
+	}))
 	m.HandleFunc("POST /v1/terms/{id}/move", foundationMutation(a, 200, true, func(r *http.Request, in dms.MoveTermInput, v int) (any, error) {
 		return a.dms(r).MoveTerm(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
