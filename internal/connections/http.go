@@ -390,9 +390,15 @@ func (e *httpEndpoint) keep(key string, answer Envelope, ttl time.Duration, now 
 	e.bytes += size
 }
 
-// cacheKey is what a channel's cached GET answer is kept under.
-func cacheKey(ch Channel, p prepared) string {
-	return ch.Key + "\x00" + p.path.Raw + "\x00" + p.headers.Get("Accept")
+// cacheKey is what a channel's cached GET answer is kept under. A signed
+// call names its caller, whom the service may answer for alone, so its
+// answer is kept for that caller only.
+func (e *httpEndpoint) cacheKey(ch Channel, p prepared, subject string) string {
+	key := ch.Key + "\x00" + p.path.Raw + "\x00" + p.headers.Get("Accept")
+	if e.settings.Sign && e.v.SigningSecret != "" {
+		key += "\x00" + subject
+	}
+	return key
 }
 
 // do makes a call through channel ch as subject. A GET a channel caches is
@@ -400,7 +406,7 @@ func cacheKey(ch Channel, p prepared) string {
 func (e *httpEndpoint) do(ctx context.Context, ch Channel, p prepared, subject, requestID string) (Envelope, error) {
 	now := time.Now()
 	rec := CallRecord{At: now.UTC(), Channel: ch.Key, Method: p.method, Path: strings.SplitN(p.path.Raw, "?", 2)[0], Caller: subject}
-	key := cacheKey(ch, p)
+	key := e.cacheKey(ch, p, subject)
 	ttl := ch.cacheFor()
 	if ttl > 0 && p.method == http.MethodGet {
 		if answer, ok := e.cached(key, now); ok {

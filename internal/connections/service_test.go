@@ -197,10 +197,10 @@ func TestChannelAccessIsBorrowed(t *testing.T) {
 		t.Fatal(err)
 	}
 	sealed, err := h.svc.open(stored)
-	if err != nil || sealed.Credentials.Password != "secret" || replaced.Target != "mqtt://127.0.0.1:2" {
+	if err != nil || sealed.Credentials.Password != "secret" || replaced.Name != "Home broker" {
 		t.Fatalf("replace lost the credentials: %+v %v", sealed, err)
 	}
-	if _, err = h.svc.Replace(h.ctx, h.s, "alice", created.ID, created.Version, Save{Name: "Broker", Target: "mqtt://127.0.0.1:2", Channels: channels}); !errors.Is(err, dms.ErrPreconditionFailed) {
+	if _, err = h.svc.Replace(h.ctx, h.s, "alice", created.ID, created.Version, Save{Name: "Broker", Target: "mqtt://127.0.0.1:1", Channels: channels}); !errors.Is(err, dms.ErrPreconditionFailed) {
 		t.Fatalf("a stale replace: %v", err)
 	}
 	list, err := h.s.DAL.Resources().Resource(h.ctx, h.list)
@@ -522,6 +522,20 @@ func TestHTTPCalls(t *testing.T) {
 	if result, err := h.svc.Test(h.ctx, "alice", v.ID); err != nil || !result.OK {
 		t.Fatalf("test %+v %v", result, err)
 	}
+	// A signed call names its caller, so another caller's GET is never
+	// answered from bob's cached answer.
+	mu.Lock()
+	before := len(hits)
+	mu.Unlock()
+	p, _ = prepareCall(tg.channel, Call{Path: "/status"}, MaxBody)
+	if _, err = h.svc.sendCall(h.ctx, h.s, "alice", tg, p, "r5", ""); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	if len(hits) != before+1 || hits[before].Header.Get("PaperGo-Subject") != "alice" {
+		t.Fatalf("alice's signed GET was answered from bob's cache")
+	}
+	mu.Unlock()
 	// An HTTP target outside the operator's networks is refused.
 	elsewhere := &Runtime{svc: h.svc, networks: nil}
 	u, _ := url.Parse(service.URL)

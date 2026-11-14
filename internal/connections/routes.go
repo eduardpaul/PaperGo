@@ -331,7 +331,7 @@ func (m module) fetch(w http.ResponseWriter, r *http.Request, in httpapi.Request
 		return err
 	}
 	ttl := t.channel.cacheFor()
-	if _, hit := e.cached(cacheKey(t.channel, p), time.Now()); ttl == 0 || !hit || method != http.MethodGet {
+	if _, hit := e.cached(e.cacheKey(t.channel, p, in.Subject), time.Now()); ttl == 0 || !hit || method != http.MethodGet {
 		if err = m.s.runtime.limit(in.Subject, t.conn.ID, t.channel.Key, UseSee); err != nil {
 			return err
 		}
