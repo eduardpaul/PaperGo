@@ -334,7 +334,9 @@ var receiptsApps = []string{"receipts/apps/receipts-desk.json"}
 // receiptsBindings bind the references of the receipts sample's parameters
 // to a library and the catalog types of receipts and their lines.
 func receiptsBindings(library, receipt, line string) []string {
-	return []string{"$collection:receipts", library, "$type:receipts_receipt", receipt, "$type:receipts_line", line}
+	// A reference stands for an ID; a setting for its default, as JSON.
+	return []string{"$collection:receipts", library, "$type:receipts_receipt", receipt, "$type:receipts_line", line,
+		`"$setting:read_text_height"`, "32", `"$setting:read_quality"`, "80", `"$setting:pdf_color"`, `"gray"`, `"$setting:pdf_quality"`, "80"}
 }
 
 // dieselApps are the diesel sample's apps, by their settings files.
