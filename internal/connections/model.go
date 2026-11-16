@@ -364,9 +364,6 @@ func example(kind Kind) string {
 	return "mqtt://192.168.1.20:1883, mqtts://broker.example.com:8883 or wss://broker.example.com/mqtt"
 }
 
-// tlsScheme reports whether a target's scheme uses TLS.
-func tlsScheme(kind Kind, u *url.URL) bool { return schemes[kind][u.Scheme] }
-
 // checkSealed checks what a kind keeps sealed, but not where it goes,
 // which the network policy decides.
 func checkSealed(kind Kind, s *sealed) error {
