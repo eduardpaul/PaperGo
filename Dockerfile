@@ -8,7 +8,7 @@
 #   (default)    the production image
 # CI jobs that run outside the image read these versions with
 # scripts/toolchain-versions.py.
-ARG GO_VERSION=1.27.3
+ARG GO_VERSION=1.27.4
 ARG NODE_VERSION=24.15.0
 
 FROM node:${NODE_VERSION}-bookworm-slim AS node
