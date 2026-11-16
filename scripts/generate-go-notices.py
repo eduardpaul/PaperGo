@@ -91,7 +91,7 @@ MODULE_FORMAT = ('{{with .Module}}{{.Path}}\t{{.Version}}\t{{.Main}}\t{{.Dir}}\t
 def licence_files(directory):
     directory = Path(directory)
     return [(path.name, path.read_text(errors='replace'))
-            for path in sorted(directory.iterdir()) if path.is_file() and LICENSE_FILE.match(path.name)]
+            for path in sorted(directory.iterdir(), key=lambda path: path.name) if path.is_file() and LICENSE_FILE.match(path.name)]
 
 
 def licence_digest(files):
