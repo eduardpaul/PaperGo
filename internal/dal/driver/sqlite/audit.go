@@ -2,9 +2,11 @@ package sqlite
 
 import (
 	"context"
+	"time"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob/dialect/sqlite"
+	"github.com/stephenafamo/bob/dialect/sqlite/dm"
 	"github.com/stephenafamo/bob/dialect/sqlite/sm"
 	"github.com/stephenafamo/bob/types"
 	"papergo/internal/dal/audit"
@@ -88,4 +90,11 @@ func (q Queries) AuditRecorded(ctx context.Context, entityType, entityID, action
 	w := models.SelectWhere.AuditEvents
 	ok, err := models.AuditEvents.Query(w.EntityType.EQ(entityType), w.EntityID.EQ(entityID), w.Action.EQ(action)).Exists(ctx, q.exec)
 	return ok, dberr.Translate(err)
+}
+
+func (q Queries) DeleteAuditEvents(ctx context.Context, before time.Time, limit int) (int64, error) {
+	c := models.AuditEvents.Columns
+	page := models.AuditEvents.Query(sm.Columns(c.ID), models.SelectWhere.AuditEvents.CreatedAt.LT(before), sm.OrderBy(c.CreatedAt), sm.OrderBy(c.ID), sm.Limit(limit))
+	n, err := models.AuditEvents.Delete(dm.Where(sqlite.Raw(`"id" IN ?`, page))).Exec(ctx, q.exec)
+	return n, dberr.Translate(err)
 }

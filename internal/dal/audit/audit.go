@@ -1,4 +1,6 @@
-// Package audit owns the immutable audit log shared by every database driver.
+// Package audit owns the audit log shared by every database driver. Events
+// are appended and never changed; they are deleted only by age, under the
+// run retention.
 // Drivers implement Queries; this package decides what those statements mean.
 package audit
 
@@ -50,6 +52,9 @@ type Queries interface {
 	AuditEvents(ctx context.Context, f Filter) ([]Event, error)
 	CountAuditEvents(ctx context.Context, f Filter) (int64, error)
 	InsertAuditEvent(ctx context.Context, e Event) error
+	// DeleteAuditEvents deletes up to limit events created before the
+	// cutoff, oldest first, and returns how many it deleted.
+	DeleteAuditEvents(ctx context.Context, before time.Time, limit int) (int64, error)
 	// AuditRecorded reports whether an action on an entity was recorded.
 	AuditRecorded(ctx context.Context, entityType, entityID, action string) (bool, error)
 }
@@ -78,6 +83,17 @@ func (r *Repo) Count(ctx context.Context, f Filter) (int64, error) {
 // Recorded reports whether an action on an entity was recorded.
 func (r *Repo) Recorded(ctx context.Context, entityType, entityID, action string) (bool, error) {
 	return r.read.AuditRecorded(ctx, entityType, entityID, action)
+}
+
+// DeleteExpired deletes one page of events created before the cutoff.
+func (r *Repo) DeleteExpired(ctx context.Context, before time.Time, limit int) (int64, error) {
+	var n int64
+	err := r.write(ctx, func(q Queries) error {
+		var err error
+		n, err = q.DeleteAuditEvents(ctx, before.UTC(), limit)
+		return err
+	})
+	return n, err
 }
 
 // accessActions change who can do what; clients reload access when one is

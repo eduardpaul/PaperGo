@@ -30,6 +30,7 @@ func workers(service *dms.Service, store storage.Store, list features, runs *scr
 		{Name: "operation deadlines", Every: time.Minute, Run: service.ExpireOperations},
 		{Name: "delta retention", Every: time.Hour, Run: service.CollectExpiredDeltas},
 		{Name: "live change retention", Every: time.Hour, Run: service.CollectExpiredLiveChanges},
+		{Name: "audit retention", Every: time.Hour, Run: service.CollectExpiredAudit},
 		{Name: "purged blobs", Every: time.Minute, Run: func(ctx context.Context, _ time.Time) error { return service.CleanupPurgedBlobs(ctx, store) }},
 		{Name: "unreferenced objects", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.CollectObjects(ctx, store, now) }},
 		{Name: "reclaimed files", Every: time.Minute, Run: func(ctx context.Context, now time.Time) error { return service.SweepReclaims(ctx, store, now) }},

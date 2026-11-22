@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"papergo/internal/dal"
+	auditstore "papergo/internal/dal/audit"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/directory"
 	"papergo/internal/dal/resources"
@@ -36,6 +37,13 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 		daltest.Update(t, s.DAL, "live_changes", daltest.Row{"created_at": at}, daltest.Row{"entity_id": item.ID})
 	}
 	change(past)
+	// Audit events older than the run retention expire; a recent one stays.
+	s.SetRetention(15 * 24 * time.Hour)
+	daltest.Update(t, s.DAL, "audit_events", daltest.Row{"created_at": time.Now().UTC().Add(-16 * 24 * time.Hour)}, daltest.Row{})
+	recent, err := s.DAL.Audit().Append(ctx, auditstore.Event{Subject: "alice", Action: "test.recent", EntityType: "test", TraceID: "trace"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	daltest.Insert(t, s.DAL, "cached_results", daltest.Row{"id": uuid.NewString(), "namespace": "answers", "scope": "scope", "key": "key", "payload": `{}`, "created_at": past, "used_at": past, "expires_at": past.Add(time.Hour)})
 	before, err := s.StorageStatus(ctx, "alice")
 	if err != nil {
@@ -55,22 +63,27 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	if before.BlobBytes != size || before.Expired.LiveChanges < 1 || before.Expired.CachedResults < 1 {
 		t.Fatalf("%+v", before)
 	}
-	if before.Retained.AuditEvents < 1 {
-		t.Fatal("audit missing", before.Retained)
+	if before.Expired.AuditEvents < 1 {
+		t.Fatal("old audit events not expired", before.Expired)
 	}
-	audit := before.Retained.AuditEvents
 	if _, err = resultcache.New(s.db).PurgeExpired(ctx, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.CollectExpiredLiveChanges(ctx, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.CollectExpiredAudit(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if kept, err := s.DAL.Audit().List(ctx, auditstore.Filter{}); err != nil || len(kept) != 1 || kept[0].ID != recent.ID {
+		t.Fatalf("audit after retention: %+v %v", kept, err)
+	}
 	after, err := s.StorageStatus(ctx, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Expired.CachedResults != 0 || after.Expired.LiveChanges != 0 || after.Retained.AuditEvents != audit {
-		t.Fatalf("after cleanup %+v audit %d", after.Expired, after.Retained.AuditEvents)
+	if after.Expired.CachedResults != 0 || after.Expired.LiveChanges != 0 || after.Expired.AuditEvents != 0 {
+		t.Fatalf("after cleanup %+v", after.Expired)
 	}
 	again, err := s.StorageStatus(ctx, "alice")
 	if err != nil || again.Expired.CachedResults != 0 || again.Expired.LiveChanges != 0 {

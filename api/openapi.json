@@ -34472,6 +34472,10 @@
               "dispatched_events": {
                 "type": "integer",
                 "description": "Events dispatched longer ago than the run retention (RUN_RETENTION)."
+              },
+              "audit_events": {
+                "type": "integer",
+                "description": "Audit events older than the run retention (RUN_RETENTION)."
               }
             },
             "required": [
@@ -34479,7 +34483,8 @@
               "activity_records",
               "live_changes",
               "operations",
-              "dispatched_events"
+              "dispatched_events",
+              "audit_events"
             ],
             "additionalProperties": false
           },
@@ -34487,15 +34492,11 @@
             "type": "object",
             "description": "Records cleanup leaves in place.",
             "properties": {
-              "audit_events": {
-                "type": "integer"
-              },
               "publications": {
                 "type": "integer"
               }
             },
             "required": [
-              "audit_events",
               "publications"
             ],
             "additionalProperties": false

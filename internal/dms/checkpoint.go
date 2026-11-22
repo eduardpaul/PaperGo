@@ -21,7 +21,7 @@ type StorageRunCount struct {
 }
 
 // StorageExpired counts operational rows a cleanup pass can collect.
-// Dispatched events use the run retention (RUN_RETENTION). Live changes use
+// Dispatched events and audit events use the run retention (RUN_RETENTION). Live changes use
 // the seven-day live retention. Operations use the operation retention: the
 // run retention, at least the seven-day package retention.
 // Caches and activity records use their own expires_at.
@@ -31,11 +31,11 @@ type StorageExpired struct {
 	LiveChanges      int `json:"live_changes"`
 	Operations       int `json:"operations"`
 	DispatchedEvents int `json:"dispatched_events"`
+	AuditEvents      int `json:"audit_events"`
 }
 
 // StorageRetained counts records cleanup leaves in place.
 type StorageRetained struct {
-	AuditEvents  int `json:"audit_events"`
 	Publications int `json:"publications"`
 }
 
@@ -111,11 +111,11 @@ func (s *Service) StorageStatus(ctx context.Context, subject string) (StorageSta
 	if out.Expired.Operations, err = count(s.DAL.Operations().Count(ctx, operations.Filter{Finished: true, UpdatedThrough: &expired})); err != nil {
 		return StorageStatus{}, err
 	}
-	dispatched := now.Add(-s.RunRetention())
-	if out.Expired.DispatchedEvents, err = count(s.DAL.Events().Count(ctx, eventstore.Filter{DispatchedThrough: &dispatched})); err != nil {
+	retained := now.Add(-s.RunRetention())
+	if out.Expired.DispatchedEvents, err = count(s.DAL.Events().Count(ctx, eventstore.Filter{DispatchedThrough: &retained})); err != nil {
 		return StorageStatus{}, err
 	}
-	if out.Retained.AuditEvents, err = count(s.DAL.Audit().Count(ctx, auditstore.Filter{})); err != nil {
+	if out.Expired.AuditEvents, err = count(s.DAL.Audit().Count(ctx, auditstore.Filter{To: &retained})); err != nil {
 		return StorageStatus{}, err
 	}
 	if out.Retained.Publications, err = s.DAL.Revisions().CountPublications(ctx); err != nil {

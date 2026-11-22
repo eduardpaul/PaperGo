@@ -180,8 +180,8 @@ var ErrOperationQuota = errors.New("too many pending operations; try again later
 func (s *Service) SetOperationQuotas(q OperationQuotas) { s.ops.quotas = q }
 
 // SetRetention sets the run retention (RUN_RETENTION): how long finished
-// operations are kept, and after how long dispatched events count as
-// expired. Call it before the service is used; zero keeps DefaultRetention.
+// operations and audit events are kept, and after how long dispatched
+// events count as expired. Call it before the service is used; zero keeps DefaultRetention.
 func (s *Service) SetRetention(d time.Duration) { s.ops.retention = d }
 
 // RunRetention is the run retention SetRetention set, or DefaultRetention.
