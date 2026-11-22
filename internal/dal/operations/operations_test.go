@@ -418,6 +418,16 @@ func testTermination(t *testing.T, s *dal.Store) {
 	if leased, err := s.Blobs().Leased(ctx, blob.ID); err != nil || !leased {
 		t.Fatalf("operation lease: %v %v", leased, err)
 	}
+	// A lease keeps a reclaimed blob's object, so a backup still holds it.
+	if _, err := s.Blobs().SetAvailability(ctx, blob.ID, blobs.AvailabilityPending, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Blobs().SetAvailability(ctx, blob.ID, blobs.AvailabilityReclaimed, nil); err != nil {
+		t.Fatal(err)
+	}
+	if objects, err := s.Blobs().StoredObjects(ctx); err != nil || len(objects) != 1 || objects[0].Key != "source" {
+		t.Fatalf("leased reclaimed object not stored: %+v %v", objects, err)
+	}
 	// Past its deadline an operation is neither claimed nor can succeed.
 	if got := claim(t, ops, "late", 5, deadline); len(got) != 1 || got[0].ID != running.ID {
 		t.Fatalf("claimed past a deadline: %+v", got)

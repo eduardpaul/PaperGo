@@ -70,8 +70,8 @@ type TextQueries interface {
 	// OrphanTexts returns texts of bytes no file holds.
 	OrphanTexts(ctx context.Context, limit int) ([]Text, error)
 	DeleteText(ctx context.Context, id string) error
-	// StoredObjects lists each object a blob, text or ready preview
-	// references, once per key and metadata.
+	// StoredObjects lists each object an unreclaimed or leased blob, a text
+	// or a ready preview references, once per key and metadata.
 	StoredObjects(ctx context.Context) ([]StoredObject, error)
 }
 
@@ -166,9 +166,10 @@ func (r *Repo) CollectTexts(ctx context.Context) error {
 	})
 }
 
-// StoredObjects lists each object a blob, text or ready preview references,
-// including conflicting metadata for one key, so an archive can reject
-// inconsistent files.
+// StoredObjects lists each object an unreclaimed or leased blob, a text or a
+// ready preview references, including conflicting metadata for one key, so
+// an archive can reject inconsistent files. A reclaimed blob's bytes are
+// gone: its row stays as history and the archive leaves it out.
 func (r *Repo) StoredObjects(ctx context.Context) ([]StoredObject, error) {
 	return r.read.StoredObjects(ctx)
 }

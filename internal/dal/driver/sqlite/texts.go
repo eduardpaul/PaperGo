@@ -87,11 +87,14 @@ func (q Queries) DeleteText(ctx context.Context, id string) error {
 }
 
 func (q Queries) StoredObjects(ctx context.Context) ([]blobs.StoredObject, error) {
-	return directoryRows(ctx, q.exec, `SELECT DISTINCT object_key, size, sha256 FROM blobs
+	// A reclaimed blob's object is deleted unless a lease still keeps it, as
+	// ObjectReferenced decides: its row stays as history, its bytes are gone.
+	return directoryRows(ctx, q.exec, `SELECT DISTINCT object_key, size, sha256 FROM blobs b
+WHERE b.availability <> ?3 OR EXISTS (SELECT 1 FROM blob_leases l WHERE l.blob_id = b.id)
 UNION SELECT json_extract(payload, '$.object_key'), CAST(json_extract(payload, '$.object_size') AS INTEGER), json_extract(payload, '$.object_sha256') FROM activity_records WHERE namespace = ?1
 UNION SELECT object_key, object_size, object_sha256 FROM blob_previews WHERE status = ?2 ORDER BY 1`, func(r scan.Rows) (blobs.StoredObject, error) {
 		var o blobs.StoredObject
 		err := r.Scan(&o.Key, &o.Size, &o.SHA256)
 		return o, err
-	}, textNamespace, string(blobs.PreviewReady))
+	}, textNamespace, string(blobs.PreviewReady), string(blobs.AvailabilityReclaimed))
 }

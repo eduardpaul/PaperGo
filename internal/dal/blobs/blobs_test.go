@@ -102,6 +102,16 @@ func testBlobPreviewsAndDeletions(t *testing.T, s *dal.Store) {
 	if _, err := s.Blobs().SetAvailability(ctx, "blob", blobs.AvailabilityReclaimed, nil); err != nil {
 		t.Fatal(err)
 	}
+	// A reclaimed blob's object is deleted: a backup must not ask for it.
+	objects, err := s.Blobs().StoredObjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range objects {
+		if o.Key == "object" {
+			t.Fatalf("reclaimed blob's object stored: %+v", objects)
+		}
+	}
 	if err := s.Blobs().CollectPreviews(ctx); err != nil {
 		t.Fatal(err)
 	}
