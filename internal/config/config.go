@@ -65,8 +65,9 @@ type Config struct {
 	ConnectionNetworks []netip.Prefix
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
-	// RunRetention is how long finished workflow runs, dispatched events
-	// and failed runs are kept.
+	// RunRetention is how long finished workflow runs, dispatched events,
+	// failed runs and other finished operations are kept; operations at
+	// least as long as an export package is offered.
 	RunRetention time.Duration
 	// SystemRunRetention is how long successful automatic runs of system
 	// built-ins are kept. RunRetention is a ceiling.

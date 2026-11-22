@@ -36,7 +36,7 @@ An operation is `pending` until it ends as `succeeded`, `failed`, `superseded` o
 
 **Completion notification.** A write that ended operations calls the completion hook with their IDs once it commits, and workflow runs waiting for them resume. The hook is a prompt, not a guarantee: a process can stop between the commit and the call, so maintenance also reconciles waits from the operations' stored state.
 
-**Retention.** Ended operations and their results are deleted 30 days after their last update. Kinds whose module keeps a record, such as workflow runs, are deleted under that module's retention instead. Pending operations are never deleted by age; their deadline ends them.
+**Retention.** Ended operations and their results are deleted `RUN_RETENTION` (default 30 days, never less than 7 days, the life of an export package) after their last update. Kinds whose module keeps a record, such as workflow runs, are deleted under that module's retention instead. Pending operations are never deleted by age; their deadline ends them.
 
 ## Ownership and dependencies
 

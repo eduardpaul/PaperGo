@@ -9227,7 +9227,7 @@ export interface NotificationSendResult extends AdditionalDataHolder, Parsable {
     skipped?: number | null;
 }
 /**
- * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
+ * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after RUN_RETENTION (default 30 days, at least 7) without an update.
  */
 export interface Operation extends AdditionalDataHolder, Parsable {
     /**

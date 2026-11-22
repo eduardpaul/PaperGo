@@ -26,7 +26,10 @@ const OperationKindBulkUpdate = "bulk_update"
 // OperationKindRun executes a workflow run; the workflow runtime
 // registers its handler.
 const OperationKindRun = "script.run"
-const OperationRetention = 30 * 24 * time.Hour
+
+// DefaultRetention is how long finished operations are kept and dispatched
+// events count as expired when no retention is set: RUN_RETENTION's default.
+const DefaultRetention = 30 * 24 * time.Hour
 
 // A step performs one bounded, transactional batch and persists its resume
 // point or terminal status with SaveOperation. Register handlers before
@@ -58,7 +61,7 @@ type OperationHandler struct {
 	// External operations are never executed: a domain action ends them,
 	// such as the response that completes a task. They are accepted parked.
 	External bool
-	// KeepFinished keeps finished operations past OperationRetention:
+	// KeepFinished keeps finished operations past the operation retention:
 	// their owner deletes them, such as workflow runs, whose history has
 	// its own retention.
 	KeepFinished bool
@@ -135,9 +138,11 @@ func (s *Service) RegisterOperationHandler(kind string, handler OperationHandler
 type operationRuntime struct {
 	handlers map[string]OperationHandler
 	// holder names this process's claims.
-	holder   string
-	quotas   OperationQuotas
-	finished func([]string)
+	holder string
+	quotas OperationQuotas
+	// retention is RUN_RETENTION; zero means DefaultRetention.
+	retention time.Duration
+	finished  func([]string)
 	// wakes are called when operations were accepted.
 	wakeMu sync.Mutex
 	wakes  []func()
@@ -173,6 +178,26 @@ var ErrOperationQuota = errors.New("too many pending operations; try again later
 // SetOperationQuotas bounds operations accepted for people. Call it before
 // the service is used.
 func (s *Service) SetOperationQuotas(q OperationQuotas) { s.ops.quotas = q }
+
+// SetRetention sets the run retention (RUN_RETENTION): how long finished
+// operations are kept, and after how long dispatched events count as
+// expired. Call it before the service is used; zero keeps DefaultRetention.
+func (s *Service) SetRetention(d time.Duration) { s.ops.retention = d }
+
+// RunRetention is the run retention SetRetention set, or DefaultRetention.
+func (s *Service) RunRetention() time.Duration {
+	if s.ops.retention > 0 {
+		return s.ops.retention
+	}
+	return DefaultRetention
+}
+
+// OperationRetention is how long finished operations are kept: the run
+// retention, but never less than PackageRetention, so an export's package
+// can be downloaded for as long as it is offered.
+func (s *Service) OperationRetention() time.Duration {
+	return max(s.RunRetention(), PackageRetention)
+}
 
 // OnOperationsFinished calls f after each committed write that ended
 // operations, with their IDs, once the writer is free, so consumers waiting
@@ -708,7 +733,7 @@ func (s *Service) CancelOperations(ctx context.Context, ids []string) error {
 // Each pass deletes operationPurgePage rows and continues until the expired set is drained.
 // Kinds whose handlers keep finished operations are left to their owners.
 func (s *Service) CollectExpiredOperations(ctx context.Context, now time.Time) error {
-	cutoff := now.UTC().Add(-OperationRetention)
+	cutoff := now.UTC().Add(-s.OperationRetention())
 	var keep []string
 	for kind, handler := range s.ops.handlers {
 		if handler.KeepFinished {

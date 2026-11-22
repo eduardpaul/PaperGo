@@ -4203,7 +4203,7 @@ export interface NotificationSendResult extends AdditionalDataHolder, Parsable {
 	skipped?: number | null;
 }
 /**
- * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.
+ * Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after RUN_RETENTION (default 30 days, at least 7) without an update.
  */
 export interface Operation extends AdditionalDataHolder, Parsable {
 	/**
@@ -10301,7 +10301,7 @@ export interface OperationsItemRequestBuilder extends BaseRequestBuilder<Operati
 	 */
 	get cancel(): CancelRequestBuilder;
 	/**
-	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
+	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<Operation>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -10316,7 +10316,7 @@ export interface OperationsItemRequestBuilder extends BaseRequestBuilder<Operati
 	 */
 	get(requestConfiguration?: RequestConfiguration<object> | undefined): Promise<Operation | undefined>;
 	/**
-	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
+	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
@@ -11074,7 +11074,7 @@ interface OperationsRequestBuilder$1 extends BaseRequestBuilder<OperationsReques
 	 */
 	all(requestConfiguration?: RequestConfiguration<OperationsRequestBuilderGetQueryParameters> | undefined): Promise<NonNullable<OperationPage["value"]>>;
 	/**
-	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
+	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {Promise<OperationPage>}
 	 * @throws {Problem} error when the service returns a 400 status code
@@ -11089,14 +11089,14 @@ interface OperationsRequestBuilder$1 extends BaseRequestBuilder<OperationsReques
 	 */
 	get(requestConfiguration?: RequestConfiguration<OperationsRequestBuilderGetQueryParameters> | undefined): Promise<OperationPage | undefined>;
 	/**
-	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
+	 * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
 	 * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
 	 * @returns {RequestInformation}
 	 */
 	toGetRequestInformation(requestConfiguration?: RequestConfiguration<OperationsRequestBuilderGetQueryParameters> | undefined): RequestInformation;
 }
 /**
- * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
+ * Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.
  */
 export interface OperationsRequestBuilderGetQueryParameters {
 	/**

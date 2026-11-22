@@ -3847,7 +3847,7 @@
     "/v1/resources/{id}/operations": {
       "get": {
         "summary": "Operations",
-        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.",
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.",
         "operationId": "operations",
         "parameters": [
           {
@@ -4098,7 +4098,7 @@
             }
           }
         },
-        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage."
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire RUN_RETENTION (default 30 days, at least 7) after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage."
       }
     },
     "/v1/resources/{id}/views": {
@@ -28777,7 +28777,7 @@
       },
       "Operation": {
         "type": "object",
-        "description": "Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after 30 days without an update.",
+        "description": "Tracked operation executed by a registered handler, in bounded transactional batches or outside the database writer under a renewed claim. Field indexing and filtered bulk edits are built in. Payloads, credential constraints and claims are private; progress and results are visible through operation reads. Pending work resumes after restart: an execution that stops gives its claim back or lets it expire, and transient failures retry later. Terminal records expire after RUN_RETENTION (default 30 days, at least 7) without an update.",
         "properties": {
           "id": {
             "type": "string"
@@ -34467,11 +34467,11 @@
               },
               "operations": {
                 "type": "integer",
-                "description": "Terminal operations older than the 30-day operation retention."
+                "description": "Terminal operations older than the operation retention: RUN_RETENTION, at least 7 days."
               },
               "dispatched_events": {
                 "type": "integer",
-                "description": "Events dispatched at least 30 days ago, the default run retention."
+                "description": "Events dispatched longer ago than the run retention (RUN_RETENTION)."
               }
             },
             "required": [
@@ -39070,7 +39070,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": false,
-        "description": "Makes the request safe to retry: a repeat with the same key, by the same caller, for the same operation kind and container and with the same request, returns the operation accepted first (200 with Idempotent-Replayed) instead of accepting another. The same key with a different request is rejected with 409 idempotency_conflict. A key stays bound while its operation is pending and for 30 days after it finishes; after that it names a new operation.",
+        "description": "Makes the request safe to retry: a repeat with the same key, by the same caller, for the same operation kind and container and with the same request, returns the operation accepted first (200 with Idempotent-Replayed) instead of accepting another. The same key with a different request is rejected with 409 idempotency_conflict. A key stays bound while its operation is pending and for RUN_RETENTION (default 30 days, at least 7) after it finishes; after that it names a new operation.",
         "schema": {
           "type": "string",
           "minLength": 1,

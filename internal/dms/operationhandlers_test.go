@@ -73,6 +73,55 @@ func TestRegisteredOperationsResumeAndExpire(t *testing.T) {
 	}
 }
 
+// Finished operations are kept for the run retention, never less than an
+// export package is offered.
+func TestOperationRetentionFollowsRunRetention(t *testing.T) {
+	s, _, list := fixture(t)
+	if err := s.RegisterOperationHandler("checkpoint", checkpointHandler()); err != nil {
+		t.Fatal(err)
+	}
+	finished := func(age time.Duration) string {
+		op, err := s.EnqueueOperation(testContext, "alice", list.ID, "checkpoint", json.RawMessage(`{}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.runOperations(testContext); err != nil {
+			t.Fatal(err)
+		}
+		daltest.Update(t, s.DAL, "operations", daltest.Row{"updated_at": time.Now().UTC().Add(-age)}, daltest.Row{"id": op.ID})
+		return op.ID
+	}
+	kept := func(id string) bool {
+		_, err := s.Operation(testContext, "alice", id)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			t.Fatal(err)
+		}
+		return err == nil
+	}
+	day := 24 * time.Hour
+	if s.OperationRetention() != DefaultRetention {
+		t.Fatalf("default retention %v", s.OperationRetention())
+	}
+	s.SetRetention(15 * day)
+	young, old := finished(14*day), finished(16*day)
+	if err := s.CollectExpiredOperations(testContext, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if !kept(young) || kept(old) {
+		t.Fatalf("15-day retention: kept 14 days %v, kept 16 days %v", kept(young), kept(old))
+	}
+	// An hour of run retention still keeps operations for the package
+	// retention: an export's package stays downloadable.
+	s.SetRetention(time.Hour)
+	young, old = finished(PackageRetention-day), finished(PackageRetention+day)
+	if err := s.CollectExpiredOperations(testContext, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if !kept(young) || kept(old) {
+		t.Fatalf("package floor: kept 6 days %v, kept 8 days %v", kept(young), kept(old))
+	}
+}
+
 func TestOperationUnknownHandlerAndRevokedCredential(t *testing.T) {
 	s, _, list := fixture(t)
 	// A process claims only the kinds it runs.

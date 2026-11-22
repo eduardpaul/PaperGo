@@ -53,7 +53,7 @@ A YAML file sets only what it names, so a mounted `config.yaml` keeps the image'
 | `ai.embeddings.models_path`, `.threads`, `.max_tokens` | `AI_EMBEDDINGS_MODELS_PATH`, `AI_EMBEDDINGS_THREADS`, `AI_EMBEDDINGS_MAX_TOKENS` | Local models. |
 | `ai.embeddings.endpoint`, `.api_key_file`, `.dimensions` | `AI_EMBEDDINGS_ENDPOINT`, `AI_EMBEDDINGS_API_KEY_FILE`, `AI_EMBEDDINGS_DIMENSIONS` | OpenAI-compatible endpoints. |
 | `ai.decisions.models_path`, `.threads`, `.max_tokens`, `.head_tokens` | `AI_DECISION_MODELS_PATH`, `AI_DECISION_THREADS`, `AI_DECISION_MAX_TOKENS`, `AI_DECISION_HEAD_TOKENS` | The local decision engine; see [decisions](decisions.md). |
-| `retention.runs`, `.system_runs`, `.result_cache` | `RUN_RETENTION`, `SYSTEM_RUN_RETENTION`, `RESULT_CACHE_TTL` | `720h`, `24h` and `720h`. |
+| `retention.runs`, `.system_runs`, `.result_cache` | `RUN_RETENTION`, `SYSTEM_RUN_RETENTION`, `RESULT_CACHE_TTL` | `720h`, `24h` and `720h`. `runs` also keeps other finished operations, at least 7 days. |
 | `quotas.per_creator`, `.per_workspace`, `.installation`, `.workspace_payload_bytes` | `OPERATION_QUOTA_PER_CREATOR`, `OPERATION_QUOTA_PER_WORKSPACE`, `OPERATION_QUOTA_INSTALLATION`, `OPERATION_QUOTA_WORKSPACE_PAYLOAD_BYTES` | Pending operations: 1,000, 5,000, 50,000 and 256 MiB; `0` leaves a bound off. |
 | `organization.locale` | `ORGANIZATION_LOCALE` | See [organization defaults](#organization-defaults). |
 | `organization.language`, `.number_format` | `ORGANIZATION_LANGUAGE`, `ORGANIZATION_NUMBER_FORMAT` | Organization preferences, applied when the database is created; see [preferences](preferences.md). |

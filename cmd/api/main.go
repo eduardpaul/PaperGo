@@ -137,6 +137,7 @@ func run(log *slog.Logger) error {
 	}
 	service := dms.NewService(db.SQL)
 	service.SetOperationQuotas(dms.OperationQuotas(c.OperationQuotas))
+	service.SetRetention(c.RunRetention)
 	// The key seals list integrations and connections. Once either is
 	// stored a lost key is an error, never a new key that opens nothing.
 	configuredIntegrations, err := db.DAL.Integrations().Exists(startup, integrations.Filter{})

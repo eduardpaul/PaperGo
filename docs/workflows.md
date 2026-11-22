@@ -594,7 +594,7 @@ Each run is an operation of kind `script.run`, which the `workflows` worker exec
 
 Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow or `item_id` selects the item being inspected.
 
-Finished runs, with their steps and logs, and dispatched events are deleted after `RUN_RETENTION` (default 30 days). Successful automatic runs of system built-ins are deleted after `SYSTEM_RUN_RETENTION` (default 24h), or `RUN_RETENTION` when that is shorter. Failures and manual system runs use `RUN_RETENTION`. Queued, running and waiting runs stay.
+Finished runs, with their steps and logs, dispatched events and other finished operations are deleted after `RUN_RETENTION` (default 30 days); operations are kept at least 7 days, as long as an export package is offered. Successful automatic runs of system built-ins are deleted after `SYSTEM_RUN_RETENTION` (default 24h), or `RUN_RETENTION` when that is shorter. Failures and manual system runs use `RUN_RETENTION`. Queued, running and waiting runs stay.
 
 ### Deleting items and workflows
 
@@ -616,7 +616,7 @@ Deleting a workflow, alone or with its workspace or collection, raises `workflow
 | Reusable answers | `RESULT_CACHE_TTL` (default 720h), extended on read | Hourly |
 | Live changes | 7 days | Hourly |
 | Delta tokens | 30 days; a materialized page lasts 5 minutes | Hourly |
-| Other terminal operations | 30 days; pending operations stay | Hourly |
+| Other terminal operations | `RUN_RETENTION`, at least 7 days; pending operations stay | Hourly |
 | Content packages | 7 days on the export result | Blob collection after that result expires |
 | Item and file history | The collection's versioning and `max_versions` | On the collection's own writes |
 | Audit events | Kept. The schema rejects updates and deletes | |
@@ -699,7 +699,7 @@ Runs execute on the API's [worker runtime](application-foundation.md#background-
 
 | Setting | Meaning |
 | --- | --- |
-| `RUN_RETENTION` | How long finished runs, failed runs and dispatched events are kept (default `720h`). This is also the ceiling for successful automatic system runs |
+| `RUN_RETENTION` | How long finished runs, failed runs, dispatched events and other finished operations are kept (default `720h`; operations at least 7 days). This is also the ceiling for successful automatic system runs |
 | `SYSTEM_RUN_RETENTION` | How long successful automatic system runs are kept (default `24h`) |
 | `RESULT_CACHE_TTL` | Idle lifetime of reusable answers (default `720h`). Independent of `RUN_RETENTION` |
 

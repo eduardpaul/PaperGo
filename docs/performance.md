@@ -248,8 +248,8 @@ are metadata; PaperGo does not run an OCR engine in these measurements.
 Collections can retain 1–500 metadata versions per item (default 50 when
 versioning is enabled). With versioning off, replaced files enter byte reclamation
 after the grace period. With versioning enabled, file versions are retained
-independently; `max_versions` does not cap stored file bytes. Dispatched events and finished workflow runs use the
-30-day default run retention (`RUN_RETENTION`); successful automatic system runs use `SYSTEM_RUN_RETENTION` (default 24h) and reusable answers use `RESULT_CACHE_TTL` (default 720h). Cleanup is hourly, so an eligible row can wait up to one hour. Live changes use seven days. Ordinary audit
+independently; `max_versions` does not cap stored file bytes. Dispatched events, finished workflow runs and other finished operations use the
+run retention (`RUN_RETENTION`, default 30 days; operations at least 7 days); successful automatic system runs use `SYSTEM_RUN_RETENTION` (default 24h) and reusable answers use `RESULT_CACHE_TTL` (default 720h). Cleanup is hourly, so an eligible row can wait up to one hour. Live changes use seven days. Ordinary audit
 history has no general automatic expiry, and explicit publication snapshots stay while the item is live. Retention deletions free SQLite pages
 for reuse; they do not inherently shrink the database file. The server logs
 every request, so configure log rotation independently of application retention.

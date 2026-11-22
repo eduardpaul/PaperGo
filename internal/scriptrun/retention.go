@@ -19,7 +19,7 @@ func (r *Runner) retention() time.Duration {
 	if r.Retention > 0 {
 		return r.Retention
 	}
-	return 30 * 24 * time.Hour
+	return dms.DefaultRetention
 }
 
 // systemRetention is how long successful automatic runs of system

@@ -12,10 +12,6 @@ import (
 	"papergo/internal/dal/resultcache"
 )
 
-// storageStatusRunRetention is the default RUN_RETENTION. The status count of
-// dispatched events uses it so the figure has a documented window.
-const storageStatusRunRetention = 30 * 24 * time.Hour
-
 // StorageRunCount is how many workflow runs have a status. Name is the
 // operation kind runs are executed as.
 type StorageRunCount struct {
@@ -25,8 +21,9 @@ type StorageRunCount struct {
 }
 
 // StorageExpired counts operational rows a cleanup pass can collect.
-// Dispatched events use the default 30-day run retention. Live changes use
-// the seven-day live retention. Operations use the 30-day operation retention.
+// Dispatched events use the run retention (RUN_RETENTION). Live changes use
+// the seven-day live retention. Operations use the operation retention: the
+// run retention, at least the seven-day package retention.
 // Caches and activity records use their own expires_at.
 type StorageExpired struct {
 	CachedResults    int `json:"cached_results"`
@@ -110,11 +107,11 @@ func (s *Service) StorageStatus(ctx context.Context, subject string) (StorageSta
 	if out.Expired.LiveChanges, err = count(s.DAL.LiveChanges().CountExpired(ctx, now.Add(-LiveRetention))); err != nil {
 		return StorageStatus{}, err
 	}
-	expired := now.Add(-OperationRetention)
+	expired := now.Add(-s.OperationRetention())
 	if out.Expired.Operations, err = count(s.DAL.Operations().Count(ctx, operations.Filter{Finished: true, UpdatedThrough: &expired})); err != nil {
 		return StorageStatus{}, err
 	}
-	dispatched := now.Add(-storageStatusRunRetention)
+	dispatched := now.Add(-s.RunRetention())
 	if out.Expired.DispatchedEvents, err = count(s.DAL.Events().Count(ctx, eventstore.Filter{DispatchedThrough: &dispatched})); err != nil {
 		return StorageStatus{}, err
 	}
